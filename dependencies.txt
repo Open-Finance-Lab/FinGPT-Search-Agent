@@ -7,3 +7,4 @@ pip install:
     openai==0.28
     google
     transformers
+    torch
