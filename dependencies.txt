@@ -6,3 +6,4 @@ pip install:
     requests
     openai==0.28
     google
+    transformers
