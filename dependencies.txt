@@ -3,8 +3,10 @@ pip install:
     django
     django-cors-headers
     bs4
-    requests
+    django-request
     openai==0.28
     google
     transformers
     torch
+    accelerate
+    tensorflow
