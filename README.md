@@ -22,7 +22,7 @@ Current Progress:
 
 
 ## Installation:
-
+**You will need an API key for running the agent. Please ask the project leader for the key.**
 1. Clone the repo into an empty directory.
 2. Install the necessary dependencies as shown in the dependencies.txt file in the root path via "pip install" or "pip3 install" if using Python3.
 3. Go to extensions on a Chrome-Based browser and select developer mode
