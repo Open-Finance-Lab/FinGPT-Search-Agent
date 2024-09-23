@@ -22,15 +22,19 @@ Current Progress:
 
 
 ## Installation:
-
+**You will need an API key for running the agent. Please ask the project leader for the key.**
 1. Clone the repo into an empty directory.
 2. Install the necessary dependencies as shown in the dependencies.txt file in the root path via "pip install" or "pip3 install" if using Python3.
 3. Go to extensions on a Chrome-Based browser and select developer mode
 4. Click "Load Unpakced" on the top left corner. Navigate to the folder "FinGPT_Demo/ChatBot-Fin/Extension-ChatBot-Fin/src", select and load it.
 5. Go to a terminal of your choice and navigate to "FinGPT_Demo\ChatBot-Fin\chat_server"
-6. Run the command "python manage.py runserver"  or "python3 manage.py runserver" if using Python3. Wait for the server to start. This should take no longer than a couple seconds.
-7. Navigate to "https://finance.yahoo.com/" or "https://www.bloomberg.com/". The search agent should automatically load and scrape the homepage.
-8. Start chatting!
+6. Create a folder called "gemma-2-2b-it" at "ChatBot-Fin/chat_server/datascraper" (so the path of the
+folder should be "ChatBot-Fin/chat_server/datascraper/gemma-2-2b-it". Then, go to
+https://huggingface.co/google/gemma-2-2b-it/tree/main, click "Files and versions", and download every file
+into the "gemma-2-2b-it" folder.
+7. Run the command "python manage.py runserver"  or "python3 manage.py runserver" if using Python3. Wait for the server to start. This should take no longer than a couple seconds.
+8. Navigate to "https://finance.yahoo.com/" or "https://www.bloomberg.com/". The search agent should automatically load and scrape the homepage.
+9. Start chatting!
 
 Immediate Next Steps:
 1. Design a RAG specific for CDM (rule and program pairing, controlled generation)
