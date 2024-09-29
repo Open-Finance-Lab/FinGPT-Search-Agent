@@ -14,3 +14,7 @@ ChatBot-Fin/Extension-ChatBot-Fin/node_modules/
 
 ./ChatBot-Fin/chat_server/datascraper/gemma-2-2b-it
 .idea/fingpt_rcos.iml
+
+ChatBot-Fin/chat_server/datascraper/cdm_cloned/
+ChatBot-Fin/chat_server/datascraper/embeddings.pkl
+ChatBot-Fin/chat_server/datascraper/faiss_index.idx
