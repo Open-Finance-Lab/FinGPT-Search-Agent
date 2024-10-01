@@ -39,7 +39,7 @@ Current Progress:
      - Now go to your terminal and navigate to "FinGPT_For_RCOS/ChatBot-Fin/chat_server/datascraper" and run "git clone https://huggingface.co/google/gemma-2-2b-it"
      - (Optional) If you want to clone without large files - just their pointers: "GIT_LFS_SKIP_SMUDGE=1 git clone https://huggingface.co/google/gemma-2-2b-it"
      - Now that we have done that, we should now have "gemma-2-2b-it" in our "FinGPT_For_RCOS/ChatBot-Fin/chat_server/datascraper"
-6. Now create a new terminal, then go to FinGPT_For_RCOS/ChatBot-Fin and run the command "python manage.py runserver" or "python3 manage.py runserver" if using Python3. Wait for the server to start. This should take no longer than a couple seconds.
+6. Now create a new terminal, then go to FinGPT_For_RCOS/ChatBot-Fin/chat_server and run the command "python manage.py runserver" or "python3 manage.py runserver" if using Python3. Wait for the server to start. This should take no longer than a couple seconds.
 7. Navigate to https://finance.yahoo.com/ or https://www.bloomberg.com/. The search agent should automatically load and scrape the homepage.
 8. Start chatting!
 
