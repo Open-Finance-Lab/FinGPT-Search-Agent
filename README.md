@@ -21,46 +21,20 @@ Current Progress:
   ![image](https://github.com/YangletLiu/FinGPT-Search-Agent/blob/main/figures/user_preferred.png)
 
 
-<<<<<<< HEAD
-=======
-
-
->>>>>>> doan_branch
-## Installation Guide:
-**Important**: You will need an API key for running the agent. Please ask the project leader for the key.
-1. Open a terminal and navigate to the directory where you want to set up the project.
-2. Clone the repository by running the following command: "git clone https://github.com/FlyM1ss/FinGPT_for_RCOS.git"
-
-<<<<<<< HEAD
-=======
-
->>>>>>> doan_branch
-2. Install the necessary dependencies as shown in the requirements.txt file in the root path via "pip install -r requirements.txt"
+## Installation:
+**You will need an API key for running the agent. Please ask the project leader for the key.**
+1. Clone the repo into an empty directory.
+2. Install the necessary dependencies as shown in the dependencies.txt file in the root path via "pip install" or "pip3 install" if using Python3.
 3. Go to extensions on a Chrome-Based browser and select developer mode
-4. Click "Load unpacked" on the top left corner. Navigate to the folder "FinGPT_For_RCOS/ChatBot-Fin/Extension-ChatBot-Fin/src", select and load it.
-5. Go to https://huggingface.co/google/gemma-2-2b-it/tree/main, then follow these steps:
-<<<<<<< HEAD
-   - Go to the more options botton (button w/ the 3 dots) and click "Clone repository". It will run you through how to  clone the repository:
-      - Make sure you have git-lfs installed (https://git-lfs.com): Run "git lfs install"
-      - When prompted for a password, use an access token with write permissions. Generate one from your settings: https://huggingface.co/settings/tokens
-      - Now go to your terminal and navigate to "FinGPT_For_RCOS/ChatBot-Fin/chat_server/datascraper" and run "git clone https://huggingface.co/google/gemma-2-2b-it"
-      - (Optional) If you want to clone without large files - just their pointers: "GIT_LFS_SKIP_SMUDGE=1 git clone https://huggingface.co/google/gemma-2-2b-it"
-      - Now that we have done that, we should now have "gemma-2-2b-it" in our "FinGPT_For_RCOS/ChatBot-Fin/chat_server/datascraper" 
-6. Now create a new terminal, then go to FinGPT_For_RCOS/ChatBot-Fin and run the command "python manage.py runserver" or "python3 manage.py runserver" if using Python3. Wait for the server to start. This should take no longer than a couple seconds.
-7. Navigate to https://finance.yahoo.com/ or https://www.bloomberg.com/. The search agent should automatically load and scrape the homepage.
-8. Start chatting!
-=======
-  - Go to the more options botton (button w/ the 3 dots) and click "Clone repository". It will run you through how to  clone the repository:
-     - Make sure you have git-lfs installed (https://git-lfs.com): Run "git lfs install"
-     - When prompted for a password, use an access token with write permissions. Generate one from your settings: https://huggingface.co/settings/tokens
-     - Now go to your terminal and navigate to "FinGPT_For_RCOS/ChatBot-Fin/chat_server/datascraper" and run "git clone https://huggingface.co/google/gemma-2-2b-it"
-     - (Optional) If you want to clone without large files - just their pointers: "GIT_LFS_SKIP_SMUDGE=1 git clone https://huggingface.co/google/gemma-2-2b-it"
-     - Now that we have done that, we should now have "gemma-2-2b-it" in our "FinGPT_For_RCOS/ChatBot-Fin/chat_server/datascraper"
-6. Now create a new terminal, then go to FinGPT_For_RCOS/ChatBot-Fin/chat_server and run the command "python manage.py runserver" or "python3 manage.py runserver" if using Python3. Wait for the server to start. This should take no longer than a couple seconds.
-7. Navigate to https://finance.yahoo.com/ or https://www.bloomberg.com/. The search agent should automatically load and scrape the homepage.
-8. Start chatting!
-
->>>>>>> doan_branch
+4. Click "Load Unpakced" on the top left corner. Navigate to the folder "FinGPT_Demo/ChatBot-Fin/Extension-ChatBot-Fin/src", select and load it.
+5. Go to a terminal of your choice and navigate to "FinGPT_Demo\ChatBot-Fin\chat_server"
+6. Create a folder called "gemma-2-2b-it" at "ChatBot-Fin/chat_server/datascraper" (so the path of the
+folder should be "ChatBot-Fin/chat_server/datascraper/gemma-2-2b-it". Then, go to
+https://huggingface.co/google/gemma-2-2b-it/tree/main, click "Files and versions", and download every file
+into the "gemma-2-2b-it" folder.
+7. Run the command "python manage.py runserver"  or "python3 manage.py runserver" if using Python3. Wait for the server to start. This should take no longer than a couple seconds.
+8. Navigate to "https://finance.yahoo.com/" or "https://www.bloomberg.com/". The search agent should automatically load and scrape the homepage.
+9. Start chatting!
 
 Immediate Next Steps:
 1. Design a RAG specific for CDM (rule and program pairing, controlled generation)
