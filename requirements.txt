@@ -11,4 +11,3 @@ transformers
 torch==2.3.0
 accelerate
 tensorflow
-#requests==2.32.3
