@@ -15,3 +15,4 @@ pip install transformers
 pip install torch
 pip install accelerate
 pip install tensorflow
+pip install faiss-cpu
