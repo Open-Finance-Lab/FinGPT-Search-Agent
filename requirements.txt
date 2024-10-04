@@ -11,3 +11,6 @@ transformers
 torch==2.3.0
 accelerate
 tensorflow
+faiss-cpu
+
+
