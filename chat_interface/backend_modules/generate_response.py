@@ -6,5 +6,9 @@ the "get_urls" and "clean_urls" modules will return.
 Input will be a string(user input) and a list of maps(data) of the form {URL:text}.
 The output should be a string.
 '''
+from clean_urls import clean_urls
+from get_urls import get_urls
+
+
 def generate_response(user_input:str, data:list) -> str:
     pass
