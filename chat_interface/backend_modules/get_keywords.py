@@ -12,7 +12,7 @@ to help with search querying
 
 def get_keywords(user_input: str, model_name: str) -> list:
     # Get the API key to use OpenAI models
-    load_dotenv()
+    load_dotenv(dotenv_path='ChatBot-Fin/chat_server/datascraper/.env')
     openai.api_key = os.getenv("API_KEY7")
 
     # Using the specified model (either GPT-4o or GPT-3.5-turbo)
@@ -63,4 +63,6 @@ def get_keywords_from_models(user_input: str, models: list) -> dict:
 
 if __name__ == "__main__":
     user = input("Hello! How can I help you? ").strip()
-    get_keywords(user)
+    model_name = "gpt-3.5-turbo"  # or "gpt-4", depending on the model you want to use
+    get_keywords(user, model_name)
+
