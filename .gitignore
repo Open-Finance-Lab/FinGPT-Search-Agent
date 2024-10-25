@@ -18,3 +18,18 @@ ChatBot-Fin/Extension-ChatBot-Fin/node_modules/
 ChatBot-Fin/chat_server/datascraper/cdm_cloned/
 ChatBot-Fin/chat_server/datascraper/embeddings.pkl
 ChatBot-Fin/chat_server/datascraper/faiss_index.idx
+
+# virtual environment folders
+venv/
+env/
+.venv/
+
+myenv/
+
+# Python bytecode and compiled files
+__pycache__/
+*.py[cod]
+
+# pip files and packages
+pip-log.txt
+pip-delete-this-directory.txt
