@@ -41,6 +41,10 @@ Stop-Process -Name chrome -Force
 #Chrome stopped
 Write-Host "Chrome stopped"
 
+$curDir=$PSScriptRoot
+$extensionPath= Join-Path $curDir "ChatBot-Fin/Extension-ChatBot-Fin/src"
+
 #load extension
-chrome --load-extension=ChatBot-Fin/Extension-ChatBot-Fin/src
+Write-Host $extensionPath
+chrome --load-extension=$extensionPath
 Write-Host "FinGPT extension loaded onto Chrome"
