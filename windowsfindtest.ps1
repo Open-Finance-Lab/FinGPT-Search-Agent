@@ -18,5 +18,5 @@ foreach ($path in $paths) {
 
 #load extension
 Write-Host $extensionPath
-Start-Process $ChromePath "chrome.exe" -ArgumentList "--load-extension=$extensionPath"
+Start-Process -ChromePath "chrome.exe" -ArgumentList "--load-extension=$extensionPath"
 Write-Host "FinGPT extension loaded onto Chrome"
