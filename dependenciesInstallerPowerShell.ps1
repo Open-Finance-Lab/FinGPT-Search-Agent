@@ -49,17 +49,15 @@ $paths = @(
     "C:\Program Files (x86)\Google\Chrome\Application"
 )
 
-$foundPaths = @()
-
 $ChromePath
 
 foreach ($path in $paths) {
     if (Test-Path $path) {
-        $ChromePath = $path
+        $ChromePath = Join-Path $path "chrome.exe"
     }
 }
 
 #load extension
 Write-Host $extensionPath
-Start-Process -ChromePath "chrome.exe" -ArgumentList "--load-extension=$extensionPath"
+Start-Process $ChromePath --load-extension=$extensionPath
 Write-Host "FinGPT extension loaded onto Chrome"
