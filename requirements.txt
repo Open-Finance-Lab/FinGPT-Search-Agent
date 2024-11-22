@@ -6,6 +6,5 @@ django-request
 openai==0.28
 google
 transformers
-torch==2.0.1+cpu
 tensorflow-cpu
 faiss-cpu
