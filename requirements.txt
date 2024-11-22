@@ -1,13 +1,12 @@
-pip install:
-    python-dotenv
-    django
-    django-cors-headers
-    bs4
-    django-request
-    openai==0.28
-    google
-    transformers
-    torch
-    accelerate
-    tensorflow
-    faiss-cpu
+python-dotenv
+django
+django-cors-headers
+bs4
+django-request
+openai==0.28
+google
+transformers
+torch
+accelerate
+tensorflow
+faiss-cpu
