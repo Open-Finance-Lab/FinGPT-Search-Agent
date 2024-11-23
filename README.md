@@ -1,7 +1,7 @@
 # FinGPT-Search-Agent
 
 
-Vision: A search agent specialized in financce, business, accounting domains to assist users in information retrieval; providing the information sources to help users evaluate the quality of generated responses.
+Vision: A search agent specialized in finance, business, accounting domains to assist users in information retrieval; providing the information sources to help users evaluate the quality of generated responses.
 
 
 1. A search agent for websites (Yahoo Finance, Bloomberg, XBRL International) and local files (SEC 10K, XBRL files (eXtensible Business Reporting Language)).
@@ -36,9 +36,9 @@ Current Progress:
 2. Clone the repository by running the following command: "git clone https://github.com/FlyM1ss/FinGPT_for_RCOS.git"
 
 
-2. Install the necessary dependencies as shown in the requirements.txt file in the root path via "pip install -r requirements.txt"
-3. Go to extensions on a Chrome-Based browser and select developer mode
-4. Click "Load unpacked" on the top left corner. Navigate to the folder "FinGPT_For_RCOS/ChatBot-Fin/Extension-ChatBot-Fin/src", select and load it.
+3. Install the necessary dependencies as shown in the requirements.txt file in the root path via "pip install -r requirements.txt"
+4. Go to extensions on a Chrome-Based browser and select developer mode
+5. Click "Load unpacked" on the top left corner. Navigate to the folder "FinGPT_For_RCOS/ChatBot-Fin/Extension-ChatBot-Fin/src", select and load it.
 
 
 [//]: # (5. Go to https://huggingface.co/google/gemma-2-2b-it/tree/main, then follow these steps:)
@@ -57,12 +57,12 @@ Current Progress:
 
 
 
-5. Now create a new terminal, then go to FinGPT_For_RCOS/ChatBot-Fin and run the command "python manage.py runserver" or "python3 manage.py runserver" if using Python3. Wait for the server to start. This should take no longer than a couple seconds.
-6. Navigate to https://finance.yahoo.com/ or https://www.bloomberg.com/. The search agent should automatically load and scrape the homepage.
-7. Start chatting!
+6. Now create a new terminal, then go to FinGPT_For_RCOS/ChatBot-Fin and run the command "python manage.py runserver" or "python3 manage.py runserver" if using Python3. Wait for the server to start. This should take no longer than a couple seconds.
+7. Navigate to https://finance.yahoo.com/ or https://www.bloomberg.com/. The search agent should automatically load and scrape the homepage.
+8. Start chatting!
 
-**NOTE:** There is an option under Settings window for enabling local RAG. It is a function under development and additional steps
-are required to get it working. If you want to try it out, please contact Felix Tian (FlyM1ss) on discord.
+**NOTE:** There is an option under Settings window for enabling local RAG. It is a function under development and additional steps are required to get it working. 
+If you want to try it out, please contact Felix Tian (FlyM1ss) on discord. 
 I will update the README once it is ready.
 
 Immediate Next Steps:
