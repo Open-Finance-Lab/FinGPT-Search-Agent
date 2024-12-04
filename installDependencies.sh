@@ -16,3 +16,6 @@ pip install torch
 pip install accelerate
 pip install tensorflow
 pip install faiss-cpu
+pip install selenium
+pip install webdriver-manager
+
