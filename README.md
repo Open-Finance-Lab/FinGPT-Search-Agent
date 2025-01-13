@@ -83,7 +83,7 @@ Future Plans:
 
 Citation
 
-''''
+''
 @inproceedings{tian2024customized,
   title={Customized FinGPT Search Agents Using Foundation Models},
   author={Tian, Felix and Byadgi, Ajay and Kim, Daniel S and Zha, Daochen and White, Matt and Xiao, Kairong and Liu, Xiao-Yang},
@@ -91,7 +91,7 @@ Citation
   pages={469--477},
   year={2024}
 }
-''''
+''
 
 
 **Disclaimer: We are sharing codes for academic purposes under the MIT education license. Nothing herein is financial advice, and NOT a recommendation to trade real money. Please use common sense and always first consult a professional before trading or investing.**
