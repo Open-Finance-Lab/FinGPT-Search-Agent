@@ -1,19 +1,18 @@
 # FinGPT-Search-Agent
 
 
-Vision: A search agent specialized in finance, business, accounting domains to assist users in information retrieval; providing the information sources to help users evaluate the quality of generated responses.
+Vision: A search agent specialized in finance, business, accounting domains to assist users in information retrieval and analysis. 
 
-
-1. A search agent for websites (Yahoo Finance, Bloomberg, XBRL International) and local files (SEC 10K, XBRL files (eXtensible Business Reporting Language)).
-2. A powerful information search-and-retrieval engine to quickly locate relevant financial information from various sources, such as websites, reports, filings, and databases.
-3. For generated responses, users can check the sources, ensuring reliability and accuracy.
-4. This is a demo of FinLLMs on the HuggingFace's [Open Financial LLM Leaderboard](https://huggingface.co/spaces/TheFinAI/Open-Financial-LLM-Leaderboard).
+1. A search agent for financial websites (Yahoo Finance, Bloomberg, XBRL International) and local files (SEC 10K, XBRL files (eXtensible Business Reporting Language)).
+2. A powerful information engine to quickly locate relevant financial information from various sources, such as websites, reports, filings, and databases.
+3. For generated responses, users can double-check the information sources for generated responses.
+4. This project provide a demo for FinLLMs at the HuggingFace's [Open Financial LLM Leaderboard](https://huggingface.co/spaces/TheFinAI/Open-Financial-LLM-Leaderboard).
 
 
 **NO Trading Suggestions!**
 
 
-Current Progress:
+Progress:
 
 
 1. Snapshot of the search agent: drag, resize and minimize; Providing information on user's current page.
@@ -70,7 +69,6 @@ Immediate Next Steps:
 2. SEC Filing's parsing (should be very similar to CDM files parsing)
 3. Make the installation easier.
 4. Users cannot re-open the agent once it is closed. Need to fix it.
-
 
 
 
