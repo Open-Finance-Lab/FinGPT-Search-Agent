@@ -6,7 +6,4 @@ pip install:
     django-request
     openai==0.28
     google
-    transformers
-    torch
-    accelerate
     tensorflow
