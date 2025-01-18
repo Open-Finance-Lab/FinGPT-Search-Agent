@@ -4,7 +4,11 @@ django_request==1.6.3
 faiss_cpu==1.8.0.post1
 google==3.0.0
 Markdown==3.7
-numpy==2.2.1
+numpy-1.26.4
 openai==0.28.0
 Requests==2.32.3
 transformers==4.44.2
+python-dotenv~=1.0.1
+bs4~=0.0.2
+faiss-cpu~=1.8.0.post1
+django-request~=1.6.3
