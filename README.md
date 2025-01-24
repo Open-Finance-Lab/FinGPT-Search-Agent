@@ -1,6 +1,6 @@
 # FinGPT-Search-Agent
 
-Vision: A search agent specialized in financce, business, accounting domains to assist users in information retrieval; providing the information sources to help users evaluate the quality of generated responses.
+Vision: A search agent specialized in finance, business, accounting domains to assist users in information retrieval; providing the information sources to help users evaluate the quality of generated responses.
 
 1. A search agent for websites (Yahoo Finance, Bloomberg, XBRL International) and local files (SEC 10K, XBRL files (eXtensible Business Reporting Language)).
 2. A powerful information search-and-retrieval engine to quickly locate relevant financial information from various sources, such as websites, reports, filings, and databases.
@@ -22,7 +22,7 @@ Current Progress:
 
 
 ## Installation:
-**You will need an API key for running the agent. Please ask the project leader for the key.**
+**You will need an API key for running the agent. Please ask the project leader （FlyM1ss) for the key.**
 1. Clone the repo into an empty directory.
 2. Install the necessary dependencies as shown in the dependencies.txt file in the root path via "pip install" or "pip3 install" if using Python3.
 3. Go to extensions on a Chrome-Based browser and select developer mode
