@@ -18,3 +18,36 @@ ChatBot-Fin/Extension-ChatBot-Fin/node_modules/
 ChatBot-Fin/chat_server/datascraper/cdm_cloned/
 ChatBot-Fin/chat_server/datascraper/embeddings.pkl
 ChatBot-Fin/chat_server/datascraper/faiss_index.idx
+<<<<<<< HEAD
+
+# virtual environment folders
+venv/
+env/
+.venv/
+
+myenv/
+
+# Python bytecode and compiled files
+__pycache__/
+*.py[cod]
+
+# pip files and packages
+pip-log.txt
+pip-delete-this-directory.txt
+ChatBot-Fin/chat_server/chat_server_app/__pycache__/__init__.cpython-312.pyc
+ChatBot-Fin/chat_server/chat_server_app/__pycache__/views.cpython-312.pyc
+ChatBot-Fin/chat_server/chat_server_app/__pycache__/views.cpython-312.pyc
+ChatBot-Fin/chat_server/datascraper/.env
+ChatBot-Fin/chat_server/datascraper/.env
+=======
+<<<<<<< HEAD
+ChatBot-Fin/chat_server/chat_server_app/__pycache__/__init__.cpython-312.pyc
+ChatBot-Fin/chat_server/chat_server_app/__pycache__/views.cpython-312.pyc
+=======
+<<<<<<< HEAD
+=======
+ChatBot-Fin/chat_server/chat_server_app/__pycache__/__init__.cpython-312.pyc
+ChatBot-Fin/chat_server/chat_server_app/__pycache__/views.cpython-312.pyc
+>>>>>>> doan_branch
+>>>>>>> origin/main
+>>>>>>> main
