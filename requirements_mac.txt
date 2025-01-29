@@ -9,3 +9,4 @@ Requests==2.32.3
 python-dotenv~=1.0.1
 bs4~=0.0.2
 faiss_cpu
+django-cors-headers
