@@ -17,8 +17,7 @@ Current Progress:
 2. Checking sources, which are very important and help reduce misinformation.
    ![image](https://github.com/YangletLiu/FinGPT-Search-Agent/blob/main/figures/sources.png)
 
-3. User's webpage list. A list of URLs (and APIs in the future) that users set higher priority to retrieve information.
-   ![image](https://github.com/YangletLiu/FinGPT-Search-Agent/blob/main/figures/user_preferred.png)
+3. Dedicated RAG for local files (SEC 10K, XBRL files) (Currently requires additional setup to use).
 
 
 ## Installation:
