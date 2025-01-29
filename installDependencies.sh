@@ -15,7 +15,7 @@ echo "Upgrading pip..."
 pip install --upgrade pip
 
 # Make sure requirements.txt exists
-if [ ! -f "requirements.txt" ]
+if [ ! -f "requirements_win.txt" ]
 then
     echo "Error: requirements.txt not found in the current directory."
     exit 1
@@ -23,6 +23,6 @@ fi
 
 # Install dependencies listed in requirements.txt
 echo "Installing dependencies from requirements.txt..."
-pip install -r requirements.txt
+pip install -r requirements_win.txt
 
 echo "All dependencies have been installed successfully."
