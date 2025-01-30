@@ -5,7 +5,7 @@ Vision: An agent in finance, business, accounting domains to assist users in inf
 This is a demo of FinLLMs on the HuggingFace's [Open Financial LLM Leaderboard](https://huggingface.co/spaces/TheFinAI/Open-Financial-LLM-Leaderboard).
 
 1. A powerful information search-and-retrieval engine: A search agent for websites (Math Cup, Yahoo Finance, Bloomberg, XBRL International) and local files (SEC 10K, XBRL files (eXtensible Business Reporting Language)).
-2. A powerful answer engine: Allow open search to quickly locate relevant financial information from various sources, such as websites, reports, filings, and databases
+2. A powerful answer engine: an answer agent performs open search to quickly locate relevant financial information from various sources, such as websites, reports, filings, and databases
 3. For generated responses, users can check the sources, ensuring reliability and accuracy.
 
 **NO Trading Suggestions!**
