@@ -15,14 +15,14 @@ echo "Upgrading pip..."
 pip install --upgrade pip
 
 # Make sure requirements.txt exists
-if [ ! -f "requirements_win.txt" ]
+if [ ! -f "requirements_mac.txt" ]
 then
-    echo "Error: requirements.txt not found in the current directory."
+    echo "Error: requirements_mac.txt not found in the current directory."
     exit 1
 fi
 
 # Install dependencies listed in requirements.txt
 echo "Installing dependencies from requirements.txt..."
-pip install -r requirements_win.txt
+pip install -r requirements_mac.txt
 
 echo "All dependencies have been installed successfully."
