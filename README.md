@@ -33,9 +33,11 @@ Current Progress:
 9. Start chatting!
 
 Immediate Next Steps:
-1. Integrate into Math Cup and related projects (AI Tutor for Math Cup).
-2. Implement a local dynamic database and pre-fetch context (specific websites, news, textbooks, etc.) into it.
-3. Users cannot re-open the agent once it is closed. Need to fix it.
+1. Display Chain of Thought in the context window if applicable.
+2. Integrate Deepseek.
+3. Try to make the agent render LaTex.
+4. Implement a local dynamic database and pre-fetch context (specific websites, news, textbooks, etc.) into it.
+5. Users cannot re-open the agent once it is closed. Need to fix it.
 
 
 Future Plans:
