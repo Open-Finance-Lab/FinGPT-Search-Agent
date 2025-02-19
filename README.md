@@ -1,11 +1,12 @@
-# FinGPT-Search-Agent
+# FinGPT Agents
 
-Vision: A search agent specialized in finance, business, accounting domains to assist users in information retrieval; providing the information sources to help users evaluate the quality of generated responses.
+Vision: An agent in finance, business, accounting domains to assist users in information retrieval and data analysis. When generating responses, it provides the information sources to help users evaluate the responses' quality.
+ 
+This is a demo of FinLLMs on the HuggingFace's [Open Financial LLM Leaderboard](https://huggingface.co/spaces/TheFinAI/Open-Financial-LLM-Leaderboard).
 
-1. A search agent for websites (Math Cup, Yahoo Finance, Bloomberg, XBRL International) and local files (SEC 10K, XBRL files (eXtensible Business Reporting Language)).
-2. A powerful information search-and-retrieval engine to quickly locate relevant financial information from various sources, such as websites, reports, filings, and databases.
+1. A powerful information search-and-retrieval engine: A search agent for websites (Math Cup, Yahoo Finance, Bloomberg, XBRL International) and local files (SEC 10K, XBRL files (eXtensible Business Reporting Language)).
+2. A powerful answer engine: an answer agent performs open search to quickly locate relevant financial information from various sources, such as websites, reports, filings, and databases
 3. For generated responses, users can check the sources, ensuring reliability and accuracy.
-4. This is a demo of FinLLMs on the HuggingFace's [Open Financial LLM Leaderboard](https://huggingface.co/spaces/TheFinAI/Open-Financial-LLM-Leaderboard).
 
 **NO Trading Suggestions!**
 
