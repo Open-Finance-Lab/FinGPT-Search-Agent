@@ -16,3 +16,6 @@ ChatBot-Fin/Extension-ChatBot-Fin/node_modules/
 .idea/fingpt_rcos.iml
 ChatBot-Fin/chat_server/datascraper/embeddings.pkl
 ChatBot-Fin/chat_server/datascraper/faiss_index.idx
+FinGPTenv/
+/ChatBot-Fin/chat_server/chat_server_app/__pycache__
+/.idea
