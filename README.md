@@ -22,7 +22,7 @@ Current Progress:
 
 
 ## Installation:
-**You will need an API key for running the agent. Please ask the project leader （FlyM1ss) for the key. **
+**You will need an API key for running the agent. Please ask the project leader (FlyM1ss) for the key. **
 1. Create or copy paste the file ".env" into {rootFolderName}\ChatBot-Fin\chat_server\datascraper. If creating the file,
 do it with an IDE (do not edit it with a text editor like Notepad), paste the API key into the file and save.
 2. Clone the repo into an empty directory.
