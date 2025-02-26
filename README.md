@@ -34,7 +34,7 @@ quotation mark, and press Enter. Finally, copy "powershell.exe -ExecutionPolicy 
 Terminal and press Enter to run the script. This bypasses the execution policy *only for this execution* to run the
 script.
 4. For MacOS, in the root folder, find "Installer_Mac.sh", right click it, and choose Open with Terminal.
-5. The installer automatically installs the Extension in Google Chrome and start the back-end. If the extension isn't
+5. The installer automatically installs the Extension in Google Chrome and starts the back-end. If the extension isn't
 installed in Chrome, or you want to have it installed in another browser, go to your desired browser and find Plugins or
 Extensions (usually located at top right portion). Enable Developer Mode.
 6. Click "Load Unpacked" located the top left corner of Plugins or Extensions page. Navigate to the folder
