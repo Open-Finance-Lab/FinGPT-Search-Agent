@@ -1,22 +1,22 @@
 chat_interface/backend_modules/.env
  # Intellij Idea
- .idea/
-.idea/workspace.xml
-.idea/discord.xml
-.idea/vcs.xml
-.idea/misc.xml
-.idea/modules.xml
+/.idea/
+/.idea/codeStyles
 FinGPT_Demo.iml
 
 # node modules
 ChatBot-Fin/Extension-ChatBot-Fin/node_modules/
-/ChatBot-Fin/chat_server/chat_server/__pycache__
 
-./ChatBot-Fin/chat_server/datascraper/gemma-2-2b-it
-.idea/fingpt_rcos.iml
+# pycache
+/ChatBot-Fin/chat_server/chat_server/__pycache__
+/ChatBot-Fin/chat_server/chat_server_app/__pycache__
+
+# venv
+/FinGPTenv
+
+# rag loca embeddings
 ChatBot-Fin/chat_server/datascraper/embeddings.pkl
 ChatBot-Fin/chat_server/datascraper/faiss_index.idx
-/FinGPTenv/Lib/site-packages
-/FinGPTenv
-/ChatBot-Fin/chat_server/chat_server_app/__pycache__
-/.idea/codeStyles
+
+
+
