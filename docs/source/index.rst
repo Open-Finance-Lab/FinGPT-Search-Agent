@@ -3,7 +3,7 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-FinGPT Agents documentation
+FinGPT Agents Documentation
 ===========================
 
 Add your content using ``reStructuredText`` syntax. See the
@@ -15,3 +15,8 @@ documentation for details.
    :maxdepth: 2
    :caption: Contents:
 
+   introduction
+   agent_setup
+   usage/index
+   project_structure
+   team
