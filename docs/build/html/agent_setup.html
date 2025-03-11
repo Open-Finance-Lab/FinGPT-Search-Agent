@@ -42,6 +42,124 @@
 <li><p>Any prerequisites, environment variables, etc.</p></li>
 </ul>
 </section>
+<section id="installation">
+<h2>Installation<a class="headerlink" href="#installation" title="Link to this heading">¶</a></h2>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>You will need an API key for running the agent. Please ask the project leader (FlyM1ss) via Discord / WeChat / Email (<a class="reference external" href="mailto:felixflyingt&#37;&#52;&#48;gmail&#46;com">felixflyingt<span>&#64;</span>gmail<span>&#46;</span>com</a>) for the key.</p>
+</div>
+<ol class="arabic simple">
+<li><p><strong>Prepare your `.env` file</strong>:</p>
+<ul class="simple">
+<li><p>Create (or copy/paste) the file <code class="docutils literal notranslate"><span class="pre">.env</span></code> into
+<code class="docutils literal notranslate"><span class="pre">{rootFolderName}\ChatBot-Fin\chat_server\datascraper</span></code>.</p></li>
+<li><p>If creating the file, use an IDE (rather than Notepad) to avoid format issues.</p></li>
+<li><p>Paste the API key into the file and save.</p></li>
+</ul>
+</li>
+<li><p><strong>Clone the repository</strong>:</p>
+<ul class="simple">
+<li><p>Clone the repo into an empty directory of your choice.</p></li>
+</ul>
+</li>
+</ol>
+<section id="windows">
+<h3>Windows<a class="headerlink" href="#windows" title="Link to this heading">¶</a></h3>
+<ol class="arabic">
+<li><p>In the project’s <strong>root folder</strong>, locate the file <code class="docutils literal notranslate"><span class="pre">Installer_Win.ps1</span></code>.</p></li>
+<li><p><strong>Right-click</strong> it and select <strong>“Run with PowerShell”</strong>.</p>
+<ul>
+<li><p>If you face permission issues, do the following:</p>
+<ul>
+<li><p>Navigate to the project’s root folder in File Explorer.</p></li>
+<li><p>Click the address bar to select the path, then press <strong>Ctrl+C</strong> to copy.</p></li>
+<li><p>Open a <strong>Terminal</strong> (Admin mode).
+- Right-click the task bar and select <strong>Terminal (Admin)</strong>
+- Type <code class="docutils literal notranslate"><span class="pre">cd</span> <span class="pre">&quot;</span></code>, paste the path you copied, then type <code class="docutils literal notranslate"><span class="pre">&quot;</span></code> and press Enter.</p></li>
+<li><p>Finally, run:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">powershell</span><span class="o">.</span><span class="n">exe</span> <span class="o">-</span><span class="n">ExecutionPolicy</span> <span class="n">Bypass</span> <span class="o">-</span><span class="n">File</span> <span class="o">.</span>\<span class="n">Installer_Win</span><span class="o">.</span><span class="n">ps1</span>
+</pre></div>
+</div>
+</li>
+<li><p>This bypasses the execution policy <strong>only</strong> for this script run.</p></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><p>The installer attempts to:
+- Install the Extension in Google Chrome
+- Start the back-end</p></li>
+<li><p>If the Extension is <strong>not</strong> automatically installed, or you want to use another browser:</p>
+<ul class="simple">
+<li><p>Enable Developer Mode in that browser’s Extensions/Plugins panel.</p></li>
+<li><p>Click <strong>“Load Unpacked”</strong> and navigate to
+<code class="docutils literal notranslate"><span class="pre">{rootFolderName}/ChatBot-Fin/Extension-ChatBot-Fin/src</span></code>
+to select and load the extension manually.</p></li>
+</ul>
+</li>
+<li><p>If the <strong>back-end</strong> isn’t started automatically:
+- Open a terminal and navigate to</p>
+<blockquote>
+<div><p><code class="docutils literal notranslate"><span class="pre">{rootFolderName}\ChatBot-Fin\chat_server</span></code></p>
+</div></blockquote>
+<ul>
+<li><p>Run:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">python</span> <span class="n">manage</span><span class="o">.</span><span class="n">py</span> <span class="n">runserver</span>
+</pre></div>
+</div>
+<blockquote>
+<div><p>python3 manage.py runserver</p>
+</div></blockquote>
+</li>
+<li><p>Wait a few seconds for the server to start.</p></li>
+</ul>
+</li>
+</ol>
+</section>
+<section id="mac">
+<h3>Mac<a class="headerlink" href="#mac" title="Link to this heading">¶</a></h3>
+<ol class="arabic">
+<li><p>In the project’s <strong>root folder</strong>, locate the file <code class="docutils literal notranslate"><span class="pre">Installer_Mac.sh</span></code>.</p></li>
+<li><p>Right-click it and select <strong>“Open with Terminal”</strong>.</p></li>
+<li><p>The installer attempts to:
+- Install the Extension in Google Chrome
+- Start the back-end</p></li>
+<li><p>If the Extension is <strong>not</strong> automatically installed, or you want to use another browser:
+- Enable Developer Mode in that browser’s Extensions/Plugins panel.
+- Click <strong>“Load Unpacked”</strong> and navigate to</p>
+<blockquote>
+<div><p><code class="docutils literal notranslate"><span class="pre">{rootFolderName}/ChatBot-Fin/Extension-ChatBot-Fin/src</span></code>
+to select and load the extension manually.</p>
+</div></blockquote>
+</li>
+<li><p>If the <strong>back-end</strong> isn’t automatically started:
+- Open a terminal and navigate to</p>
+<blockquote>
+<div><p><code class="docutils literal notranslate"><span class="pre">{rootFolderName}\ChatBot-Fin\chat_server</span></code></p>
+</div></blockquote>
+<ul>
+<li><p>Run:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">python</span> <span class="n">manage</span><span class="o">.</span><span class="n">py</span> <span class="n">runserver</span>
+</pre></div>
+</div>
+<blockquote>
+<div><p>python3 manage.py runserver</p>
+</div></blockquote>
+</li>
+<li><p>Wait for the server to initialize.</p></li>
+</ul>
+</li>
+</ol>
+</section>
+</section>
+<section id="final-steps">
+<h2>Final Steps<a class="headerlink" href="#final-steps" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p>Navigate to any supported website (Math Cup, Yahoo Finance, Bloomberg, XBRL International).</p></li>
+<li><p>The search agent should automatically load and scrape the homepage.</p></li>
+<li><p><strong>Start chatting!</strong></p></li>
+</ul>
+</section>
 </section>
 
 
@@ -75,6 +193,8 @@
 <li class="toctree-l1"><a class="reference internal" href="introduction.html">Introduction</a></li>
 <li class="toctree-l1 current"><a class="current reference internal" href="#">Agent Setup</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="#using-pre-built-installer-scripts">Using pre-built installer scripts</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#installation">Installation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#final-steps">Final Steps</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="usage/index.html">Using the Agent</a></li>
