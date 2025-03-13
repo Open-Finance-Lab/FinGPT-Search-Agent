@@ -48,6 +48,11 @@
 <p class="admonition-title">Note</p>
 <p>You will need an API key for running the agent. Please ask the project leader (FlyM1ss) via Discord / WeChat / Email (<a class="reference external" href="mailto:felixflyingt&#37;&#52;&#48;gmail&#46;com">felixflyingt<span>&#64;</span>gmail<span>&#46;</span>com</a>) for the key.</p>
 </div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>It is genuinely a good practice to run python projects inside a virtual environment. If you are running python 3,
+please replace <code class="docutils literal notranslate"><span class="pre">python</span></code> with <code class="docutils literal notranslate"><span class="pre">python3</span></code> in the commands below.</p>
+</div>
 <ol class="arabic simple">
 <li><p><strong>Prepare your `.env` file</strong>:</p>
 <ul class="simple">
@@ -76,7 +81,7 @@
 <li><p>Open a <strong>Terminal</strong> (Admin mode).
 - Right-click the task bar and select <strong>Terminal (Admin)</strong>
 - Type <code class="docutils literal notranslate"><span class="pre">cd</span> <span class="pre">&quot;</span></code>, paste the path you copied, then type <code class="docutils literal notranslate"><span class="pre">&quot;</span></code> and press Enter.</p></li>
-<li><p>Finally, run:</p>
+<li><p>Finally, run</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">powershell</span><span class="o">.</span><span class="n">exe</span> <span class="o">-</span><span class="n">ExecutionPolicy</span> <span class="n">Bypass</span> <span class="o">-</span><span class="n">File</span> <span class="o">.</span>\<span class="n">Installer_Win</span><span class="o">.</span><span class="n">ps1</span>
 </pre></div>
 </div>
@@ -98,18 +103,13 @@ to select and load the extension manually.</p></li>
 </ul>
 </li>
 <li><p>If the <strong>back-end</strong> isn’t started automatically:
-- Open a terminal and navigate to</p>
-<blockquote>
-<div><p><code class="docutils literal notranslate"><span class="pre">{rootFolderName}\ChatBot-Fin\chat_server</span></code></p>
-</div></blockquote>
+- Open a terminal and navigate to
+<code class="docutils literal notranslate"><span class="pre">{rootFolderName}\ChatBot-Fin\chat_server</span></code></p>
 <ul>
 <li><p>Run:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">python</span> <span class="n">manage</span><span class="o">.</span><span class="n">py</span> <span class="n">runserver</span>
 </pre></div>
 </div>
-<blockquote>
-<div><p>python3 manage.py runserver</p>
-</div></blockquote>
 </li>
 <li><p>Wait a few seconds for the server to start.</p></li>
 </ul>
@@ -126,25 +126,16 @@ to select and load the extension manually.</p></li>
 - Start the back-end</p></li>
 <li><p>If the Extension is <strong>not</strong> automatically installed, or you want to use another browser:
 - Enable Developer Mode in that browser’s Extensions/Plugins panel.
-- Click <strong>“Load Unpacked”</strong> and navigate to</p>
-<blockquote>
-<div><p><code class="docutils literal notranslate"><span class="pre">{rootFolderName}/ChatBot-Fin/Extension-ChatBot-Fin/src</span></code>
-to select and load the extension manually.</p>
-</div></blockquote>
-</li>
+- Click <strong>“Load Unpacked”</strong> and navigate to
+<code class="docutils literal notranslate"><span class="pre">{rootFolderName}/ChatBot-Fin/Extension-ChatBot-Fin/src</span></code> to select and load the extension manually.</p></li>
 <li><p>If the <strong>back-end</strong> isn’t automatically started:
-- Open a terminal and navigate to</p>
-<blockquote>
-<div><p><code class="docutils literal notranslate"><span class="pre">{rootFolderName}\ChatBot-Fin\chat_server</span></code></p>
-</div></blockquote>
+- Open a terminal and navigate to
+<code class="docutils literal notranslate"><span class="pre">{rootFolderName}\ChatBot-Fin\chat_server</span></code></p>
 <ul>
 <li><p>Run:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">python</span> <span class="n">manage</span><span class="o">.</span><span class="n">py</span> <span class="n">runserver</span>
 </pre></div>
 </div>
-<blockquote>
-<div><p>python3 manage.py runserver</p>
-</div></blockquote>
 </li>
 <li><p>Wait for the server to initialize.</p></li>
 </ul>
