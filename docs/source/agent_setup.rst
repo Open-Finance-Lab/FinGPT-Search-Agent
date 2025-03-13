@@ -12,6 +12,10 @@ Installation
 .. note::
    You will need an API key for running the agent. Please ask the project leader (FlyM1ss) via Discord / WeChat / Email (felixflyingt@gmail.com) for the key.
 
+.. note::
+   It is genuinely a good practice to run python projects inside a virtual environment. If you are running python 3,
+   please replace ``python`` with ``python3`` in the commands below.
+
 1. **Prepare your `.env` file**:
 
    - Create (or copy/paste) the file ``.env`` into 
@@ -36,8 +40,9 @@ Windows
      - Open a **Terminal** (Admin mode).  
        - Right-click the task bar and select **Terminal (Admin)**
        - Type ``cd "``, paste the path you copied, then type ``"`` and press Enter.
-     - Finally, run:
+     - Finally, run
        ::
+
          powershell.exe -ExecutionPolicy Bypass -File .\Installer_Win.ps1
 
      - This bypasses the execution policy **only** for this script run.
@@ -52,13 +57,12 @@ Windows
      to select and load the extension manually.
 5. If the **back-end** isn’t started automatically:
    - Open a terminal and navigate to  
-     ``{rootFolderName}\ChatBot-Fin\chat_server``
+   ``{rootFolderName}\ChatBot-Fin\chat_server``
+
    - Run:
      ::
+
        python manage.py runserver
-     or
-     ::
-       python3 manage.py runserver
    - Wait a few seconds for the server to start.
 
 Mac
@@ -72,17 +76,16 @@ Mac
 4. If the Extension is **not** automatically installed, or you want to use another browser:
    - Enable Developer Mode in that browser’s Extensions/Plugins panel.
    - Click **"Load Unpacked"** and navigate to  
-     ``{rootFolderName}/ChatBot-Fin/Extension-ChatBot-Fin/src``  
-     to select and load the extension manually.
+   ``{rootFolderName}/ChatBot-Fin/Extension-ChatBot-Fin/src`` to select and load the extension manually.
+
 5. If the **back-end** isn’t automatically started:
    - Open a terminal and navigate to  
-     ``{rootFolderName}\ChatBot-Fin\chat_server``
+   ``{rootFolderName}\ChatBot-Fin\chat_server``
+
    - Run:
      ::
+
        python manage.py runserver
-     or
-     ::
-       python3 manage.py runserver
    - Wait for the server to initialize.
 
 Final Steps
