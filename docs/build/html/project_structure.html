@@ -35,43 +35,63 @@
             
   <section id="project-structure">
 <h1>Project Structure<a class="headerlink" href="#project-structure" title="Link to this heading">¶</a></h1>
+<p>This project currently exists only in the form of a web extension. Extension settings are located in
+<code class="docutils literal notranslate"><span class="pre">manifest.json</span></code> inside <code class="docutils literal notranslate"><span class="pre">ChatBot-Fin\Extension-ChatBot-Fin\src</span></code>.</p>
 <section id="front-end">
 <h2>Front-end<a class="headerlink" href="#front-end" title="Link to this heading">¶</a></h2>
+<p>FinGPT Agents’ front-end files are located in <code class="docutils literal notranslate"><span class="pre">ChatBot-Fin\Extension-ChatBot-Fin\src</span></code>.</p>
+<p>Currently, <code class="docutils literal notranslate"><span class="pre">content_archive.js</span></code> is fully responsible for rendering the extension window, which we call the “pop up”.
+This long javascript file is organized in three main sections, from top to down:</p>
 <ul class="simple">
-<li><p>Brief description of the front-end code architecture.</p></li>
-<li><p>Key files, technologies used, etc.</p></li>
+<li><p><strong>Event Listeners</strong>: Contains functions that handle the extension’s communication with back-end, including
+rendering agent’s responses, button presses, user input and more.</p></li>
+<li><p><strong>UI</strong>: Contains all code that renders the pop up. Event listener handling “Preferred Links” are also located in this
+section.</p></li>
+<li><p><strong>Dragging</strong>: The function <code class="docutils literal notranslate"><span class="pre">makeDraggableAndResizable</span></code> is responsible for making the pop up draggable and resizable.</p></li>
+</ul>
+<section id="plans-for-front-end">
+<h3>Plans for Front-end<a class="headerlink" href="#plans-for-front-end" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p>Ability to consistently render LaTeX.</p></li>
+<li><p>Integrate DeepSeek.</p></li>
+<li><p>With that, nicely render Chain of Thought in the context window if applicable.</p></li>
 </ul>
 </section>
-<section id="plans-for-front-end">
-<h2>Plans for Front-end<a class="headerlink" href="#plans-for-front-end" title="Link to this heading">¶</a></h2>
-<ul class="simple">
-<li><p>Outline any roadmap or future improvements you plan to implement.</p></li>
-</ul>
 </section>
 <section id="back-end">
 <h2>Back-end<a class="headerlink" href="#back-end" title="Link to this heading">¶</a></h2>
+<p>FinGPT Agents’ back-end files are located in <code class="docutils literal notranslate"><span class="pre">ChatBot-Fin\chat_server</span></code>. The back-end is hosted via Django with a
+couple hand-written Python files. You may see all Django files inside <code class="docutils literal notranslate"><span class="pre">chat_server</span></code> (settings.py, urls.py) and
+<code class="docutils literal notranslate"><span class="pre">chat_server_app</span></code> (admin.py, apps,py, models,py, tests,py, views,py). The additional <code class="docutils literal notranslate"><span class="pre">datascraper</span></code> folder
+contains <code class="docutils literal notranslate"><span class="pre">cdm_rag.py</span></code>, which is responsible for RAG; and <code class="docutils literal notranslate"><span class="pre">datascraper.py</span></code>, which contains most back-end functions
+and API connection to LLMs.</p>
 <ul class="simple">
-<li><p>Brief description of back-end architecture, how it interacts with LLMs, etc.</p></li>
+<li><p>All local API endpoints are defined in <code class="docutils literal notranslate"><span class="pre">urls.py</span></code> as per standard Django practice.</p></li>
+<li><p>Traffic are handled in <code class="docutils literal notranslate"><span class="pre">views.py</span></code>. Question logging and Preferred URL function are directly handled in this file,
+with all the rest being handled in <code class="docutils literal notranslate"><span class="pre">datascraper.py</span></code>.</p></li>
+<li><p>There are currently no models imported, thus <code class="docutils literal notranslate"><span class="pre">models.py</span></code> is empty.</p></li>
 </ul>
-</section>
 <section id="plans-for-back-end">
-<h2>Plans for Back-end<a class="headerlink" href="#plans-for-back-end" title="Link to this heading">¶</a></h2>
+<h3>Plans for Back-end<a class="headerlink" href="#plans-for-back-end" title="Link to this heading">¶</a></h3>
 <ul class="simple">
-<li><p>Future features, expansions, or refactoring ideas.</p></li>
+<li><p>Port the locally-hosted back-end to a cloud server (currently decided to be Amazon Lambda).</p></li>
+<li><p>Implement the local dynamic database, a.k.a. the local knowledge database.</p></li>
+<li><p>Implement langchain.</p></li>
 </ul>
 </section>
 <section id="database">
-<h2>Database<a class="headerlink" href="#database" title="Link to this heading">¶</a></h2>
+<h3>Database<a class="headerlink" href="#database" title="Link to this heading">¶</a></h3>
 <ul class="simple">
 <li><p>Description of the database structure and its purpose.</p></li>
 <li><p>Any relevant database management tools or techniques.</p></li>
 </ul>
 </section>
 <section id="api">
-<h2>API<a class="headerlink" href="#api" title="Link to this heading">¶</a></h2>
+<h3>API<a class="headerlink" href="#api" title="Link to this heading">¶</a></h3>
 <ul class="simple">
 <li><p>Description of the API endpoints and their functionality.</p></li>
 </ul>
+</section>
 </section>
 </section>
 
@@ -108,11 +128,7 @@
 <li class="toctree-l1"><a class="reference internal" href="usage/index.html">Using the Agent</a></li>
 <li class="toctree-l1 current"><a class="current reference internal" href="#">Project Structure</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="#front-end">Front-end</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#plans-for-front-end">Plans for Front-end</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#back-end">Back-end</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#plans-for-back-end">Plans for Back-end</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#database">Database</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#api">API</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="team.html">Team</a></li>
