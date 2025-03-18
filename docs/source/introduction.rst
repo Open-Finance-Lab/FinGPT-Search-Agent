@@ -24,7 +24,7 @@ For students, imagine how much time may be saved from reviewing for an exam, if 
 Road Map
 --------
 
-.. image:: _static/images/roadmap.png
+.. image:: _static/images/2025_march_roadmap.png
    :alt: FinGPT Agents current roadmap
    :align: left
    :width: 800px
