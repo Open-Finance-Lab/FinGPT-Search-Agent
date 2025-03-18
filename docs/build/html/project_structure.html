@@ -1,0 +1,185 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Project Structure &mdash; FinGPT Agents 3.1 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
+      <link rel="stylesheet" type="text/css" href="_static/css/custom.css" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=b576230a"></script>
+      <script src="_static/doctools.js?v=9bcbadda"></script>
+      <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+      <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Team" href="team.html" />
+    <link rel="prev" title="Advanced Usage" href="usage/advanced_usage.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            FinGPT Agents
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="introduction.html">Introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="agent_setup.html">Agent Setup</a></li>
+<li class="toctree-l1"><a class="reference internal" href="usage/index.html">Using the Agent</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Project Structure</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#front-end">Front-end</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#plans-for-front-end">Plans for Front-end</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#back-end">Back-end</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#plans-for-back-end">Plans for Back-end</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#database">Database</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#api">API</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="team.html">Team</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">FinGPT Agents</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Project Structure</li>
+      <li class="wy-breadcrumbs-aside">
+              <a href="https://github.com/Open-Finance-Lab/FinRL-Contest/blob/main/docs/source/project_structure.rst" class="fa fa-github"> Edit on GitHub</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="project-structure">
+<h1>Project Structure<a class="headerlink" href="#project-structure" title="Link to this heading"></a></h1>
+<p>This project currently exists only in the form of a web extension. Extension settings are located in
+<code class="docutils literal notranslate"><span class="pre">manifest.json</span></code> inside <code class="docutils literal notranslate"><span class="pre">ChatBot-Fin\Extension-ChatBot-Fin\src</span></code>.</p>
+<section id="front-end">
+<h2>Front-end<a class="headerlink" href="#front-end" title="Link to this heading"></a></h2>
+<p>FinGPT Agents’ front-end files are located in <code class="docutils literal notranslate"><span class="pre">ChatBot-Fin\Extension-ChatBot-Fin\src</span></code>.</p>
+<p>Currently, <code class="docutils literal notranslate"><span class="pre">content_archive.js</span></code> is fully responsible for rendering the extension window, which we call the “pop up”.
+This long javascript file is organized in three main sections, from top to down:</p>
+<ul class="simple">
+<li><p><strong>Event Listeners</strong>: Contains functions that handle the extension’s communication with back-end, including
+rendering agent’s responses, button presses, user input and more.</p></li>
+<li><p><strong>UI</strong>: Contains all code that renders the pop up. Event listener handling “Preferred Links” are also located in this
+section.</p></li>
+<li><p><strong>Dragging</strong>: The function <code class="docutils literal notranslate"><span class="pre">makeDraggableAndResizable</span></code> is responsible for making the pop up draggable and resizable.</p></li>
+</ul>
+<section id="plans-for-front-end">
+<h3>Plans for Front-end<a class="headerlink" href="#plans-for-front-end" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>Ability to consistently render LaTeX.</p></li>
+<li><p>Integrate DeepSeek.</p></li>
+<li><p>With that, nicely render Chain of Thought in the context window if applicable.</p></li>
+</ul>
+</section>
+</section>
+<section id="back-end">
+<h2>Back-end<a class="headerlink" href="#back-end" title="Link to this heading"></a></h2>
+<p>FinGPT Agents’ back-end files are located in <code class="docutils literal notranslate"><span class="pre">ChatBot-Fin\chat_server</span></code>. The back-end is hosted via Django with a
+couple hand-written Python files. You may see all Django files inside <code class="docutils literal notranslate"><span class="pre">chat_server</span></code> (settings.py, urls.py) and
+<code class="docutils literal notranslate"><span class="pre">chat_server_app</span></code> (admin.py, apps,py, models,py, tests,py, views,py). The additional <code class="docutils literal notranslate"><span class="pre">datascraper</span></code> folder
+contains <code class="docutils literal notranslate"><span class="pre">cdm_rag.py</span></code>, which is responsible for RAG; and <code class="docutils literal notranslate"><span class="pre">datascraper.py</span></code>, which contains most back-end functions
+and API connection to LLMs.</p>
+<ul class="simple">
+<li><p>All local API endpoints are defined in <code class="docutils literal notranslate"><span class="pre">urls.py</span></code> as per standard Django practice.</p></li>
+<li><p>Traffic are handled in <code class="docutils literal notranslate"><span class="pre">views.py</span></code>. Question logging and Preferred URL function are directly handled in this file,
+with all the rest being handled in <code class="docutils literal notranslate"><span class="pre">datascraper.py</span></code>.</p></li>
+<li><p>There are currently no models imported, thus <code class="docutils literal notranslate"><span class="pre">models.py</span></code> is empty.</p></li>
+</ul>
+<section id="plans-for-back-end">
+<h3>Plans for Back-end<a class="headerlink" href="#plans-for-back-end" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>Port the locally-hosted back-end to a cloud server (currently decided to be Amazon Lambda).</p></li>
+<li><p>Implement the local dynamic database, a.k.a. the local knowledge database.</p></li>
+<li><p>Implement langchain.</p></li>
+</ul>
+</section>
+<section id="database">
+<h3>Database<a class="headerlink" href="#database" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>Description of the database structure and its purpose.</p></li>
+<li><p>Any relevant database management tools or techniques.</p></li>
+</ul>
+</section>
+<section id="api">
+<h3>API<a class="headerlink" href="#api" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>Description of the API endpoints and their functionality.</p></li>
+</ul>
+</section>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="usage/advanced_usage.html" class="btn btn-neutral float-left" title="Advanced Usage" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="team.html" class="btn btn-neutral float-right" title="Team" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2025, FlyM1ss, Yanglet Liu.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>
