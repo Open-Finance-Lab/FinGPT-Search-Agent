@@ -26,6 +26,8 @@ Road Map
 
 .. image:: _static/images/roadmap.png
    :alt: FinGPT Agents current roadmap
-   :align: center
-   :scale: 80%
+   :align: left
+   :width: 800px
+
+Current roadmap begins at March, 2025.
 
