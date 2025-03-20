@@ -22,16 +22,29 @@ Current Progress:
 
 
 ## Installation:
-**You will need an API key for running the agent. Please ask the project leader （FlyM1ss) for the key.**
-1. Clone the repo into an empty directory.
-2. In the root folder, find "installDepdencies.sh" and double click it to install packages necessary for local deployment.
-3. Create the file ".env" at {rootFolderName}\ChatBot-Fin\chat_server\datascraper. With an IDE (do not edit it with a text editor like Notepad), paste the API key into the file and save.
-4. Now, go to your desired browser and find Plugins or Extensions (usually located at top right portion). Enable Developer Mode.
-5. Click "Load Unpacked" located the top left corner of Plugins or Extensions page. Navigate to the folder "{rootFolderName}/ChatBot-Fin/Extension-ChatBot-Fin/src", select and load it.
-6. Go to a terminal of your choice and navigate to "{rootFolderName}\ChatBot-Fin\chat_server"
-7. Run the command "python manage.py runserver"  or "python3 manage.py runserver" if using Python3. Wait for the server to start. This should take no longer than a couple seconds.
-8. Navigate to "https://finance.yahoo.com/" or "https://www.bloomberg.com/". The search agent should automatically load and scrape the homepage.
-9. Start chatting!
+**You will need an API key for running the agent. Please ask the project leader (FlyM1ss) for the key. **
+1. Create or copy paste the file ".env" into {rootFolderName}\ChatBot-Fin\chat_server\datascraper. If creating the file,
+do it with an IDE (do not edit it with a text editor like Notepad), paste the API key into the file and save.
+2. Clone the repo into an empty directory.
+3. For Windows, in the root folder, find "Installer_Win.ps1", right click it, and choose "Run with PowerShell". If no 
+permission, first navigate into the root folder of this project in File Explorer and left click the address bar to
+select the address. Press Ctrl+C to copy. Then, manually open Terminal in Admin mode by right-clicking the task bar and
+choose Terminal (Admin). Type "cd" followed by a space and a quotation mark. Then, paste the address and type the second 
+quotation mark, and press Enter. Finally, copy "powershell.exe -ExecutionPolicy Bypass -File .\Installer_Win.ps1" into
+Terminal and press Enter to run the script. This bypasses the execution policy *only for this execution* to run the
+script.
+4. For MacOS, in the root folder, find "Installer_Mac.sh", right click it, and choose Open with Terminal.
+5. The installer automatically installs the Extension in Google Chrome and starts the back-end. If the extension isn't
+installed in Chrome, or you want to have it installed in another browser, go to your desired browser and find Plugins or
+Extensions (usually located at top right portion). Enable Developer Mode.
+6. Click "Load Unpacked" located the top left corner of Plugins or Extensions page. Navigate to the folder
+"{rootFolderName}/ChatBot-Fin/Extension-ChatBot-Fin/src", select and load it.
+7. If the back-end isn't automatically started, go to a terminal of your choice and navigate to
+"{rootFolderName}\ChatBot-Fin\chat_server"
+8. Run the command "python manage.py runserver"  or "python3 manage.py runserver" if using Python3. Wait for the server
+to start. This should take no longer than a dozen second (may take a bit longer for the first time).
+9. Navigate to a supported website. The search agent should automatically load and scrape the homepage.
+10. Start chatting!
 
 Immediate Next Steps:
 1. Display Chain of Thought in the context window if applicable.
@@ -47,4 +60,6 @@ Future Plans:
 3. Start to promote the demo more and collect questions from users.
 
 
-**Disclaimer: We are sharing codes for academic purposes under the MIT education license. Nothing herein is financial advice, and NOT a recommendation to trade real money. Please use common sense and always first consult a professional before trading or investing.**
+**Disclaimer: We are sharing codes for academic purposes under the MIT education license. Nothing herein is financial 
+advice, and NOT a recommendation to trade real money. Please use common sense and always first consult a professional
+before trading or investing.**
