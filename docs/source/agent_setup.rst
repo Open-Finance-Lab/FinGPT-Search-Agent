@@ -16,16 +16,20 @@ Installation
    It is genuinely a good practice to run python projects inside a virtual environment. If you are running python 3,
    please replace ``python`` with ``python3`` in the commands below.
 
-1. **Prepare your `.env` file**:
+Clone the repository
+~~~~~~~~~~~~~~~~~~~~
+
+   - Clone the repo into an empty directory of your choice. If you don't know how to clone, below is a guide that you may follow:
+
+
+
+   **Prepare your `.env` file**:
 
    - Create (or copy/paste) the file ``.env`` into 
      ``{rootFolderName}\ChatBot-Fin\chat_server\datascraper``.  
    - If creating the file, use an IDE (rather than Notepad) to avoid format issues.
    - Paste the API key into the file and save.
 
-2. **Clone the repository**:
-   
-   - Clone the repo into an empty directory of your choice.
 
 Windows
 ~~~~~~~
