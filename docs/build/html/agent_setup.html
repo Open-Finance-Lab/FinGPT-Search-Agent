@@ -49,7 +49,11 @@
 <li class="toctree-l1"><a class="reference internal" href="introduction.html">Introduction</a></li>
 <li class="toctree-l1 current"><a class="current reference internal" href="#">Agent Setup</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="#using-pre-built-installer-scripts">Using pre-built installer scripts</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#installation">Installation</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#clone-repository">Clone Repository</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#recommended-cloning-method-github-desktop">Recommended Cloning Method: GitHub Desktop</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#install-the-agent">Install the Agent</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#windows">Windows</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#mac">Mac</a></li>
 </ul>
@@ -94,9 +98,6 @@
 <li><p>Step-by-step guide on how to run/install the Agent locally or via the installer script.</p></li>
 <li><p>Any prerequisites, environment variables, etc.</p></li>
 </ul>
-</section>
-<section id="installation">
-<h2>Installation<a class="headerlink" href="#installation" title="Link to this heading"></a></h2>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
 <p>You will need an API key for running the agent. Please ask the project leader (FlyM1ss) via Discord / WeChat / Email (<a class="reference external" href="mailto:felixflyingt&#37;&#52;&#48;gmail&#46;com">felixflyingt<span>&#64;</span>gmail<span>&#46;</span>com</a>) for the key.</p>
@@ -106,8 +107,56 @@
 <p>It is genuinely a good practice to run python projects inside a virtual environment. If you are running python 3,
 please replace <code class="docutils literal notranslate"><span class="pre">python</span></code> with <code class="docutils literal notranslate"><span class="pre">python3</span></code> in the commands below.</p>
 </div>
+</section>
+<section id="clone-repository">
+<h2>Clone Repository<a class="headerlink" href="#clone-repository" title="Link to this heading"></a></h2>
+<p>Clone the repo into an empty directory of your choice. If you don’t know how to clone, below is a guide you can
+follow. If you do, please skip to <em>Install the Agent</em> section.</p>
+<section id="recommended-cloning-method-github-desktop">
+<h3>Recommended Cloning Method: GitHub Desktop<a class="headerlink" href="#recommended-cloning-method-github-desktop" title="Link to this heading"></a></h3>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>You may choose to use Git commands to clone the repository. However, they require more technical knowledge than
+Github Desktop. If you are interested or do not want to install Github Desktop, feel free to checkout
+<a class="reference external" href="https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository?tool=cli">Github’s documentation</a>
+on cloning repositories using Git.</p>
+</div>
 <ol class="arabic simple">
-<li><p><strong>Prepare your `.env` file</strong>:</p>
+<li><p><strong>Download and Install GitHub Desktop</strong></p>
+<ul class="simple">
+<li><p>Visit <a class="reference external" href="https://desktop.github.com/">https://desktop.github.com/</a> to download the latest version for your operating system.</p></li>
+<li><p>Complete the installation.</p></li>
+</ul>
+</li>
+<li><p><strong>Open GitHub Desktop and Sign In</strong></p>
+<ul class="simple">
+<li><p>Launch GitHub Desktop and sign in with your GitHub account.</p></li>
+</ul>
+</li>
+<li><p><strong>Clone the Repository</strong></p>
+<ul class="simple">
+<li><p>In GitHub Desktop, click <strong>File</strong> &gt; <strong>Clone repository…</strong>.</p></li>
+<li><p>Select the <strong>URL</strong> tab and paste:
+<code class="docutils literal notranslate"><span class="pre">https://github.com/Open-Finance-Lab/FinGPT-Search-Agent</span></code></p></li>
+<li><p>Choose a local path (an empty directory) where you want to store the project files.</p></li>
+<li><p>Click <strong>Clone</strong>.</p></li>
+</ul>
+</li>
+<li><p><strong>Switch to the Correct Branch</strong></p>
+<ul class="simple">
+<li><p>In GitHub Desktop, confirm that the repository is open.</p></li>
+<li><p>At the top center of the app, there’s a dropdown showing the currently active branch.</p></li>
+<li><p>Change this from <code class="docutils literal notranslate"><span class="pre">main</span></code> to <code class="docutils literal notranslate"><span class="pre">fingpt_local_singleModel</span></code> by selecting the branch from the dropdown list.</p></li>
+<li><p>If you don’t see the branch listed, click <strong>Fetch</strong> from the top menu. The branch should show up after fetching
+is complete.</p></li>
+</ul>
+</li>
+<li><p><strong>Verify</strong></p>
+<ul class="simple">
+<li><p>Your GitHub Desktop window should now display the <cite>fingpt_local_singleModel</cite> branch as your active branch.</p></li>
+</ul>
+</li>
+<li><p><strong>Prepare your `.env` file</strong></p>
 <ul class="simple">
 <li><p>Create (or copy/paste) the file <code class="docutils literal notranslate"><span class="pre">.env</span></code> into
 <code class="docutils literal notranslate"><span class="pre">{rootFolderName}\ChatBot-Fin\chat_server\datascraper</span></code>.</p></li>
@@ -115,12 +164,11 @@ please replace <code class="docutils literal notranslate"><span class="pre">pyth
 <li><p>Paste the API key into the file and save.</p></li>
 </ul>
 </li>
-<li><p><strong>Clone the repository</strong>:</p>
-<ul class="simple">
-<li><p>Clone the repo into an empty directory of your choice.</p></li>
-</ul>
-</li>
 </ol>
+</section>
+</section>
+<section id="install-the-agent">
+<h2>Install the Agent<a class="headerlink" href="#install-the-agent" title="Link to this heading"></a></h2>
 <section id="windows">
 <h3>Windows<a class="headerlink" href="#windows" title="Link to this heading"></a></h3>
 <ol class="arabic">
@@ -144,9 +192,12 @@ please replace <code class="docutils literal notranslate"><span class="pre">pyth
 </li>
 </ul>
 </li>
-<li><p>The installer attempts to:
-- Install the Extension in Google Chrome
-- Start the back-end</p></li>
+<li><p>The installer attempts to:</p>
+<ul class="simple">
+<li><p>Install the Extension in Google Chrome</p></li>
+<li><p>Start the back-end</p></li>
+</ul>
+</li>
 <li><p>If the Extension is <strong>not</strong> automatically installed, or you want to use another browser:</p>
 <ul class="simple">
 <li><p>Enable Developer Mode in that browser’s Extensions/Plugins panel.</p></li>
@@ -155,10 +206,10 @@ please replace <code class="docutils literal notranslate"><span class="pre">pyth
 to select and load the extension manually.</p></li>
 </ul>
 </li>
-<li><p>If the <strong>back-end</strong> isn’t started automatically:
-- Open a terminal and navigate to
-<code class="docutils literal notranslate"><span class="pre">{rootFolderName}\ChatBot-Fin\chat_server</span></code></p>
+<li><p>If the <strong>back-end</strong> isn’t started automatically:</p>
 <ul>
+<li><p>Open a terminal and navigate to
+<code class="docutils literal notranslate"><span class="pre">{rootFolderName}\ChatBot-Fin\chat_server</span></code></p></li>
 <li><p>Run:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">python</span> <span class="n">manage</span><span class="o">.</span><span class="n">py</span> <span class="n">runserver</span>
 </pre></div>
@@ -174,17 +225,23 @@ to select and load the extension manually.</p></li>
 <ol class="arabic">
 <li><p>In the project’s <strong>root folder</strong>, locate the file <code class="docutils literal notranslate"><span class="pre">Installer_Mac.sh</span></code>.</p></li>
 <li><p>Right-click it and select <strong>“Open with Terminal”</strong>.</p></li>
-<li><p>The installer attempts to:
-- Install the Extension in Google Chrome
-- Start the back-end</p></li>
-<li><p>If the Extension is <strong>not</strong> automatically installed, or you want to use another browser:
-- Enable Developer Mode in that browser’s Extensions/Plugins panel.
-- Click <strong>“Load Unpacked”</strong> and navigate to
+<li><p>The installer attempts to:</p>
+<ul class="simple">
+<li><p>Install the Extension in Google Chrome</p></li>
+<li><p>Start the back-end</p></li>
+</ul>
+</li>
+<li><p>If the Extension is <strong>not</strong> automatically installed, or you want to use another browser:</p>
+<ul class="simple">
+<li><p>Enable Developer Mode in that browser’s Extensions/Plugins panel.</p></li>
+<li><p>Click <strong>“Load Unpacked”</strong> and navigate to
 <code class="docutils literal notranslate"><span class="pre">{rootFolderName}/ChatBot-Fin/Extension-ChatBot-Fin/src</span></code> to select and load the extension manually.</p></li>
-<li><p>If the <strong>back-end</strong> isn’t automatically started:
-- Open a terminal and navigate to
-<code class="docutils literal notranslate"><span class="pre">{rootFolderName}\ChatBot-Fin\chat_server</span></code></p>
+</ul>
+</li>
+<li><p>If the <strong>back-end</strong> isn’t automatically started:</p>
 <ul>
+<li><p>Open a terminal and navigate to
+<code class="docutils literal notranslate"><span class="pre">{rootFolderName}\ChatBot-Fin\chat_server</span></code></p></li>
 <li><p>Run:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">python</span> <span class="n">manage</span><span class="o">.</span><span class="n">py</span> <span class="n">runserver</span>
 </pre></div>
