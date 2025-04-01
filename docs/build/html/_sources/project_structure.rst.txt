@@ -56,11 +56,3 @@ Plans for Back-end
 
 * Implement langchain.
 
-Database
-~~~~~~~~
-- Description of the database structure and its purpose.
-- Any relevant database management tools or techniques.
-
-API
-~~~
-- Description of the API endpoints and their functionality.

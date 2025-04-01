@@ -10,6 +10,11 @@ Key Features
 - Also a powerful **answer engine**: an answer agent that performs open search (open-domain search plus local file search) to quickly locate relevant financial information from various sources, such as websites, reports, filings, and local databases.
 - For generated responses, users may perform quick **source verification**, ensuring reliability and accuracy.
 
+.. image:: _static/images/agent_mcp_interaction.jpg
+   :alt: Web agent interaction diagram
+   :align: left
+   :width: 800px
+
 **NO DIRECT TRADING ADVICE**
 
 Motivation
