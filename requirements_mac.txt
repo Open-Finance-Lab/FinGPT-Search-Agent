@@ -10,7 +10,3 @@ python-dotenv~=1.0.1
 bs4~=0.0.2
 faiss_cpu
 django-cors-headers
-sphinx
-sphinx_rtd_theme
-nbsphinx
-nbsphinx_link
