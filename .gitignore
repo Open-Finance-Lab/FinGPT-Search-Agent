@@ -1,7 +1,8 @@
+# environment variables
 chat_interface/backend_modules/.env
- # Intellij Idea
+
+# Intellij Idea
 /.idea/
-/.idea/codeStyles
 FinGPT_Demo.iml
 
 # node modules
@@ -14,9 +15,9 @@ ChatBot-Fin/Extension-ChatBot-Fin/node_modules/
 # venv
 /FinGPTenv
 
-# rag loca embeddings
+# rag local embeddings
 ChatBot-Fin/chat_server/datascraper/embeddings.pkl
 ChatBot-Fin/chat_server/datascraper/faiss_index.idx
 
-
-
+# Sphinx doc build
+/docs/build
