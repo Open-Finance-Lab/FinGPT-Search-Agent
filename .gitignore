@@ -19,6 +19,5 @@ ChatBot-Fin/Extension-ChatBot-Fin/node_modules/
 ChatBot-Fin/chat_server/datascraper/embeddings.pkl
 ChatBot-Fin/chat_server/datascraper/faiss_index.idx
 
-
-
+# Sphinx doc build
 /docs/build
