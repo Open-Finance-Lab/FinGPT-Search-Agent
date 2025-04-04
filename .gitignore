@@ -21,3 +21,4 @@ FinGPTenv/
 /ChatBot-Fin/chat_server/chat_server_app/__pycache__
 /.idea
 ChatBot-Fin/chat_server/.google-cookie
+/docs/build
