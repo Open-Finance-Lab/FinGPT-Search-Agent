@@ -156,6 +156,22 @@ pkill -f "Google Chrome" 2>/dev/null
 echo "Chrome closed (or was not running)."
 
 echo
+echo "🔧 Building and verifying FinGPT extension..."
+ORIGINAL_DIR=$(pwd)
+# Change to extension directory (relative to script location)
+cd "$SCRIPT_DIR/ChatBot-Fin/Extension-ChatBot-Fin" || exit 1
+npm run build:full # Build frontend and verify dist/ contents
+cd "$ORIGINAL_DIR"
+
+BUILD_STATUS=$?
+if [ $BUILD_STATUS -ne 0 ]; then
+  echo "❌ Build or file check failed. Aborting further steps."
+  exit 1
+else
+  echo "✅ Build passed! Proceeding..."
+fi
+
+echo
 echo "Loading FinGPT extension in Chrome..."
 EXTENSION_PATH="${SCRIPT_DIR}/ChatBot-Fin/Extension-ChatBot-Fin/dist"
 if [ ! -d "$EXTENSION_PATH" ]; then
