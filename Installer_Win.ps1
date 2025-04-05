@@ -162,7 +162,7 @@ Stop-Process -Name chrome -Force -ErrorAction SilentlyContinue
 Write-Host "Chrome closed (or was not running)."
 
 Write-Host "`nLoading FinGPT extension in Chrome..."
-$extensionPath = Join-Path $PSScriptRoot "ChatBot-Fin\Extension-ChatBot-Fin\src"
+$extensionPath = Join-Path $PSScriptRoot "ChatBot-Fin\Extension-ChatBot-Fin\dist"
 if (!(Test-Path $extensionPath)) {
     Write-Host "ERROR: Extension source folder not found at $extensionPath"
     PressAnyKeyToExit 1

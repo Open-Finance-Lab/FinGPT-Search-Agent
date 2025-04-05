@@ -157,7 +157,7 @@ echo "Chrome closed (or was not running)."
 
 echo
 echo "Loading FinGPT extension in Chrome..."
-EXTENSION_PATH="${SCRIPT_DIR}/ChatBot-Fin/Extension-ChatBot-Fin/src"
+EXTENSION_PATH="${SCRIPT_DIR}/ChatBot-Fin/Extension-ChatBot-Fin/dist"
 if [ ! -d "$EXTENSION_PATH" ]; then
     echo "ERROR: Extension source folder not found at $EXTENSION_PATH"
     press_any_key_to_exit 1
