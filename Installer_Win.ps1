@@ -161,8 +161,25 @@ Write-Host "`nAttempting to close Chrome if running..."
 Stop-Process -Name chrome -Force -ErrorAction SilentlyContinue
 Write-Host "Chrome closed (or was not running)."
 
+
+Write-Host "`n🔧 Building and verifying FinGPT extension..."
+$OriginalDir = Get-Location
+# Change to extension directory
+Set-Location -Path "$PSScriptRoot\ChatBot-Fin\Extension-ChatBot-Fin"
+npm run build:full # build frontend and verify dist/ contents
+
+Set-Location -Path $OriginalDir
+$BUILD_STATUS = $LASTEXITCODE
+if ($BUILD_STATUS -ne 0) {
+    Write-Host "❌ Build or file check failed. Aborting further steps." -ForegroundColor Red
+    exit 1
+} else {
+    Write-Host "✅ Build passed! Proceeding..." -ForegroundColor Green
+}
+
+
 Write-Host "`nLoading FinGPT extension in Chrome..."
-$extensionPath = Join-Path $PSScriptRoot "ChatBot-Fin\Extension-ChatBot-Fin\src"
+$extensionPath = Join-Path $PSScriptRoot "ChatBot-Fin\Extension-ChatBot-Fin\dist"
 if (!(Test-Path $extensionPath)) {
     Write-Host "ERROR: Extension source folder not found at $extensionPath"
     PressAnyKeyToExit 1
