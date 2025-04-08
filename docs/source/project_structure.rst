@@ -22,8 +22,8 @@ This long javascript file is organized in three main sections, from top to down:
 The task of splitting this file into multiple smaller files is near completion. Documentation will be updated
 accordingly once the split is complete.
 
-Plans for Front-end
-~~~~~~~~~~~~~~~~~~~
+Plans for Future Front-end Capability
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 * Ability to consistently render LaTeX.
 
@@ -37,7 +37,7 @@ Plans for Front-end
    :depth: 2
 
 Initial Configuration
----------------------
+~~~~~~~~~~~~~~~~~~~~~
 
 1. **URL and Text Content**:
 
@@ -64,7 +64,7 @@ Initial Configuration
      This passes the page’s text content to the back end for any initial processing or indexing, using a ``POST`` request.
 
 User Interface
---------------
+~~~~~~~~~~~~~~
 
 The interface is composed of the main "popup" window and sub-windows (settings, sources).
 
@@ -110,7 +110,7 @@ The interface is composed of the main "popup" window and sub-windows (settings, 
    - Lists URLs returned by the back end in a simple format.
 
 API
----
+~~~
 
 All back-end communication is performed through ``fetch`` calls:
 
@@ -148,7 +148,7 @@ All back-end communication is performed through ``fetch`` calls:
    - ``POST /api/add_preferred_url/`` adds a new link to the user’s preference list.
 
 Button Handlers
----------------
+~~~~~~~~~~~~~~~
 
 1. **get_chat_response()**:
 
@@ -171,7 +171,7 @@ Button Handlers
    - Displays them as clickable items in the UI.
 
 Helpers
--------
+~~~~~~~
 
 1. **appendChatElement(parent, className, text)**:
 
