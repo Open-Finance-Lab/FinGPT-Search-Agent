@@ -1,30 +1,23 @@
+# environment variables
 chat_interface/backend_modules/.env
- # Intellij Idea
- .idea/
-.idea/workspace.xml
-.idea/discord.xml
-.idea/vcs.xml
-.idea/misc.xml
-.idea/modules.xml
+
+# Intellij Idea
+/.idea/
 FinGPT_Demo.iml
 
 # node modules
 ChatBot-Fin/Extension-ChatBot-Fin/node_modules/
+
+# pycache
 /ChatBot-Fin/chat_server/chat_server/__pycache__
+/ChatBot-Fin/chat_server/chat_server_app/__pycache__
 
-./ChatBot-Fin/chat_server/datascraper/gemma-2-2b-it
-.idea/fingpt_rcos.iml
+# venv
+/FinGPTenv
 
-ChatBot-Fin/chat_server/datascraper/cdm_cloned/
+# rag local embeddings
 ChatBot-Fin/chat_server/datascraper/embeddings.pkl
 ChatBot-Fin/chat_server/datascraper/faiss_index.idx
-<<<<<<< HEAD
-ChatBot-Fin/chat_server/chat_server_app/__pycache__/__init__.cpython-312.pyc
-ChatBot-Fin/chat_server/chat_server_app/__pycache__/views.cpython-312.pyc
-=======
-<<<<<<< HEAD
-=======
-ChatBot-Fin/chat_server/chat_server_app/__pycache__/__init__.cpython-312.pyc
-ChatBot-Fin/chat_server/chat_server_app/__pycache__/views.cpython-312.pyc
->>>>>>> doan_branch
->>>>>>> origin/main
+
+# Sphinx doc build
+/docs/build
