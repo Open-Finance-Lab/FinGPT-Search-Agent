@@ -1,7 +1,7 @@
-Introduction
+Overview
 ============
 
-FinGPT is a web-based agent in finance, business, accounting domains to assist users in information retrieval and data analysis. When generating responses, it provides the information sources to help users evaluate the responses' quality.
+FinGPT Search Agents is a web-based agent in finance, business, accounting domains to assist users in information retrieval and data analysis. When generating responses, it provides the information sources to help users evaluate the responses' quality.
 
 Key Features
 ------------
@@ -29,7 +29,7 @@ For students, imagine how much time may be saved from reviewing for an exam, if 
 Road Map
 --------
 
-.. image:: _static/images/2025_march_roadmap.png
+.. image:: _static/images/current_roadmap.png
    :alt: FinGPT Agents current roadmap
    :align: left
    :width: 800px
