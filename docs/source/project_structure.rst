@@ -8,7 +8,7 @@ Front-end
 ---------
 FinGPT Agents' front-end files are located in ``ChatBot-Fin\Extension-ChatBot-Fin\src``.
 
-Currently, ``main.js`` is fully responsible for rendering the extension window, which we call the "pop up".
+Currently, ``content_archive.js`` is fully responsible for rendering the extension window, which we call the "pop up".
 This long javascript file is organized in three main sections, from top to down:
 
 * **Event Listeners**: Contains functions that handle the extension's communication with back-end, including
