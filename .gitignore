@@ -21,3 +21,9 @@ ChatBot-Fin/chat_server/datascraper/faiss_index.idx
 
 # Sphinx doc build
 /docs/build
+
+# webpack build
+/ChatBot-Fin/Extension-ChatBot-Fin/dist
+
+#question logging
+ChatBot-Fin/chat_server/chat_server_app/questionLog.csv
