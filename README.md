@@ -13,13 +13,13 @@ This is a demo of FinLLMs on the HuggingFace's [Open Financial LLM Leaderboard](
 Current Progress:
 
 1. Snapshot of the search agent: drag, resize and minimize; Providing information on user's current page.
-   ![image](https://github.com/Open-Finance-Lab/FinGPT-Search-Agent/tree/fingpt_local_singleModel/figures/F4.0_1.png)
+   ![image](figures/F4.0_1.png)
 
 2. Checking sources, which are very important and help reduce misinformation.
-   ![image](https://github.com/Open-Finance-Lab/FinGPT-Search-Agent/tree/fingpt_local_singleModel/figures/F4.0_Source.png)
+   ![image](figures/F4.0_Source.png)
 
 3. Dedicated RAG for local files (SEC 10K, XBRL files).
-   ![image](https://github.com/Open-Finance-Lab/FinGPT-Search-Agent/tree/fingpt_local_singleModel/figures/F4.0_RAG_1.png)
+   ![image](figures/F4.0_RAG_1.png)
 
 
 ## Installation, Usage, and more
