@@ -1,6 +1,9 @@
 # environment variables
 chat_interface/backend_modules/.env
 
+# google cookie
+ChatBot-Fin/chat_server/.google-cookie
+
 # Intellij Idea
 /.idea/
 FinGPT_Demo.iml
@@ -25,5 +28,5 @@ ChatBot-Fin/chat_server/datascraper/faiss_index.idx
 # webpack build
 /ChatBot-Fin/Extension-ChatBot-Fin/dist
 
-#question logging
+# question logging
 ChatBot-Fin/chat_server/chat_server_app/questionLog.csv
