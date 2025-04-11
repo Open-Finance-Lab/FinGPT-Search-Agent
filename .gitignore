@@ -4,8 +4,9 @@ chat_interface/backend_modules/.env
 # google cookie
 ChatBot-Fin/chat_server/.google-cookie
 
-# Intellij Idea
+# Intellij Idea and VS
 /.idea/
+/.vs/
 FinGPT_Demo.iml
 
 # node modules
