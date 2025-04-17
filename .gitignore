@@ -31,3 +31,4 @@ ChatBot-Fin/chat_server/datascraper/faiss_index.idx
 
 # question logging
 ChatBot-Fin/chat_server/chat_server_app/questionLog.csv
+ChatBot-Fin/chat_server/preferred_urls.txt
