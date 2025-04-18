@@ -59,6 +59,19 @@ Future Plans:
 2. Make user-specified web lists more "intelligent", if there is any way for the agent to auto-navigate some websites.
 3. Start to promote the demo more and collect questions from users.
 
+Citing:
+
+''''
+@inproceedings{tian2024customized,
+  title={Customized fingpt search agents using foundation models},
+  author={Tian, Felix and Byadgi, Ajay and Kim, Daniel S and Zha, Daochen and White, Matt and Xiao, Kairong and Liu, Xiao-Yang},
+  booktitle={Proceedings of the 5th ACM International Conference on AI in Finance},
+  pages={469--477},
+  year={2024}
+}
+}
+''''
+
 
 **Disclaimer: We are sharing codes for academic purposes under the MIT education license. Nothing herein is financial 
 advice, and NOT a recommendation to trade real money. Please use common sense and always first consult a professional
