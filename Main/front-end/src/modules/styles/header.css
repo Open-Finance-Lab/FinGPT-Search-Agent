@@ -1,0 +1,27 @@
+/* Header */
+#header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    background-color: #333;
+    border-radius: 15px 15px 0 0;
+    padding: 10px;
+    cursor: move;
+}
+
+#header span {
+    font-size: 1.2em;
+    font-weight: bold;
+}
+
+#header .icon {
+    cursor: pointer;
+    margin-left: 10px;
+}
+
+/* Icon Container */
+#icon-container {
+    display: flex;
+    align-items: center;
+}
