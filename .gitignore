@@ -13,6 +13,9 @@ FinGPT_Demo.iml
 Main/front-end/node_modules/
 Main/back-end/node_modules/
 
+# npm packages
+Main/front-end/package-lock.json
+
 # pycache
 /Main/back-end/chat_server/__pycache__
 /Main/back-end/chat_server_app/__pycache__
@@ -32,4 +35,7 @@ Main/back-end/datascraper/faiss_index.idx
 
 # question logging
 Main/back-end/chat_server_app/questionLog.csv
+
+# user preferred links
 Main/back-end/preferred_urls.txt
+
