@@ -1,12 +1,12 @@
-# FinGPT Agents
+# FinGPT Search Agents
 
-Vision: An agent in finance, business, accounting domains to assist users in information retrieval and data analysis. When generating responses, it provides the information sources to help users evaluate the responses' quality.
+Vision: A financial agent to assist users in information retrieval and data analysis. It provides the information sources of generated responses to help users evaluate the responses' quality.
  
-This is a demo of FinLLMs on the HuggingFace's [Open Financial LLM Leaderboard](https://huggingface.co/spaces/TheFinAI/Open-Financial-LLM-Leaderboard).
+This is a demo of FinLLM Leaderboard on HuggingFace's [Open Financial LLM Leaderboard](https://huggingface.co/spaces/TheFinAI/Open-Financial-LLM-Leaderboard).
 
-1. A powerful information search-and-retrieval engine: A search agent for websites (Math Cup, Yahoo Finance, Bloomberg, XBRL International) and local files (SEC 10K, XBRL files (eXtensible Business Reporting Language)).
-2. A powerful answer engine: an answer agent performs open search to quickly locate relevant financial information from various sources, such as websites, reports, filings, and databases
-3. For generated responses, users can check the sources, ensuring reliability and accuracy.
+1. A powerful agent for retrieving financial information: financial websites (Yahoo Finance, Bloomberg, XBRL International) and local files (SEC 10K, XBRL files (eXtensible Business Reporting Language)).
+2. A powerful answer engine: performs open search to quickly locate relevant financial information from various sources, such as websites, reports, filings, and databases
+3. Users can check the sources of generated responses, ensuring reliability and accuracy.
 
 **NO Trading Suggestions!**
 
@@ -33,6 +33,18 @@ Immediate Next Steps:
 
 Future Plans:
 1. zkp demo.
+
+Citing:
+
+```
+@inproceedings{tian2024customized,
+  title={Customized fingpt search agents using foundation models},
+  author={Tian, Felix and Byadgi, Ajay and Kim, Daniel S and Zha, Daochen and White, Matt and Xiao, Kairong and Liu, Xiao-Yang},
+  booktitle={Proceedings of the 5th ACM International Conference on AI in Finance},
+  pages={469--477},
+  year={2024}
+}
+```
 
 
 **Disclaimer: We are sharing codes for academic purposes under the MIT education license. Nothing herein is financial 

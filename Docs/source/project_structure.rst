@@ -1,4 +1,4 @@
-Project File Structure
+File Structure
 ======================
 
 This project currently exists only in the form of a web extension. Extension settings are located in
