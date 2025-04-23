@@ -93,7 +93,7 @@ Write-Host "`nUpgrading pip in the virtual environment..."
 pip install --upgrade pip
 
 # requirements file
-$requirementsFile = Join-Path $PSScriptRoot "requirements_win.txt"
+$requirementsFile = Join-Path $PSScriptRoot "Requirements\requirements_win.txt"
 if (!(Test-Path $requirementsFile)) {
     Write-Host "ERROR: requirements_win.txt not found at $requirementsFile"
     PressAnyKeyToExit 1
@@ -109,10 +109,10 @@ Write-Host "All dependencies installed successfully."
 Write-Host "`nStarting Django back-end..."
 
 # Path to your Django project folder
-$serverPath = Join-Path $PSScriptRoot "ChatBot-Fin\chat_server"
+$serverPath = Join-Path $PSScriptRoot "Main\back-end"
 
 if (!(Test-Path $serverPath)) {
-    Write-Host "ERROR: ChatBot-Fin\\chat_server folder not found at $serverPath"
+    Write-Host "ERROR: Main\\back-end folder not found at $serverPath"
     PressAnyKeyToExit 1
 }
 
@@ -165,7 +165,8 @@ Write-Host "Chrome closed (or was not running)."
 Write-Host "`n🔧 Building and verifying FinGPT extension..."
 $OriginalDir = Get-Location
 # Change to extension directory
-Set-Location -Path "$PSScriptRoot\ChatBot-Fin\Extension-ChatBot-Fin"
+Set-Location -Path "$PSScriptRoot\Main\front-end"
+npm i # install dependencies
 npm run build:full # build frontend and verify dist/ contents
 
 Set-Location -Path $OriginalDir
@@ -179,7 +180,7 @@ if ($BUILD_STATUS -ne 0) {
 
 
 Write-Host "`nLoading FinGPT extension in Chrome..."
-$extensionPath = Join-Path $PSScriptRoot "ChatBot-Fin\Extension-ChatBot-Fin\dist"
+$extensionPath = Join-Path $PSScriptRoot "Main\front-end\dist"
 if (!(Test-Path $extensionPath)) {
     Write-Host "ERROR: Extension source folder not found at $extensionPath"
     PressAnyKeyToExit 1

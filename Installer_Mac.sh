@@ -83,7 +83,7 @@ echo "Upgrading pip in the virtual environment..."
 pip install --upgrade pip
 
 # Use requirements_mac.txt for macOS
-REQUIREMENTS_FILE="${SCRIPT_DIR}/requirements_mac.txt"
+REQUIREMENTS_FILE="${SCRIPT_DIR}/Requirements/requirements_mac.txt"
 if [ ! -f "$REQUIREMENTS_FILE" ]; then
     echo "ERROR: requirements_mac.txt not found at $REQUIREMENTS_FILE"
     press_any_key_to_exit 1
@@ -105,7 +105,7 @@ echo
 echo "Starting Django back-end..."
 
 # Path to your Django project folder: ChatBot-Fin/chat_server
-SERVER_PATH="${SCRIPT_DIR}/ChatBot-Fin/chat_server"
+SERVER_PATH="${SCRIPT_DIR}/Main/back-end"
 if [ ! -d "$SERVER_PATH" ]; then
     echo "ERROR: ChatBot-Fin/chat_server folder not found at $SERVER_PATH"
     press_any_key_to_exit 1
@@ -159,7 +159,8 @@ echo
 echo "🔧 Building and verifying FinGPT extension..."
 ORIGINAL_DIR=$(pwd)
 # Change to extension directory (relative to script location)
-cd "$SCRIPT_DIR/ChatBot-Fin/Extension-ChatBot-Fin" || exit 1
+cd "$SCRIPT_DIR/Main/front-end" || exit 1
+npm i # Install dependencies
 npm run build:full # Build frontend and verify dist/ contents
 cd "$ORIGINAL_DIR"
 
@@ -173,7 +174,7 @@ fi
 
 echo
 echo "Loading FinGPT extension in Chrome..."
-EXTENSION_PATH="${SCRIPT_DIR}/ChatBot-Fin/Extension-ChatBot-Fin/dist"
+EXTENSION_PATH="${SCRIPT_DIR}/Main/front-end/dist"
 if [ ! -d "$EXTENSION_PATH" ]; then
     echo "ERROR: Extension source folder not found at $EXTENSION_PATH"
     press_any_key_to_exit 1
