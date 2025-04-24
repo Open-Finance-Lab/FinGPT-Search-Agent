@@ -2,7 +2,7 @@
 chat_interface/backend_modules/.env
 
 # google cookie
-Main/back-end/.google-cookie
+Main/backend/.google-cookie
 
 # Intellij Idea and VS
 /.idea/
@@ -10,32 +10,32 @@ Main/back-end/.google-cookie
 FinGPT_Demo.iml
 
 # node modules
-Main/front-end/node_modules/
-Main/back-end/node_modules/
+Main/frontend/node_modules/
+Main/backend/node_modules/
 
 # npm packages
-Main/front-end/package-lock.json
+Main/frontend/package-lock.json
 
 # pycache
-/Main/back-end/chat_server/__pycache__
-/Main/back-end/chat_server_app/__pycache__
+/Main/backend/chat_server/__pycache__
+/Main/backend/chat_server_app/__pycache__
 
 # venv
 /FinGPTenv
 
 # rag local embeddings
-Main/back-end/datascraper/embeddings.pkl
-Main/back-end/datascraper/faiss_index.idx
+Main/backend/datascraper/embeddings.pkl
+Main/backend/datascraper/faiss_index.idx
 
 # Sphinx doc build
 /Docs/build
 
 # webpack build
-/Main/front-end/dist
+/Main/frontend/dist
 
 # question logging
-Main/back-end/chat_server_app/questionLog.csv
+Main/backend/chat_server_app/questionLog.csv
 
 # user preferred links
-Main/back-end/preferred_urls.txt
+Main/backend/preferred_urls.txt
 
