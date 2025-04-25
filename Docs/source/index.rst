@@ -19,4 +19,3 @@ documentation for details.
    agent_setup
    usage/index
    project_structure
-   team
