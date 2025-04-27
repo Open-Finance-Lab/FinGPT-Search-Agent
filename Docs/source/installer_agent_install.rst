@@ -1,15 +1,15 @@
-Agent Setup
-===========
+Install Agent with Pre-built Scripts
+====================================
 
 - Step-by-step guide on how to run/install the Agent via the installer script. The scripts automatically installs
-  the agent to **Google Chrome** by default. If you want to install to a different browser, please see **Step 4** of
-  the section **Windows** - `Install the Agent`.
+  the agent to **Google Chrome** by default. If you want to install to a different browser, please see **Step 3** of
+  :ref:`pop-up-installation`.
 - Any prerequisites, environment variables, etc.
 
 .. note::
    You will need an OpenAI API key for running the agent. Please ask the project leader (FlyM1ss) via Discord /
    WeChat / Email (felixflyingt@gmail.com) for the key. If you have your own key, feel free to create a ``.env`` file
-   inside ``{rootFolderName}\ChatBot-Fin\chat_server\datascraper`` and put in the form of ``API_KEY7=Your-Key``.
+   inside ``{rootFolderName}\Main\backend\datascraper`` and put in the form of ``API_KEY7=Your-Key``.
 
 .. note::
    If you are running Python 3 and the commands below don't work, please replace any ``python`` within the command to
@@ -69,12 +69,14 @@ Recommended Cloning Method: GitHub Desktop
 6. **Prepare your `.env` file**
 
     - Create (or copy/paste) the file ``.env`` into
-      ``{rootFolderName}\ChatBot-Fin\chat_server\datascraper``.
+      ``{rootFolderName}\Main\backend\datascraper``.
     - If creating the file, use an IDE (rather than Notepad) to avoid format issues.
     - Paste the API key into the file and save.
 
 Install the Agent
 -----------------
+
+.. _pop-up-installation:
 
 Windows
 ~~~~~~~
@@ -103,9 +105,9 @@ Windows
 
   The installer will attempt to:
 
-    - Install the Extension in Google Chrome
     - Create and start a Python virtual environment.
     - Start the back-end
+    - Install the Extension in Google Chrome
 
 3. **Check Front-end Installation**
 
@@ -114,7 +116,7 @@ Windows
 
     - Find and open the Extension Page. It's usually opened by clicking a "puzzle piece" button or under **Settings**.
     - Find and enable Developer Mode in that browser’s Extensions/Plugins panel.
-    - Click **"Load Unpacked"** and navigate to ``{rootFolderName}/ChatBot-Fin/Extension-ChatBot-Fin``, click ``src``
+    - Click **"Load Unpacked"** and navigate to ``{rootFolderName}/Main/frontend``, click ``dist``
       to select the folder, and hit Enter or click **Select Folder**.
     - Make sure you see "FinGPT" inside the Extension/Plugin page.
 
@@ -124,7 +126,7 @@ Windows
   with CTRL-BREAK**" displayed at the last line. If the back-end isn’t started automatically or the starting failed:
 
     - Open a terminal and navigate to
-      ``{rootFolderName}\ChatBot-Fin\chat_server``
+      ``{rootFolderName}\Main\backend``
 
     - Run:
       ::
@@ -167,7 +169,7 @@ Mac
 
     - Find and open the Extension Page. It's usually opened by clicking a "puzzle piece" button or under **Settings**.
     - Find and enable Developer Mode in that browser’s Extensions/Plugins panel.
-    - Click **"Load Unpacked"** and navigate to ``{rootFolderName}/ChatBot-Fin/Extension-ChatBot-Fin``, click ``src``
+    - Click **"Load Unpacked"** and navigate to ``{rootFolderName}/Main/frontend``, click ``dist``
       to select the folder, and hit Enter or click **Select Folder**.
     - Make sure you see "FinGPT" inside the Extension/Plugin page.
 
@@ -177,7 +179,7 @@ Mac
   with CTRL-BREAK**" displayed at the last line. If the back-end isn’t started automatically or the starting failed:
 
     - Open a terminal and navigate to
-      ``{rootFolderName}\ChatBot-Fin\chat_server``
+      ``{rootFolderName}\Main\backend``
 
     - Run:
       ::
@@ -187,8 +189,9 @@ Mac
     - Wait a few seconds for the server to start.
 
 Final Steps
------------
+~~~~~~~~~~~
 
 - Navigate to any supported website.
 - The search agent should automatically load and scrape the homepage.  
 - **Start chatting!**
+

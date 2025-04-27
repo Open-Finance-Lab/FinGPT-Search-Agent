@@ -1,13 +1,8 @@
-Advanced Usage
-===============
+Advanced Usage of the Agent
+===========================
 
-Subcategories
--------------
+.. admonition:: When to use this section
+   :class: note
 
-**Advanced Ask**  
-Describe any advanced or power-user query syntax, parameters, or additional features.
-
-**Using RAG**  
-Explain how Retrieval Augmented Generation (RAG) is integrated. 
-- How to set up relevant vector databases or knowledge sources.
-- Commands, configuration, examples, etc.
+   Please make sure the search agent is successfully installed
+   and running before testing out any of the examples below!
