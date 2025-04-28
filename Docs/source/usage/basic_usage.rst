@@ -54,5 +54,5 @@ Two more buttons appear above the prompt box and below where conversations are s
 - **Source Button**: Shows the sources used by the search agent to answer the user's prompt. The sources are shown in a
   pop up and may be closed.'
 
-These components make up the current FinGPT Search Agent demo. The documentation will be updated regularily to keep up
+These components make up the current FinGPT Search Agent demo. The documentation will be updated regularly to keep up
 with latest progress.
