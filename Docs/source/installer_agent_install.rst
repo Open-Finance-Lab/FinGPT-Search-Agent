@@ -179,7 +179,7 @@ Mac
   with CTRL-BREAK**" displayed at the last line. If the back-end isn’t started automatically or the starting failed:
 
     - Open a terminal and navigate to
-      ``{rootFolderName}\Main\backend``
+      ``{rootFolderName}/Main/backend``
 
     - Run:
       ::
