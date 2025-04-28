@@ -10,6 +10,9 @@ Manually Install the Agent
    :ref:`start-agent-ready` to verify the extension's installation and how to use
    the agent.
 
+.. note::
+   The search agent currently does NOT work on **Brave** browser.
+
 Prerequisites
 -------------
 

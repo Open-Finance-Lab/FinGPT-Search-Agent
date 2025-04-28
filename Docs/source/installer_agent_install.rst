@@ -15,6 +15,9 @@ Install Agent with Pre-built Scripts
    If you are running Python 3 and the commands below don't work, please replace any ``python`` within the command to
    ``python3``.
 
+.. note::
+   The search agent currently does NOT work on **Brave** browser.
+
 Clone Repository
 ----------------
 
