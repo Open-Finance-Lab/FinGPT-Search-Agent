@@ -1,4 +1,4 @@
-Project Structure
+File Structure
 =================
 
 This document provides high-level structure and basic details about the project structure.

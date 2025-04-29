@@ -1,5 +1,5 @@
-Advanced Usage of the Agent
-===========================
+Tutorial: Advanced Usages
+=========================
 
 .. admonition:: When to use this section
    :class: note

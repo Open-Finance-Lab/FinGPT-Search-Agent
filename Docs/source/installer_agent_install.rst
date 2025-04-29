@@ -1,5 +1,5 @@
-Install Agent with Pre-built Scripts
-====================================
+Tutorial: Install with Installer Scripts
+========================================
 
 - Step-by-step guide on how to run/install the Agent via the installer script. The scripts automatically installs
   the agent to **Google Chrome** by default. If you want to install to a different browser, please see **Step 3** of

@@ -1,4 +1,4 @@
-Basic Usage of the Agent
+Tutorial: Basic Usage of the Agent
 ========================
 
 .. admonition:: When to use this section

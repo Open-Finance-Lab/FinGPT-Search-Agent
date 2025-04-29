@@ -1,5 +1,5 @@
-Manually Install the Agent
-==========================
+Tutorial: Manual Install
+========================
 
 .. admonition:: When to use this section
    :class: note
