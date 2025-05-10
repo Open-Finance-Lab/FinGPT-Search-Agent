@@ -10,6 +10,11 @@ python-dotenv~=1.0.1
 bs4~=0.0.2
 faiss-cpu
 django-cors-headers
+daphne
+pytest
+flask
+mcp[cli]
+django-mcp
 sphinx
 sphinx_rtd_theme
 nbsphinx

@@ -7,8 +7,11 @@ from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse
 from datascraper import datascraper as ds
 from datascraper import create_embeddings as ce
+from datascraper.mcp.mcp_tools import hello_world_tool
+
 from django.shortcuts import render
 from django.http import HttpResponse
+
 
 # Constants
 QUESTION_LOG_PATH = os.path.join(os.path.dirname(__file__), 'questionLog.csv')
@@ -19,6 +22,24 @@ message_list = [
     {"role": "user",
      "content": "You are a helpful financial assistant. Always answer questions to the best of your ability."}
 ]
+
+
+
+# mcp demo
+def hello_world_mcp(request):
+    """
+    HTTP GET /api/hello/?name=YourName
+    returns {"tool":"hello_world","result":"Hello, YourName!"}
+    """
+    # grab ?name=… if provided
+    name = request.GET.get("name")
+    params = {"name": name} if name else {}
+    result = hello_world_tool(params)
+    return JsonResponse({
+        "tool": "hello_world",
+        "result": result
+    })
+
 
 # Helper functions
 def _ensure_log_file_exists():

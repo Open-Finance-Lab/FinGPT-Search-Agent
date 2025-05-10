@@ -10,12 +10,17 @@ python-dotenv~=1.0.1
 bs4~=0.0.2
 faiss_cpu
 django-cors-headers
+daphne
+pytest
+flask
 sphinx
 sphinx_rtd_theme
 nbsphinx
 nbsphinx_link
 pdfjs
 mammoth
+mcp[cli]
+django-mcp
 nbsphinx==0.9.6
 nbsphinx-link==1.3.1
 sphinx-autobuild==2024.10.3
