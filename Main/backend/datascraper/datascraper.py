@@ -12,6 +12,7 @@ from urllib.parse import urljoin
 # from accelerate import init_empty_weights, load_checkpoint_and_dispatch
 # import torch
 from . import cdm_rag
+from .agent import create_fin_agent, USER_ONLY_MODELS, DEFAULT_PROMPT
 
 load_dotenv()
 api_key = os.getenv("API_KEY7")
@@ -167,12 +168,12 @@ def create_rag_response(user_input, message_list, model):
         return error_message
 
 
-def create_response(user_input, message_list, model="o3-mini"):
+def create_response(user_input, message_list, model="o4-mini"):
     """
     Creates a response using OpenAI's API and a specified model.
     """
 
-    # If the user selected "o3-preview" or "gpt-4o", we stick with standard openai
+    # If the user selected "o4-preview" or "gpt-4o", we stick with standard openai
     # If "deepseek-R1" is chosen, we call the Deepseek client
     if model == "deepseek-reasoner":
         # Deepseek logic
@@ -230,7 +231,7 @@ def create_response(user_input, message_list, model="o3-mini"):
         # return completion.choices[0].message.content
 
 
-def create_advanced_response(user_input, message_list, model="o3-mini"):
+def create_advanced_response(user_input, message_list, model="o4-mini"):
     """
     Creates an advanced response by searching user-preferred URLs first and then
     falling back to a general web search if needed. Appends metadata and content
@@ -306,6 +307,20 @@ def create_advanced_response(user_input, message_list, model="o3-mini"):
     logging.info(f"Generated answer: {answer}")
     return answer
 
+# mcp
+def create_mcp_response(question, context, model):
+    """
+    Runs the MCP-enabled agent
+    """
+    if model in USER_ONLY_MODELS:
+        # Inject our financial-assistant prompt as user message
+        from .agent import DEFAULT_PROMPT
+        context = [{"role": "user", "content": DEFAULT_PROMPT}]
+
+    # Now run the Agent. It will do list_tools → call_tool loops internally.
+    agent = create_fin_agent(model)
+    result = agent.run(question, context=context)
+    return result.content
 
 def get_sources(query):
     """

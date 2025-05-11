@@ -7,7 +7,6 @@ from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse
 from datascraper import datascraper as ds
 from datascraper import create_embeddings as ce
-from datascraper.mcp.mcp_tools import hello_world_tool
 
 from django.shortcuts import render
 from django.http import HttpResponse
@@ -126,7 +125,7 @@ def add_webtext(request):
 def chat_response(request):
     """Process chat response from selected models"""
     question = request.GET.get('question', '')
-    selected_models = request.GET.get('models', 'o3-mini,gpt-4.5-preview')
+    selected_models = request.GET.get('models', 'o4-mini,gpt-4.5-preview')
     models = selected_models.split(',')
     use_rag = request.GET.get('use_rag', 'false').lower() == 'true'
     current_url = request.GET.get('current_url', '')
@@ -148,10 +147,34 @@ def chat_response(request):
     return JsonResponse({'resp': responses})
 
 @csrf_exempt
+def mcp_chat_response(request):
+    """Process chat response via MCP-enabled Agent"""
+    question = request.GET.get('question', '')
+    selected_models = request.GET.get('models', 'o4-mini,gpt-4.5-preview')
+    models = selected_models.split(',')
+    current_url = request.GET.get('current_url', '')
+
+    responses = {}
+
+    for model in models:
+        # Always use the MCP Agent path, duh
+        responses[model] = ds.create_mcp_response(
+            question,
+            [],
+            model
+        )
+
+    # Log with a distinct tag allowing filtering later mmmmm
+    first_model_response = next(iter(responses.values())) if responses else "No response"
+    _log_interaction("mcp_chat", current_url, question, first_model_response)
+
+    return JsonResponse({'resp': responses})
+
+@csrf_exempt
 def adv_response(request):
     """Process advanced chat response from selected models"""
     question = request.GET.get('question', '')
-    selected_models = request.GET.get('models', 'o3-mini,gpt-4.5-preview')
+    selected_models = request.GET.get('models', 'o4-mini,gpt-4.5-preview')
     models = selected_models.split(',')
     use_rag = request.GET.get('use_rag', 'false').lower() == 'true'
     current_url = request.GET.get('current_url', '')

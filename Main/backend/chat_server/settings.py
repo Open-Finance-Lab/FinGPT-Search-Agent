@@ -31,7 +31,6 @@ ALLOWED_HOSTS = ["*", "https://*"]
 # Application definition
 
 INSTALLED_APPS = [
-    'daphne',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -39,8 +38,6 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'corsheaders',
-    'django_mcp',
-    'datascraper',
 ]
 
 MIDDLEWARE = [
@@ -81,11 +78,9 @@ TEMPLATES = [
     },
 ]
 
-# WSGI_APPLICATION = 'chat_server.wsgi.application'
-ASGI_APPLICATION = 'chat_server.asgi.application'
+WSGI_APPLICATION = 'chat_server.wsgi.application'
+# ASGI_APPLICATION = 'chat_server.asgi.application'
 
-# MCP
-MCP_DIRS = ["datascraper/mcp"]
 
 LOGGING = {
     'version': 1,
