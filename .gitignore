@@ -45,5 +45,6 @@ Main/backend/preferred_urls.txt
 
 # mcp
 /Main/backend/hello_mcp/__pycache__
-
+/mcp-server/__pycache__
+/mcp-server/.venv
 
