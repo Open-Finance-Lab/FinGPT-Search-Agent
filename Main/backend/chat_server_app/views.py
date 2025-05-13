@@ -1,7 +1,7 @@
 import json
 import os
 import csv
-import random
+import asyncio
 from datetime import datetime
 from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse
@@ -11,6 +11,9 @@ from datascraper import create_embeddings as ce
 from django.shortcuts import render
 from django.http import HttpResponse
 
+from django.views import View
+from datascraper.agent import create_fin_agent
+from fastmcp import Client
 
 # Constants
 QUESTION_LOG_PATH = os.path.join(os.path.dirname(__file__), 'questionLog.csv')
@@ -22,22 +25,47 @@ message_list = [
      "content": "You are a helpful financial assistant. Always answer questions to the best of your ability."}
 ]
 
+# mcp
+# class MCPGreetView(View):
+#     def get(self, request):
+#         # read name from querystring, default to "world"
+#         name = request.GET.get("name", "world")
+#
+#         agent = create_fin_agent(model="o4-mini")
+#
+#         # Initialize by connecting to mcp server first
+#         mcp_server = agent.mcp_servers[0]
+#
+#         # establish the session with the mcp server
+#         asyncio.run(mcp_server.connect())
+#
+#         # run it using asyncio.run to create its own loop
+#         result = asyncio.run(Runner.run(agent, name))
+#
+#         return JsonResponse({"reply": result.final_output})
 
+class MCPGreetView(View):
+    def get(self, request):
+        # 1) Read name parameter (default: "world")
+        name = request.GET.get("name", "world")
 
-# mcp demo
-def hello_world_mcp(request):
-    """
-    HTTP GET /api/hello/?name=YourName
-    returns {"tool":"hello_world","result":"Hello, YourName!"}
-    """
-    # grab ?name=… if provided
-    name = request.GET.get("name")
-    params = {"name": name} if name else {}
-    result = hello_world_tool(params)
-    return JsonResponse({
-        "tool": "hello_world",
-        "result": result
-    })
+        # 2) Call the greet tool via FastMCP Client
+        greeting = asyncio.run(self._call_greet(name))
+        return JsonResponse({"reply": greeting})
+
+    async def _call_greet(self, name: str) -> str:
+        # Establish a Streamable-HTTP session with the MCP server
+        async with Client("http://127.0.0.1:9000/mcp") as client:
+            await client.ping()
+            # Optional: verify greet is available
+            tools = await client.list_tools()
+            if not any(tool.name == "greet" for tool in tools):
+                raise RuntimeError("'greet' tool not found on MCP server")
+
+            # Call the greet tool
+            results = await client.call_tool("greet", {"name": name})
+            # Extract text from first TextContent result
+            return results[0].text
 
 
 # Helper functions

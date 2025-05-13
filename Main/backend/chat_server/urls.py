@@ -20,15 +20,15 @@ from chat_server_app import views
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('get_chat_response/', views.chat_response, name='get_chat_response'),
     path('input_webtext/', views.add_webtext, name='input_webtext'),
+    path('get_chat_response/', views.chat_response, name='get_chat_response'),
     path('get_adv_response/', views.adv_response, name='get_adv_response'),
-    path('clear_messages/', views.clear, name = 'clear_messages'),
     path('get_source_urls/', views.get_sources, name = 'get_source_urls'),
-    path('log_question/', views.log_question, name='log_question'),
+    path('clear_messages/', views.clear, name = 'clear_messages'),
     path('api/get_preferred_urls/', views.get_preferred_urls, name='get_preferred_urls'),
     path('api/add_preferred_url/', views.add_preferred_url, name='add_preferred_url'),
     path('api/folder_path', views.folder_path, name='folder_path'),
-    path('mcp/get_chat_response/', views.mcp_chat_response, name='mcp_chat_response'),
+    path('get_mcp_response/', views.MCPGreetView.as_view(), name='mcp-greet'),
+    path('log_question/', views.log_question, name='log_question'),
 
 ]

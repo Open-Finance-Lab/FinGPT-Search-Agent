@@ -123,6 +123,19 @@ function createSettingsWindow(isFixedModeRef, settingsIcon, positionModeIcon) {
     return result.value;
     }
 
+
+
+    // —– MCP Mode Toggle —–
+    const mcpLabel = document.createElement('label');
+    mcpLabel.innerText = "MCP Mode";
+    const mcpSwitch = document.createElement('input');
+    mcpSwitch.type = "checkbox";
+    mcpSwitch.id = "mcpModeSwitch";
+    mcpLabel.appendChild(mcpSwitch);
+
+
+
+
     // Local RAG Upload
     let RAGPath = '';
 
@@ -141,7 +154,7 @@ function createSettingsWindow(isFixedModeRef, settingsIcon, positionModeIcon) {
         console.log ("switch value:", ragSwitch.checked);
 
         
-        if(ragSwitch.checked && RAGPath != '') {
+        if(ragSwitch.checked && RAGPath !== '') {
             console.log("BODY:", JSON.stringify({ 'filePaths': [RAGPath] }));
         
             // Retrieve all file contents
@@ -248,7 +261,7 @@ function createSettingsWindow(isFixedModeRef, settingsIcon, positionModeIcon) {
     // on form submit
     ragForm.onsubmit = function(e) {
         e.preventDefault(); // Prevent default form submission
-        if(ragPath.value != '') {
+        if(ragPath.value !== '') {
             RAGPath = ragPath.value;
             ragSwitch.disabled = false;
         }
@@ -276,6 +289,10 @@ function createSettingsWindow(isFixedModeRef, settingsIcon, positionModeIcon) {
     preferredLinksContent.appendChild(createAddLinkButton());
     preferredLinksContainer.appendChild(preferredLinksContent);
     settings_window.appendChild(preferredLinksContainer);
+
+    // mcp mode
+    settings_window.appendChild(mcpLabel);
+
     settings_window.appendChild(ragLabel);
     settings_window.appendChild(ragSwitch);
     settings_window.appendChild(ragForm);
