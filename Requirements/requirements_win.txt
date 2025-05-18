@@ -14,6 +14,7 @@ django-cors-headers
 pytest
 flask
 mcp[cli]
+fastmcp
 django-mcp
 sphinx
 sphinx_rtd_theme
