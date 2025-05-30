@@ -91,6 +91,56 @@
     justify-content: center;
 }
 
+/* Math and Message Styles */
+.katex-display {
+    margin: 1em 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding-top: 0.5em;
+    padding-bottom: 0.5em;
+}
+
+.katex {
+    font-size: 1.1em;
+}
+
+.message {
+    padding: 10px;
+    margin: 5px 0;
+    line-height: 1.5;
+    color: #333;
+}
+
+.message-bot {
+    background: #f8f9fa;
+    border-radius: 8px;
+}
+
+.message-user {
+    background: #e9ecef;
+    border-radius: 8px;
+}
+
+.message ul {
+    padding-left: 20px;
+    margin: 10px 0;
+}
+
+.message li {
+    margin: 5px 0;
+}
+
+.message pre {
+    background: #f1f3f5;
+    padding: 10px;
+    border-radius: 4px;
+    overflow-x: auto;
+}
+
+.message code {
+    font-family: 'Consolas', 'Monaco', monospace;
+}
+
 /* Input Container */
 #inputContainer {
     display: flex;
