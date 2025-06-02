@@ -1,0 +1,145 @@
+/* CSS Variables for Theming */
+:root {
+    --bg-primary: #333;
+    --bg-secondary: #444;
+    --bg-tertiary: #555;
+    --text-primary: white;
+    --text-secondary: #dddddd;
+    --border-color: #555;
+    --accent: #1abc9c;
+    --shadow: 5px 0px 10px black;
+}
+
+/* Light Mode Styles */
+.light-mode {
+    --bg-primary: #ddd;
+    --bg-secondary: #eee;
+    --bg-tertiary: #f0f0f0;
+    --text-primary: black;
+    --text-secondary: #333;
+    --border-color: #ccc;
+}
+
+.light-mode #draggableElement,
+.light-mode #additionalPopup,
+.light-mode #sources_window {
+    background-color: #ddd;
+    color: black;
+}
+
+.light-mode #inputContainer input[type="text"] {
+    background-color: white;
+    color: black;
+    border: 1px solid #ccc;
+}
+
+.light-mode #header,
+.light-mode #additionalHeader,
+.light-mode #sources_window_header {
+    background-color: #ddd;
+}
+
+.light-mode .mode-button {
+    background-color: #eee;
+    color: black;
+}
+
+.light-mode .active-mode {
+    background-color: #1abc9c;
+    color: white;
+}
+
+.light-mode #buttonContainer button,
+.light-mode .clear-button,
+.light-mode .sources-button,
+.light-mode .rag-button {
+    background-color: #eee;
+    color: black;
+}
+
+.light-mode #buttonContainer button:hover,
+.light-mode .clear-button:hover,
+.light-mode .sources-button:hover,
+.light-mode .rag-button:hover {
+    background-color: #ddd;
+}
+
+.light-mode #respons .your_question,
+.light-mode #respons .agent_response,
+.light-mode #additionalPopup #respons .your_question,
+.light-mode #additionalPopup #respons .agent_response {
+    background-color: #eee;
+    color: black;
+}
+
+.light-mode .source-item {
+    background-color: #f0f0f0;
+}
+
+.light-mode .source-item:hover {
+    background-color: #e0e0e0;
+}
+
+.light-mode .preferred-link-item,
+.light-mode #add_link_button {
+    background-color: #f0f0f0;
+    color: black;
+}
+
+.light-mode .preferred-link-item:hover,
+.light-mode #add_link_button:hover {
+    background-color: #e0e0e0;
+}
+
+/* Settings Windows */
+.light-mode #settings_window {
+    background-color: #ddd;
+    color: black;
+}
+
+.light-mode #settings_window button,
+.light-mode #settings_window .model-selection-item,
+.light-mode .preferred-link-item,
+.light-mode #add_link_button {
+    background-color: #eee;
+    color: black;
+}
+
+.light-mode #settings_window button:hover,
+.light-mode #settings_window .model-selection-item:hover,
+.light-mode .preferred-link-item:hover,
+.light-mode #add_link_button:hover {
+    background-color: #ddd;
+}
+
+.light-mode .selected-model {
+    background-color: #1abc9c !important;
+    color: white !important;
+}
+
+/* Sources Window */
+.light-mode #sources_window {
+    background-color: #ddd;
+    color: black;
+}
+
+.light-mode #sources_window_header h2 {
+    color: #333;
+}
+
+.light-mode #loading_spinner {
+    color: black;
+}
+
+.light-mode #source_urls li {
+    background-color: #f0f0f0;
+    color: black;
+}
+
+.light-mode #source_urls li a {
+    color: black;
+}
+
+.light-mode #source_urls li a:hover {
+    text-decoration: underline;
+}

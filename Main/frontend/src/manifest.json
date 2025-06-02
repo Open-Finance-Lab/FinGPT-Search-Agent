@@ -18,10 +18,12 @@
         "https://www.cnbc.com/*"
       ],
       "js": [
-        "bundle.js"
+        "vendors.js",
+        "katex.js",
+        "main.js"
       ],
       "css": [
-        "textbox.css"
+        "styles.css"
       ]
     }
   ],
