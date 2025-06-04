@@ -105,9 +105,9 @@ echo
 echo "Starting Django back-end..."
 
 # Path to your Django project folder: ChatBot-Fin/chat_server
-SERVER_PATH="${SCRIPT_DIR}/Main/back-end"
+SERVER_PATH="${SCRIPT_DIR}/Main/backend"
 if [ ! -d "$SERVER_PATH" ]; then
-    echo "ERROR: ChatBot-Fin/chat_server folder not found at $SERVER_PATH"
+    echo "ERROR: Main/backend folder not found at $SERVER_PATH"
     press_any_key_to_exit 1
 fi
 
@@ -159,7 +159,7 @@ echo
 echo "🔧 Building and verifying FinGPT extension..."
 ORIGINAL_DIR=$(pwd)
 # Change to extension directory (relative to script location)
-cd "$SCRIPT_DIR/Main/front-end" || exit 1
+cd "$SCRIPT_DIR/Main/frontend" || exit 1
 npm i # Install dependencies
 npm run build:full # Build frontend and verify dist/ contents
 cd "$ORIGINAL_DIR"
@@ -174,7 +174,7 @@ fi
 
 echo
 echo "Loading FinGPT extension in Chrome..."
-EXTENSION_PATH="${SCRIPT_DIR}/Main/front-end/dist"
+EXTENSION_PATH="${SCRIPT_DIR}/Main/frontend/dist"
 if [ ! -d "$EXTENSION_PATH" ]; then
     echo "ERROR: Extension source folder not found at $EXTENSION_PATH"
     press_any_key_to_exit 1

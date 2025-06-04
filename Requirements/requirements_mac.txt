@@ -7,7 +7,7 @@ numpy
 openai
 openai-agents
 Requests==2.32.3
-python-dotenv~=1.0.1
+python-dotenv
 bs4~=0.0.2
 faiss_cpu
 django-cors-headers
@@ -19,7 +19,7 @@ nbsphinx
 nbsphinx_link
 pdfjs
 mammoth
-mcp[cli]
+"mcp[cli]"
 fastmcp
 django-mcp
 nbsphinx==0.9.6
