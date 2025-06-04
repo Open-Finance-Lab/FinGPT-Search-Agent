@@ -19,7 +19,7 @@ nbsphinx
 nbsphinx_link
 pdfjs
 mammoth
-"mcp[cli]"
+
 fastmcp
 django-mcp
 nbsphinx==0.9.6
