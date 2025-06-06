@@ -18,5 +18,6 @@ documentation for details.
    introduction
    installer_agent_install
    manual_install
+   start_agent
    usage/index
    project_structure

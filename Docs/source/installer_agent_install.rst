@@ -134,6 +134,7 @@ Windows
     - Run:
       ::
 
+        FinGPTenv\Scripts\activate
         python manage.py runserver
 
     - Wait a few seconds for the server to start.
@@ -187,6 +188,7 @@ Mac
     - Run:
       ::
 
+        source FinGPTenv/bin/activate
         python manage.py runserver
 
     - Wait a few seconds for the server to start.
