@@ -39,3 +39,4 @@ Main/backend/chat_server_app/questionLog.csv
 # user preferred links
 Main/backend/preferred_urls.txt
 
+Main/backend/django_debug.log
