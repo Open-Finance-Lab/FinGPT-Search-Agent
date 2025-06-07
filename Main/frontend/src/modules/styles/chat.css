@@ -1,0 +1,177 @@
+/* Math and Message Styles */
+.katex-display {
+    margin: 1em 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding-top: 0.5em;
+    padding-bottom: 0.5em;
+}
+
+.katex {
+    font-size: 1.1em;
+}
+
+.message {
+    padding: 10px;
+    margin: 5px 0;
+    line-height: 1.5;
+    color: #333;
+}
+
+.message-bot {
+    background: #f8f9fa;
+    border-radius: 8px;
+}
+
+.message-user {
+    background: #e9ecef;
+    border-radius: 8px;
+}
+
+.message ul {
+    padding-left: 20px;
+    margin: 10px 0;
+}
+
+.message li {
+    margin: 5px 0;
+}
+
+.message pre {
+    background: #f1f3f5;
+    padding: 10px;
+    border-radius: 4px;
+    overflow-x: auto;
+}
+
+.message code {
+    font-family: 'Consolas', 'Monaco', monospace;
+}
+
+/* Input Container */
+#inputContainer {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-top: 20px;
+}
+
+/* Mode Buttons Container */
+#modeButtonsContainer {
+    display: flex;
+    margin-bottom: 10px;
+    width: 100%;
+}
+
+/* Mode Buttons */
+.mode-button {
+    flex: 1;
+    background-color: #444;
+    border: none;
+    border-radius: 6px;
+    padding: 5px 10px;
+    font-size: 0.9em;
+    color: white;
+    cursor: default; /* while image button is disabled */
+    margin: 0 5px;
+    transition: background-color 0.3s ease;
+    white-space: nowrap;
+}
+
+.active-mode {
+    background-color: #1abc9c;
+}
+
+/* Textbox */
+#inputContainer input[type="text"], #ragPath {
+    width: 100%;
+    background: none;
+    border: 1px solid #555;
+    border-radius: 6px;
+    color: white;
+    padding: 10px;
+}
+
+#inputContainer input[type="text"]:focus, #ragPath:focus {
+    outline: none;
+    border-color: #1abc9c;
+}
+
+/* Button Container */
+#buttonContainer {
+    display: flex;
+    justify-content: center;
+    margin-top: 10px;
+}
+
+#buttonContainer button {
+    background-color: grey;
+    border: none;
+    border-radius: 6px;
+    padding: 10px 15px;
+    color: white;
+    cursor: pointer;
+    margin: 0 5px;
+}
+
+#buttonContainer button:hover {
+    background-color: #555;
+}
+
+/* Response Container */
+#respons {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+}
+
+#respons .your_question {
+    align-self: flex-end;
+    text-align: right;
+    background-color: #444;
+    border-radius: 10px;
+    padding: 8px 15px;
+    color: #fff;
+    word-wrap: break-word;
+    max-width: 80%;
+    margin-left: auto;
+    margin-top: 10px;
+}
+
+#respons .agent_response {
+    align-self: flex-start;
+    text-align: left;
+    background-color: #555;
+    border-radius: 10px;
+    padding: 8px 15px;
+    color: #fff;
+    word-wrap: break-word;
+    max-width: 80%;
+    margin-right: auto;
+    margin-top: 10px;
+}
+
+/* Clear and Sources Buttons */
+.clear-button,
+.sources-button {
+    background-color: #444;
+    border: none;
+    border-radius: 6px;
+    padding: 10px 15px;
+    color: white;
+    cursor: pointer;
+    margin-top: 10px;
+}
+
+.clear-button:hover,
+.sources-button:hover,
+.rag-button:hover {
+    background-color: #555;
+}
+
+/* Button Row */
+.button-row {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 10px;
+}
