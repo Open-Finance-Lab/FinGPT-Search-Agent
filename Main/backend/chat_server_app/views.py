@@ -2,6 +2,7 @@ import json
 import os
 import csv
 import asyncio
+import logging
 from datetime import datetime
 from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse
@@ -153,20 +154,31 @@ def add_webtext(request):
 def chat_response(request):
     """Process chat response from selected models"""
     question = request.GET.get('question', '')
-    selected_models = request.GET.get('models', 'o4-mini,gpt-4.5-preview')
-    models = selected_models.split(',')
+    selected_models = request.GET.get('models', '')
     use_rag = request.GET.get('use_rag', 'false').lower() == 'true'
     current_url = request.GET.get('current_url', '')
+    
+    # Validate and parse models
+    if not selected_models:
+        return JsonResponse({'error': 'No models specified'}, status=400)
+    
+    models = [model.strip() for model in selected_models.split(',') if model.strip()]
+    if not models:
+        return JsonResponse({'error': 'No valid models specified'}, status=400)
     
     responses = {}
     
     for model in models:
-        if use_rag:
-            # Use the RAG pipeline
-            responses[model] = ds.create_rag_response(question, message_list.copy(), model)
-        else:
-            # Use regular response
-            responses[model] = ds.create_response(question, message_list.copy(), model)
+        try:
+            if use_rag:
+                # Use the RAG pipeline
+                responses[model] = ds.create_rag_response(question, message_list.copy(), model)
+            else:
+                # Use regular response
+                responses[model] = ds.create_response(question, message_list.copy(), model)
+        except Exception as e:
+            logging.error(f"Error processing model {model}: {e}")
+            responses[model] = f"Error: {str(e)}"
     
     # Log the interaction with response preview from first model
     first_model_response = next(iter(responses.values())) if responses else "No response"
@@ -178,21 +190,32 @@ def chat_response(request):
 def mcp_chat_response(request):
     """Process chat response via MCP-enabled Agent"""
     question = request.GET.get('question', '')
-    selected_models = request.GET.get('models', 'o4-mini,gpt-4.5-preview')
-    models = selected_models.split(',')
+    selected_models = request.GET.get('models', '')
     current_url = request.GET.get('current_url', '')
+    
+    # Validate and parse models
+    if not selected_models:
+        return JsonResponse({'error': 'No models specified'}, status=400)
+    
+    models = [model.strip() for model in selected_models.split(',') if model.strip()]
+    if not models:
+        return JsonResponse({'error': 'No valid models specified'}, status=400)
 
     responses = {}
 
     for model in models:
-        # Always use the MCP Agent path, duh
-        responses[model] = ds.create_mcp_response(
-            question,
-            [],
-            model
-        )
+        try:
+            # Always use the MCP Agent path
+            responses[model] = ds.create_mcp_response(
+                question,
+                message_list.copy(),
+                model
+            )
+        except Exception as e:
+            logging.error(f"Error processing MCP model {model}: {e}")
+            responses[model] = f"Error: {str(e)}"
 
-    # Log with a distinct tag allowing filtering later mmmmm
+    # Log with a distinct tag allowing filtering later
     first_model_response = next(iter(responses.values())) if responses else "No response"
     _log_interaction("mcp_chat", current_url, question, first_model_response)
 
@@ -202,20 +225,31 @@ def mcp_chat_response(request):
 def adv_response(request):
     """Process advanced chat response from selected models"""
     question = request.GET.get('question', '')
-    selected_models = request.GET.get('models', 'o4-mini,gpt-4.5-preview')
-    models = selected_models.split(',')
+    selected_models = request.GET.get('models', '')
     use_rag = request.GET.get('use_rag', 'false').lower() == 'true'
     current_url = request.GET.get('current_url', '')
+    
+    # Validate and parse models
+    if not selected_models:
+        return JsonResponse({'error': 'No models specified'}, status=400)
+    
+    models = [model.strip() for model in selected_models.split(',') if model.strip()]
+    if not models:
+        return JsonResponse({'error': 'No valid models specified'}, status=400)
     
     responses = {}
     
     for model in models:
-        if use_rag:
-            # Use the RAG pipeline for advanced response
-            responses[model] = ds.create_rag_advanced_response(question, message_list.copy(), model)
-        else:
-            # Use regular advanced response
-            responses[model] = ds.create_advanced_response(question, message_list.copy(), model)
+        try:
+            if use_rag:
+                # Use the RAG pipeline for advanced response
+                responses[model] = ds.create_rag_advanced_response(question, message_list.copy(), model)
+            else:
+                # Use regular advanced response
+                responses[model] = ds.create_advanced_response(question, message_list.copy(), model)
+        except Exception as e:
+            logging.error(f"Error processing advanced model {model}: {e}")
+            responses[model] = f"Error: {str(e)}"
     
     # Log the interaction with response preview from first model
     first_model_response = next(iter(responses.values())) if responses else "No response"

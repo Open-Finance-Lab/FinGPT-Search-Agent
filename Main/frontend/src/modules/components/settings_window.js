@@ -1,5 +1,5 @@
 // settings_window.js
-import { availableModels, selectedModel } from '../config.js';
+import { availableModels, selectedModel, setSelectedModel } from '../config.js';
 import { loadPreferredLinks, createAddLinkButton } from '../helpers.js';
 
 // Extract text from pdf and docx
@@ -38,7 +38,7 @@ function createSettingsWindow(isFixedModeRef, settingsIcon, positionModeIcon) {
 
     function handleModelSelection(modelItem, modelName) {
         document.querySelectorAll('.model-selection-item').forEach(item => item.classList.remove('selected-model'));
-        window.selectedModel = modelName;
+        setSelectedModel(modelName);
         modelItem.classList.add('selected-model');
         modelHeader.innerText = `Model: ${modelName}`;
         modelHeader.appendChild(modelToggleIcon);

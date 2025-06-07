@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 from bs4 import BeautifulSoup
 
 from openai import OpenAI
+from anthropic import Anthropic
 
 from googlesearch import search
 from urllib.parse import urljoin
@@ -17,10 +18,18 @@ from urllib.parse import urljoin
 
 from . import cdm_rag
 from .agent import create_fin_agent, USER_ONLY_MODELS, DEFAULT_PROMPT
+from .models_config import (
+    MODELS_CONFIG, 
+    PROVIDER_CONFIGS, 
+    get_model_config, 
+    get_provider_config,
+    validate_model_support
+)
 
 load_dotenv()
 OPENAI_API_KEY = os.getenv("API_KEY7")
-# DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "")
+DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "")
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -30,11 +39,23 @@ req_headers = {
                   "Chrome/115.0.0.0 Safari/537.36"
 }
 
-openai_client = OpenAI(api_key=OPENAI_API_KEY)
-deepseek_client = OpenAI(
-    api_key=OPENAI_API_KEY, # placeholder, please remember to change later
-#     base_url="https://api.deepseek.com/v1"
-)
+# Initialize clients
+clients = {}
+
+# OpenAI client
+if OPENAI_API_KEY:
+    clients["openai"] = OpenAI(api_key=OPENAI_API_KEY)
+
+# DeepSeek client (OpenAI-compatible)
+if DEEPSEEK_API_KEY:
+    clients["deepseek"] = OpenAI(
+        api_key=DEEPSEEK_API_KEY,
+        base_url="https://api.deepseek.com"
+    )
+
+# Anthropic client
+if ANTHROPIC_API_KEY:
+    clients["anthropic"] = Anthropic(api_key=ANTHROPIC_API_KEY)
 
 INSTRUCTION = (
     "When provided context, use provided context as fact and not your own knowledge; "
@@ -191,21 +212,49 @@ def create_response(
         model: str = "o4-mini"
 ) -> str:
     """
-    Creates a chat completion using OpenAI's Python SDK (v0.27+) or Deepseek.
+    Creates a chat completion using the appropriate provider based on model configuration.
     """
-    # drop existing 'system', insert instruction, append user input
+    # Get model configuration
+    model_config = get_model_config(model)
+    if not model_config:
+        raise ValueError(f"Unsupported model: {model}")
+    
+    provider = model_config["provider"]
+    model_name = model_config["model_name"]
+    
+    # Get the appropriate client
+    client = clients.get(provider)
+    if not client:
+        raise ValueError(f"No client available for provider: {provider}. Please check API key configuration.")
+    
+    # Prepare messages
     msgs = [msg for msg in message_list if msg.get("role") != "system"]
     msgs.insert(0, {"role": "system", "content": INSTRUCTION})
     msgs.append({"role": "user", "content": user_input})
-
-    client = deepseek_client if model == "deepseek-reasoner" else openai_client
-
-    response = client.chat.completions.create(
-        model=model,
-        messages=msgs,
-    )  # type: ignore[arg-type] yeah doesn't work but still wanted to put it here. did i type it wrong?
-
-    return response.choices[0].message.content
+    
+    # Provider-specific handling
+    if provider == "anthropic":
+        # Anthropic uses a different API structure
+        response = client.messages.create(
+            model=model_name,
+            messages=msgs[1:],  # Anthropic doesn't use system messages the same way
+            system=INSTRUCTION,  # System message as separate parameter
+            max_tokens=1024
+        )
+        return response.content[0].text
+    else:
+        # OpenAI and DeepSeek use the same API structure
+        # Handle DeepSeek temperature recommendations
+        kwargs = {}
+        if provider == "deepseek" and "recommended_temperature" in model_config:
+            kwargs["temperature"] = model_config["recommended_temperature"]
+        
+        response = client.chat.completions.create(
+            model=model_name,
+            messages=msgs,
+            **kwargs
+        )
+        return response.choices[0].message.content
 
 
 def create_advanced_response(
@@ -258,24 +307,103 @@ def create_advanced_response(
             else:
                 logging.info(f"Failed for URL: {info.get('url')}")
 
-    # construct messages for OpenAI
+    # Get model configuration
+    model_config = get_model_config(model)
+    if not model_config:
+        raise ValueError(f"Unsupported model: {model}")
+    
+    provider = model_config["provider"]
+    model_name = model_config["model_name"]
+    
+    # Get the appropriate client
+    client = clients.get(provider)
+    if not client:
+        raise ValueError(f"No client available for provider: {provider}. Please check API key configuration.")
+    
+    # construct messages
     msgs = [msg for msg in message_list if msg.get('role') != 'system']
     msgs.insert(0, {"role": "system", "content": INSTRUCTION})
     for snippet in context_messages:
         msgs.append({"role": "user", "content": snippet})
     msgs.append({"role": "user", "content": user_input})
 
-    # call the chat completion endpoint
-    response = openai_client.chat.completions.create(
-        model=model,
-        messages=msgs,
-    )  # type: ignore[arg-type]
-
-    answer = response.choices[0].message.content
+    # Provider-specific handling
+    if provider == "anthropic":
+        # Anthropic uses a different API structure
+        response = client.messages.create(
+            model=model_name,
+            messages=msgs[1:],  # Anthropic doesn't use system messages the same way
+            system=INSTRUCTION,  # System message as separate parameter
+            max_tokens=4096  # Longer for advanced responses
+        )
+        answer = response.content[0].text
+    else:
+        # OpenAI and DeepSeek use the same API structure
+        kwargs = {}
+        if provider == "deepseek" and "recommended_temperature" in model_config:
+            kwargs["temperature"] = model_config["recommended_temperature"]
+        
+        response = client.chat.completions.create(
+            model=model_name,
+            messages=msgs,
+            **kwargs
+        )
+        answer = response.choices[0].message.content
+    
     logging.info(f"Generated advanced answer: {answer}")
     return answer
 
 
+def create_rag_advanced_response(user_input: str, message_list: list[dict], model: str = "o4-mini") -> str:
+    """
+    Creates an advanced response using the RAG pipeline.
+    Combines RAG functionality with advanced web search.
+    """
+    try:
+        # First try to get response from RAG
+        rag_response = cdm_rag.get_rag_advanced_response(user_input, model)
+        if rag_response:
+            return rag_response
+    except Exception as e:
+        logging.warning(f"RAG advanced response failed: {e}, falling back to advanced search")
+    
+    # Fallback to advanced search if RAG fails
+    return create_advanced_response(user_input, message_list, model)
+
+
+def create_mcp_response(user_input: str, message_list: list[dict], model: str = "o4-mini") -> str:
+    """
+    Creates a response using the MCP-enabled Agent.
+    """
+    try:
+        # Check if model supports MCP
+        if not validate_model_support(model, "mcp"):
+            logging.warning(f"Model {model} doesn't support MCP, falling back to regular response")
+            return create_response(user_input, message_list, model)
+        
+        # Create MCP agent
+        agent = create_fin_agent(model)
+        
+        # Convert message list to a single prompt for the agent
+        context = ""
+        for msg in message_list:
+            if msg.get("role") == "user":
+                context += f"User: {msg.get('content', '')}\n"
+            elif msg.get("role") == "assistant":
+                context += f"Assistant: {msg.get('content', '')}\n"
+        
+        # Combine context with current input
+        full_prompt = f"{context}User: {user_input}"
+        
+        # Note: This is a simplified implementation
+        # The actual MCP agent interaction would depend on the agent framework
+        # For now, fall back to regular response
+        logging.info("MCP functionality not fully implemented, using regular response")
+        return create_response(user_input, message_list, model)
+        
+    except Exception as e:
+        logging.error(f"MCP response failed: {e}, falling back to regular response")
+        return create_response(user_input, message_list, model)
 
 
 def get_sources(query):

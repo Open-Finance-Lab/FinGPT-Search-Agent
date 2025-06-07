@@ -16,6 +16,7 @@ flask
 mcp[cli]
 fastmcp
 django-mcp
+anthropic
 sphinx
 sphinx_rtd_theme
 nbsphinx

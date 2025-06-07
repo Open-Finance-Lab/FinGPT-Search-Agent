@@ -48,3 +48,5 @@ Main/backend/preferred_urls.txt
 /mcp-server/__pycache__
 /mcp-server/.venv
 
+# claude code local settings
+.claude/settings.local.json
