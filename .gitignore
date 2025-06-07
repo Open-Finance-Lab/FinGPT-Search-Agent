@@ -15,6 +15,7 @@ Main/backend/node_modules/
 
 # npm packages
 Main/frontend/package-lock.json
+Main/backend/package-lock.json
 
 # pycache
 /Main/backend/chat_server/__pycache__
@@ -36,6 +37,14 @@ Main/backend/datascraper/faiss_index.idx
 # question logging
 Main/backend/chat_server_app/questionLog.csv
 
+# django debug log
+Main/backend/django_debug.log
+
 # user preferred links
 Main/backend/preferred_urls.txt
+
+# mcp
+/Main/backend/hello_mcp/__pycache__
+/mcp-server/__pycache__
+/mcp-server/.venv
 
