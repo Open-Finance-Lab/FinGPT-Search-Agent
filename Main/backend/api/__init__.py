@@ -1,3 +1,3 @@
-from chat_server_app import *
+from api import *
 import datascraper.datascraper as ds
 

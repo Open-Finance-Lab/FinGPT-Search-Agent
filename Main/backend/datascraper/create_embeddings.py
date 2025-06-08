@@ -8,7 +8,7 @@ import faiss
 import json
 # OpenAI API key
 load_dotenv()
-api_key = os.getenv("API_KEY7")
+api_key = os.getenv("OPENAI_API_KEY")
 openai.api_key = api_key
 
 current_dir = os.path.dirname(os.path.abspath(__file__))

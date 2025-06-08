@@ -13,9 +13,10 @@ FinGPT Search Agents is a financial information retrieval and analysis system co
 ## Architecture
 
 ### Backend (Main/backend/)
-- **Django Project**: `chat_server/` contains global settings, ASGI/WSGI configuration
-- **Main App**: `chat_server_app/` handles chat completion, RAG triggers, question logging
+- **Django Project**: `django_config/` contains global settings, ASGI/WSGI configuration
+- **API Layer**: `api/` handles HTTP endpoints, chat completion, RAG triggers, question logging
 - **Data Pipeline**: `datascraper/` provides RAG orchestration, embeddings creation, and web scraping utilities
+- **MCP Integration**: `mcp/` contains Model Context Protocol client and agent functionality
 
 ### Frontend (Main/frontend/)
 - **Browser Extension**: Webpack-bundled JavaScript with Babel transpilation
@@ -23,8 +24,9 @@ FinGPT Search Agents is a financial information retrieval and analysis system co
 - **Entry Point**: `src/main.js` bootstraps the extension
 
 ### MCP Server (mcp-server/)
-- **FastMCP Integration**: Provides model context protocol functionality
-- **Python 3.12+**: Uses modern Python with Click/Typer CLI framework
+- **Official MCP SDK**: Uses the official Model Context Protocol Python SDK
+- **Stdio Transport**: Provides subprocess-based communication with OpenAI Agents
+- **Python 3.10+**: Compatible with modern Python versions
 
 ## Development Commands
 
@@ -35,7 +37,6 @@ python manage.py runserver          # Start Django development server
 python manage.py migrate           # Apply database migrations
 python manage.py makemigrations    # Create new migrations
 python test_models.py              # Test model configuration system
-pytest datascraper/test.py         # Run datascraper tests
 ```
 
 ### Frontend Development
@@ -50,7 +51,9 @@ npm run build:full                 # Complete build pipeline
 ### MCP Server
 ```bash
 # From mcp-server/
-uv run main.py                     # Run MCP server
+python3 server_official.py        # Run official MCP server
+# or
+uv run server_official.py         # Run with uv
 ```
 
 ## Key Components
@@ -80,9 +83,14 @@ uv run main.py                     # Run MCP server
 ### Dependencies
 - Backend: Django 4.2.18, OpenAI, FAISS, BeautifulSoup4
 - Frontend: Webpack 5, Babel, KaTeX, Marked
-- MCP Server: FastMCP 2.3.3+, MCP CLI 1.8.0+
+- MCP Server: Official MCP Python SDK 1.1.0+
 
 ## Testing
+
+**Important**: Claude Code runs in WSL and this project environment is not set up there. 
+
+Regarding testing code, if tests are needed, please directly tell me how to test the code and I will run the test commands manually.
+
 - Use `pytest` for Python tests
 - Run `python test_models.py` to verify model configuration
 - Frontend testing not currently configured

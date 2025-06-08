@@ -1,12 +1,14 @@
 [project]
-name = "mcp-server"
-version = "0.1.0"
-description = "Add your description here"
+name = "fingpt-mcp-server"
+version = "1.0.0"
+description = "Official MCP Server for FinGPT using mcp[cli] SDK"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.10"
 dependencies = [
-    "click>=8.2.0",
-    "fastmcp>=2.3.3",
-    "mcp[cli]>=1.8.0",
-    "typer>=0.15.3",
+    "mcp>=1.1.0",
+    "fastmcp",
+    "starlette",
 ]
+
+#[project.scripts]
+#fingpt-mcp-server = "server_official:main"

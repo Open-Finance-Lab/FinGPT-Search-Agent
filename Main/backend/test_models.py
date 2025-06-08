@@ -57,7 +57,7 @@ def test_api_keys():
     load_dotenv()
     
     keys = {
-        'OpenAI': os.getenv('API_KEY7'),
+        'OpenAI': os.getenv('OPENAI_API_KEY'),
         'DeepSeek': os.getenv('DEEPSEEK_API_KEY'),
         'Anthropic': os.getenv('ANTHROPIC_API_KEY')
     }

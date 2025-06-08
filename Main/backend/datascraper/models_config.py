@@ -80,7 +80,7 @@ MODELS_CONFIG = {
 PROVIDER_CONFIGS = {
     "openai": {
         "base_url": None,  # Uses default OpenAI URL
-        "env_key": "API_KEY7",
+        "env_key": "OPENAI_API_KEY",
         "client_class": "OpenAI"
     },
     "deepseek": {

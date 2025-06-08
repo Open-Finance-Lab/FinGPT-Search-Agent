@@ -3,6 +3,7 @@ import requests
 import os
 import re
 import logging
+import asyncio
 # import torch
 
 from dotenv import load_dotenv
@@ -17,7 +18,7 @@ from urllib.parse import urljoin
 # from accelerate import init_empty_weights, load_checkpoint_and_dispatch
 
 from . import cdm_rag
-from .agent import create_fin_agent, USER_ONLY_MODELS, DEFAULT_PROMPT
+from mcp_client.agent import create_fin_agent, USER_ONLY_MODELS, DEFAULT_PROMPT
 from .models_config import (
     MODELS_CONFIG, 
     PROVIDER_CONFIGS, 
@@ -27,7 +28,7 @@ from .models_config import (
 )
 
 load_dotenv()
-OPENAI_API_KEY = os.getenv("API_KEY7")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 
@@ -381,29 +382,40 @@ def create_mcp_response(user_input: str, message_list: list[dict], model: str = 
             logging.warning(f"Model {model} doesn't support MCP, falling back to regular response")
             return create_response(user_input, message_list, model)
         
-        # Create MCP agent
-        agent = create_fin_agent(model)
-        
-        # Convert message list to a single prompt for the agent
-        context = ""
-        for msg in message_list:
-            if msg.get("role") == "user":
-                context += f"User: {msg.get('content', '')}\n"
-            elif msg.get("role") == "assistant":
-                context += f"Assistant: {msg.get('content', '')}\n"
-        
-        # Combine context with current input
-        full_prompt = f"{context}User: {user_input}"
-        
-        # Note: This is a simplified implementation
-        # The actual MCP agent interaction would depend on the agent framework
-        # For now, fall back to regular response
-        logging.info("MCP functionality not fully implemented, using regular response")
-        return create_response(user_input, message_list, model)
+        # Run the MCP agent asynchronously
+        return asyncio.run(_create_mcp_response_async(user_input, message_list, model))
         
     except Exception as e:
         logging.error(f"MCP response failed: {e}, falling back to regular response")
         return create_response(user_input, message_list, model)
+
+async def _create_mcp_response_async(user_input: str, message_list: list[dict], model: str) -> str:
+    """
+    Async helper for creating MCP response.
+    """
+    from mcp_client.agent import create_fin_agent
+    from agents import Runner
+    
+    # Convert message list to context
+    context = ""
+    for msg in message_list:
+        if msg.get("role") == "user":
+            context += f"User: {msg.get('content', '')}\n"
+        elif msg.get("role") == "assistant":
+            context += f"Assistant: {msg.get('content', '')}\n"
+    
+    # Combine context with current input
+    full_prompt = f"{context}User: {user_input}"
+    
+    # Create MCP agent using async context manager
+    async with create_fin_agent(model) as agent:
+        # Run the agent with the full prompt
+        logging.info(f"[MCP DEBUG] Running agent with prompt: {full_prompt}")
+        result = await Runner.run(agent, full_prompt)
+        logging.info(f"[MCP DEBUG] Runner result: {result}")
+        logging.info(f"[MCP DEBUG] Result type: {type(result)}")
+        logging.info(f"[MCP DEBUG] Result final_output: {result.final_output}")
+        return result.final_output
 
 
 def get_sources(query):
