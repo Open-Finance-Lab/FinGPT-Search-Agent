@@ -1,7 +1,7 @@
 # create_embeddings.py
 from dotenv import load_dotenv
 import os
-import openai
+from openai import OpenAI
 import pickle
 import numpy as np
 import faiss
@@ -9,7 +9,7 @@ import json
 # OpenAI API key
 load_dotenv()
 api_key = os.getenv("API_KEY7")
-openai.api_key = api_key
+client = OpenAI(api_key=api_key)
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 index_file = os.path.join(current_dir, 'faiss_index.idx')
@@ -20,11 +20,11 @@ def embed_file_content(file_content):
     """
     Function to send file content to OpenAI's embedding API and get embeddings.
     """
-    response = openai.Embedding.create(
+    response = client.embeddings.create(
         input=file_content,
         model="text-embedding-3-large"
     )
-    return response['data'][0]['embedding']
+    return response.data[0].embedding
 
 # Helper function to store embeddings (pickling embeddings)
 def store_embeddings(embeddings, file_paths):
