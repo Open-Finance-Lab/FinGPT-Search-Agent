@@ -16,7 +16,7 @@ FinGPT Search Agents is a financial information retrieval and analysis system co
 - **Django Project**: `django_config/` contains global settings, ASGI/WSGI configuration
 - **API Layer**: `api/` handles HTTP endpoints, chat completion, RAG triggers, question logging
 - **Data Pipeline**: `datascraper/` provides RAG orchestration, embeddings creation, and web scraping utilities
-- **MCP Integration**: `mcp/` contains Model Context Protocol client and agent functionality
+- **MCP Integration**: `mcp_client/` contains Model Context Protocol client and agent functionality
 
 ### Frontend (Main/frontend/)
 - **Browser Extension**: Webpack-bundled JavaScript with Babel transpilation
