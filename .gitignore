@@ -77,3 +77,5 @@ Main/backend/preferred_urls.txt
 
 # uv
 mcp-server/uv.lock
+Main/backend/django_debug.log
+

@@ -109,7 +109,6 @@ These include everything under src/test/.
 ## Development Principles
 
 When planning, writing or editing code, always follow these principles:
-
 1. **Planning First**: Before implementing, verify or devise a clear plan and validate its reasonableness.
 2. **Simplicity**: Actively seek simpler, more elegant solutions that avoid over-engineering during both planning and implementation.
 3. **Core Principles**:
