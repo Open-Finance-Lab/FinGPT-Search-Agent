@@ -3,7 +3,6 @@ chat_interface/backend_modules/.env
 # older ver has env in here
 Main/backend/.env
 
-
 # google cookie
 Main/backend/.google-cookie
 
@@ -18,6 +17,7 @@ Main/backend/node_modules/
 
 # npm packages
 Main/frontend/package-lock.json
+Main/backend/package-lock.json
 
 # Python cache files
 __pycache__/
@@ -63,13 +63,13 @@ Main/backend/datascraper/faiss_index.idx
 /Main/frontend/dist
 
 # question logging
-Main/backend/chat_server_app/questionLog.csv
-
-# user preferred links
-Main/backend/preferred_urls.txt
+Main/backend/api/questionLog.csv
 
 # django debug log
 Main/backend/django_debug.log
+
+# user preferred links
+Main/backend/preferred_urls.txt
 
 # mcp
 /mcp-server/.venv
@@ -88,3 +88,9 @@ Main/backend/package-lock.json
 /Main/backend/django_config/__pycache__
 /Main/backend/mcp_client/__pycache__
 /Main/backend/api/__pycache__
+
+# mcp
+/mcp-server/.venv
+
+# uv
+mcp-server/uv.lock

@@ -5,7 +5,7 @@ import { getSelectedModel, selectedModel } from './config.js';
 
 
 // Function to handle chat responses (single model)
-function handleChatResponse(question, isAdvanced = false) {
+function handleChatResponse(question, promptMode = false) {
     const startTime = performance.now();
     const responseContainer = document.getElementById('respons');
 
@@ -22,16 +22,19 @@ function handleChatResponse(question, isAdvanced = false) {
     // Read the RAG checkbox state
     const useRAG = document.getElementById('ragSwitch').checked;
 
+    // Read the MCP mode toggle
+    const useMCP = document.getElementById('mcpModeSwitch').checked;
+
     const selectedModel = getSelectedModel();
 
-    getChatResponse(question, selectedModel, isAdvanced, useRAG)
+    getChatResponse(question, selectedModel, promptMode, useRAG, useMCP)
         .then(data => {
             const endTime = performance.now();
             const responseTime = endTime - startTime;
             console.log(`Time taken for response: ${responseTime} ms`);
 
-            // Get the response for the selected model
-            const modelResponse = data.resp[selectedModel];
+            // Extract the reply: MCP gives `data.reply`, normal gives `data.resp[...]`
+            const modelResponse = useMCP ? data.reply : data.resp[selectedModel];
 
             if (!modelResponse) {
                 // Safeguard in case backend does not return something

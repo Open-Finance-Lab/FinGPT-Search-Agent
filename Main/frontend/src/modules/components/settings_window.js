@@ -1,5 +1,5 @@
 // settings_window.js
-import { availableModels, selectedModel } from '../config.js';
+import { availableModels, selectedModel, setSelectedModel } from '../config.js';
 import { loadPreferredLinks, createAddLinkButton } from '../helpers.js';
 
 // Extract text from pdf and docx
@@ -38,7 +38,7 @@ function createSettingsWindow(isFixedModeRef, settingsIcon, positionModeIcon) {
 
     function handleModelSelection(modelItem, modelName) {
         document.querySelectorAll('.model-selection-item').forEach(item => item.classList.remove('selected-model'));
-        window.selectedModel = modelName;
+        setSelectedModel(modelName);
         modelItem.classList.add('selected-model');
         modelHeader.innerText = `Model: ${modelName}`;
         modelHeader.appendChild(modelToggleIcon);
@@ -123,6 +123,19 @@ function createSettingsWindow(isFixedModeRef, settingsIcon, positionModeIcon) {
     return result.value;
     }
 
+
+
+    // —– MCP Mode Toggle —–
+    const mcpLabel = document.createElement('label');
+    mcpLabel.innerText = "MCP Mode";
+    const mcpSwitch = document.createElement('input');
+    mcpSwitch.type = "checkbox";
+    mcpSwitch.id = "mcpModeSwitch";
+    mcpLabel.appendChild(mcpSwitch);
+
+
+
+
     // Local RAG Upload
     let RAGPath = '';
 
@@ -141,7 +154,7 @@ function createSettingsWindow(isFixedModeRef, settingsIcon, positionModeIcon) {
         console.log ("switch value:", ragSwitch.checked);
 
         
-        if(ragSwitch.checked && RAGPath != '') {
+        if(ragSwitch.checked && RAGPath !== '') {
             console.log("BODY:", JSON.stringify({ 'filePaths': [RAGPath] }));
         
             // Retrieve all file contents
@@ -248,7 +261,7 @@ function createSettingsWindow(isFixedModeRef, settingsIcon, positionModeIcon) {
     // on form submit
     ragForm.onsubmit = function(e) {
         e.preventDefault(); // Prevent default form submission
-        if(ragPath.value != '') {
+        if(ragPath.value !== '') {
             RAGPath = ragPath.value;
             ragSwitch.disabled = false;
         }
@@ -276,6 +289,10 @@ function createSettingsWindow(isFixedModeRef, settingsIcon, positionModeIcon) {
     preferredLinksContent.appendChild(createAddLinkButton());
     preferredLinksContainer.appendChild(preferredLinksContent);
     settings_window.appendChild(preferredLinksContainer);
+
+    // mcp mode
+    settings_window.appendChild(mcpLabel);
+
     settings_window.appendChild(ragLabel);
     settings_window.appendChild(ragSwitch);
     settings_window.appendChild(ragForm);
