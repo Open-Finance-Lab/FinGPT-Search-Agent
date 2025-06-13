@@ -1,5 +1,5 @@
 Tutorial: Basic Usage of the Agent
-========================
+==================================
 
 .. admonition:: When to use this section
    :class: note

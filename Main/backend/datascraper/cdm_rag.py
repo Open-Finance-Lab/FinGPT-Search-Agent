@@ -5,7 +5,7 @@ import os
 import pickle
 import numpy as np
 import faiss
-from openai import OpenAI
+import openai
 import ast  # For Python code parsing
 import markdown  # For Markdown parsing
 import logging
@@ -13,8 +13,8 @@ import logging
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
 load_dotenv()
-api_key = os.getenv("API_KEY7")
-client = OpenAI(api_key=api_key)
+api_key = os.getenv("OPENAI_API_KEY")
+openai.api_key = api_key
 
 # Configure logging
 logging.basicConfig(
@@ -69,11 +69,16 @@ def embed_query(query, model="text-embedding-3-large"):
     """
     Generates an embedding for the query text.
     """
-    response = client.embeddings.create(
+    # response = openai.Embedding.create(
+    #     input=query,
+    #     model=model
+    # )
+    # return response['data'][0]['embedding']
+    response = openai.Embedding.create(
         input=query,
         model=model
     )
-    return response.data[0].embedding
+    return response['data'][0]['embedding']
 
 
 def retrieve_chunks(query, k=1):
@@ -120,16 +125,16 @@ Question:
 Answer as thoroughly as possible based on the context provided."""
 
     # Use OpenAI's model
-    response = client.chat.completions.create(
+    response = openai.ChatCompletion.create(
         model=model_name,
         messages=[
             {'role': 'user', 'content': 'You are a helpful financial advisor providing detailed and accurate answers.' + prompt}
         ],
         temperature=1,  # Lower temperature for more precise answers
-        max_completion_tokens=2048  # Adjust as necessary
+        max_completion_tokens=1500  # Adjust as necessary
     )
 
-    answer = response.choices[0].message.content
+    answer = response['choices'][0]['message']['content']
     return answer.strip()
 
 def get_rag_response(question, model_name="o1-preview"):

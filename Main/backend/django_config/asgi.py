@@ -10,5 +10,5 @@ https://docs.djangoproject.com/en/4.2/howto/deployment/asgi/
 import os
 from django.core.wsgi import get_wsgi_application
 
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "chat_server.settings")
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "django_config.settings")
 application = get_wsgi_application()

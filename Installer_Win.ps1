@@ -92,7 +92,23 @@ if (!(Test-Path $activateScript)) {
 Write-Host "`nUpgrading pip in the virtual environment..."
 pip install --upgrade pip
 
-# requirements file
+# Check if Poetry is available
+$poetry = Get-Command poetry -ErrorAction SilentlyContinue
+$backendPath = Join-Path $PSScriptRoot "Main\backend"
+
+if ($poetry -and (Test-Path (Join-Path $backendPath "pyproject.toml"))) {
+    Write-Host "`nPoetry detected. Using Poetry to manage dependencies..."
+    
+    # Export requirements files using Poetry
+    Write-Host "Exporting platform-specific requirements..."
+    Push-Location $backendPath
+    poetry run export-requirements
+    Pop-Location
+    
+    Write-Host "Requirements files updated from Poetry configuration."
+}
+
+# Install from requirements file
 $requirementsFile = Join-Path $PSScriptRoot "Requirements\requirements_win.txt"
 if (!(Test-Path $requirementsFile)) {
     Write-Host "ERROR: requirements_win.txt not found at $requirementsFile"
@@ -101,6 +117,14 @@ if (!(Test-Path $requirementsFile)) {
 
 Write-Host "`nInstalling dependencies from requirements_win.txt..."
 pip install -r $requirementsFile
+
+# Install mcp[cli] separately (for consistency with Mac, though Windows doesn't have escaping issues)
+Write-Host "`nInstalling mcp[cli] package..."
+pip install mcp[cli]
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "WARNING: Failed to install mcp[cli]. You may need to install it manually with: pip install mcp[cli]"
+}
+
 Write-Host "All dependencies installed successfully."
 
 ###############################################################################
@@ -109,10 +133,10 @@ Write-Host "All dependencies installed successfully."
 Write-Host "`nStarting Django back-end..."
 
 # Path to your Django project folder
-$serverPath = Join-Path $PSScriptRoot "Main\back-end"
+$serverPath = Join-Path $PSScriptRoot "Main\backend"
 
 if (!(Test-Path $serverPath)) {
-    Write-Host "ERROR: Main\\back-end folder not found at $serverPath"
+    Write-Host "ERROR: Main\\backend folder not found at $serverPath"
     PressAnyKeyToExit 1
 }
 
@@ -165,7 +189,7 @@ Write-Host "Chrome closed (or was not running)."
 Write-Host "`n🔧 Building and verifying FinGPT extension..."
 $OriginalDir = Get-Location
 # Change to extension directory
-Set-Location -Path "$PSScriptRoot\Main\front-end"
+Set-Location -Path "$PSScriptRoot\Main\frontend"
 npm i # install dependencies
 npm run build:full # build frontend and verify dist/ contents
 
@@ -180,7 +204,7 @@ if ($BUILD_STATUS -ne 0) {
 
 
 Write-Host "`nLoading FinGPT extension in Chrome..."
-$extensionPath = Join-Path $PSScriptRoot "Main\front-end\dist"
+$extensionPath = Join-Path $PSScriptRoot "Main\frontend\dist"
 if (!(Test-Path $extensionPath)) {
     Write-Host "ERROR: Extension source folder not found at $extensionPath"
     PressAnyKeyToExit 1

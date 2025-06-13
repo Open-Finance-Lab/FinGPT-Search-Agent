@@ -9,7 +9,7 @@ Tutorial: Install with Installer Scripts
 .. note::
    You will need an OpenAI API key for running the agent. Please ask the project leader (FlyM1ss) via Discord /
    WeChat / Email (felixflyingt@gmail.com) for the key. If you have your own key, feel free to create a ``.env`` file
-   inside ``{rootFolderName}\Main\backend\datascraper`` and put in the form of ``API_KEY7=Your-Key``.
+   inside ``{rootFolderName}\Main\backend`` and put in the form of ``API_KEY7=Your-Key``.
 
 .. note::
    If you are running Python 3 and the commands below don't work, please replace any ``python`` within the command to
@@ -72,7 +72,7 @@ Recommended Cloning Method: GitHub Desktop
 6. **Prepare your `.env` file**
 
     - Create (or copy/paste) the file ``.env`` into
-      ``{rootFolderName}\Main\backend\datascraper``.
+      ``{rootFolderName}\Main\backend``.
     - If creating the file, use an IDE (rather than Notepad) to avoid format issues.
     - Paste the API key into the file and save.
 
@@ -109,6 +109,9 @@ Windows
   The installer will attempt to:
 
     - Create and start a Python virtual environment.
+    - Check for Poetry and export updated requirements if available
+    - Install Python dependencies
+    - Build the frontend extension
     - Start the back-end
     - Install the Extension in Google Chrome
 
@@ -134,6 +137,7 @@ Windows
     - Run:
       ::
 
+        FinGPTenv\Scripts\activate
         python manage.py runserver
 
     - Wait a few seconds for the server to start.
@@ -161,9 +165,12 @@ Mac
 
   The installer will attempt to:
 
-    - Install the Extension in Google Chrome
     - Create and start a Python virtual environment.
+    - Check for Poetry and export updated requirements if available
+    - Install Python dependencies
+    - Build the frontend extension
     - Start the back-end
+    - Install the Extension in Google Chrome
 
 3. **Check Front-end Installation**
 
@@ -187,6 +194,7 @@ Mac
     - Run:
       ::
 
+        source FinGPTenv/bin/activate
         python manage.py runserver
 
     - Wait a few seconds for the server to start.

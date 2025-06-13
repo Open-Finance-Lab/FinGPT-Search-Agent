@@ -1,26 +1,30 @@
 import uvicorn
-from fastmcp import FastMCP
-from starlette.middleware.cors import CORSMiddleware
+# from fastapi import FastAPI
+from mcp.server.fastmcp import FastMCP
+# from fastapi.middleware.cors import CORSMiddleware
 
-mcp = FastMCP("My MCP Server")
+# app = FastAPI(title="Echo MCP Server with CORS")
+
+# app.add_middleware(
+#     CORSMiddleware,
+#     allow_origins=["*"],
+#     allow_methods=["GET", "POST"],
+#     allow_headers=["*"],
+#     expose_headers=["Mcp-Session-Id"],  # so client can read the session header
+# )
+
+mcp = FastMCP(
+    name="FinGPT MCP Server",
+    port=9000
+)
 
 @mcp.tool()
 def greet(name: str) -> str:
-    return f"Hello, {name}!"
+    print(f"[DEBUG] greet tool called with name: {name}")
+    result = f"Hello, {name}!"
+    print(f"[DEBUG] greet tool returning: {result}")
+    return result
 
-# 2) Create the ASGI application for Streamable HTTP transport
-#    This provides both JSON-RPC and streaming endpoints under /mcp
-stream_app = mcp.streamable_http_app()
-
-# 3) Wrap with CORS so browsers can connect from any origin
-app = CORSMiddleware(
-    stream_app,
-    allow_origins=["*"],
-    allow_methods=["GET", "POST"],
-    allow_headers=["*"],
-    expose_headers=["Mcp-Session-Id"],  # so client can read the session header
-)
-
-# 4) Run with Uvicorn instead of mcp.run() for CORS to work, in theory
 if __name__ == "__main__":
-    uvicorn.run(app, host="127.0.0.1", port=9000, log_level="debug")
+    # uvicorn.run(app, host="127.0.0.1", port=9000, log_level="debug")
+    mcp.run(transport="sse")

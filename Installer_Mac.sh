@@ -82,6 +82,21 @@ echo
 echo "Upgrading pip in the virtual environment..."
 pip install --upgrade pip
 
+# Check if Poetry is available
+BACKEND_PATH="${SCRIPT_DIR}/Main/backend"
+if command -v poetry &> /dev/null && [ -f "${BACKEND_PATH}/pyproject.toml" ]; then
+    echo
+    echo "Poetry detected. Using Poetry to manage dependencies..."
+    
+    # Export requirements files using Poetry
+    echo "Exporting platform-specific requirements..."
+    cd "$BACKEND_PATH"
+    poetry run export-requirements
+    cd "$SCRIPT_DIR"
+    
+    echo "Requirements files updated from Poetry configuration."
+fi
+
 # Use requirements_mac.txt for macOS
 REQUIREMENTS_FILE="${SCRIPT_DIR}/Requirements/requirements_mac.txt"
 if [ ! -f "$REQUIREMENTS_FILE" ]; then
@@ -96,6 +111,15 @@ if [ $? -ne 0 ]; then
     echo "ERROR: Failed to install dependencies."
     press_any_key_to_exit 1
 fi
+
+# Install mcp[cli] separately due to shell escaping issues
+echo
+echo "Installing mcp[cli] package..."
+pip install 'mcp[cli]'
+if [ $? -ne 0 ]; then
+    echo "WARNING: Failed to install mcp[cli]. You may need to install it manually with: pip install 'mcp[cli]'"
+fi
+
 echo "All dependencies installed successfully."
 
 ###############################################################################

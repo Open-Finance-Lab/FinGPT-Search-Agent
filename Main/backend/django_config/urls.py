@@ -16,7 +16,7 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path
-from chat_server_app import views
+from api import views
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -28,7 +28,7 @@ urlpatterns = [
     path('api/get_preferred_urls/', views.get_preferred_urls, name='get_preferred_urls'),
     path('api/add_preferred_url/', views.add_preferred_url, name='add_preferred_url'),
     path('api/folder_path', views.folder_path, name='folder_path'),
-    path('get_mcp_response/', views.MCPGreetView.as_view(), name='mcp-greet'),
+    path('get_mcp_response/', views.mcp_chat_response, name='get_mcp_response'),
     path('log_question/', views.log_question, name='log_question'),
 
 ]

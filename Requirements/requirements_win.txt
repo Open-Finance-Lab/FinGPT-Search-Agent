@@ -13,9 +13,8 @@ faiss-cpu
 django-cors-headers
 pytest
 flask
-mcp[cli]
-fastmcp
-django-mcp
+mcp>=1.1.0
+anthropic
 sphinx
 sphinx_rtd_theme
 nbsphinx
