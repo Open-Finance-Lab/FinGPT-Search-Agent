@@ -1,4 +1,6 @@
 # environment variables
+chat_interface/backend_modules/.env
+# older ver has env in here
 Main/backend/.env
 
 # google cookie
@@ -77,5 +79,9 @@ Main/backend/preferred_urls.txt
 
 # uv
 mcp-server/uv.lock
-Main/backend/django_debug.log
 
+# additional cache directories
+/Main/backend/datascraper/__pycache__
+/Main/backend/django_config/__pycache__
+/Main/backend/mcp_client/__pycache__
+/Main/backend/api/__pycache__
