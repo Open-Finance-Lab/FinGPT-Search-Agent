@@ -95,6 +95,30 @@ Backend (`backend/`)
 | Log / DB files         | `cdm_rag.log`, `db.sqlite3` – local persistence, **git-ignored**                           |
 +------------------------+--------------------------------------------------------------------------------------------+
 
+Dependency Management
+~~~~~~~~~~~~~~~~~~~~~
+
+The backend now supports **Poetry** for modern Python dependency management:
+
++------------------------+--------------------------------------------------------------------------------------------+
+| **File/Tool**          | **Purpose**                                                                                |
++========================+============================================================================================+
+| pyproject.toml         | Poetry configuration with platform-specific dependencies                                   |
++------------------------+--------------------------------------------------------------------------------------------+
+| poetry.lock            | Lock file ensuring reproducible builds (auto-generated, git-ignored)                       |
++------------------------+--------------------------------------------------------------------------------------------+
+| manage_deps.py         | Helper script for common Poetry operations (install, add, remove, export)                  |
++------------------------+--------------------------------------------------------------------------------------------+
+| scripts/               | Contains export_requirements.py for generating platform-specific requirements              |
++------------------------+--------------------------------------------------------------------------------------------+
+| Requirements/          | Traditional pip requirements files (auto-exported from Poetry)                             |
++------------------------+--------------------------------------------------------------------------------------------+
+
+**Key features:**
+- Platform-specific Django versions (5.0.11 for Windows, 4.2.18 for macOS)
+- Automatic requirements.txt generation via ``poetry run export-requirements``
+- Backward compatibility with pip-based installation
+
 Front-End (`frontend/`)
 -----------------------
 

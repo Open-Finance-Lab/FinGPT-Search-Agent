@@ -13,13 +13,13 @@ This is a demo of FinLLM Leaderboard on HuggingFace's [Open Financial LLM Leader
 Current Progress:
 
 1. Snapshot of the search agent: drag, resize and minimize; Providing information on user's current page.
-   ![image](figures/F4.0_1.png)
+   ![image](Docs/source/_static/images/F4.0_1.png)
 
 2. Checking sources, which are very important and help reduce misinformation.
-   ![image](figures/F4.0_Source.png)
+   ![image](Docs/source/_static/images/F4.0_Source.png)
 
 3. Dedicated RAG for local files (SEC 10K, XBRL files).
-   ![image](figures/F4.0_RAG_1.png)
+   ![image](Docs/source/_static/images/F4.0_RAG_1.png)
 
 
 ## Installation, Usage, and more
@@ -28,7 +28,7 @@ Reference the [documentation](https://fingpt-search-agent-docs.readthedocs.io/en
 
 Immediate Next Steps:
 1. Integrate MCP servers for a proof-of-concept.
-2. Integrate Deepseek.
+2. Update documentation.
 3. Try to make the agent render LaTex.
 
 Future Plans:

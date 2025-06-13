@@ -20,9 +20,21 @@ Prerequisites
 
 * **Python 3.10 +** (or newer) with ``pip``
 * **Node.js 18 +** (includes ``npm``) – for building the front-end
-* A modern browser that supports Web-Extensions (Chrome, Edge, Brave, Arc …)
+* A modern browser that supports Web-Extensions (Chrome, Edge, Arc …). Brave, with its default settings, is
+currently not supported.
+* **Poetry** (optional but recommended) – for modern dependency management
 * Your **OpenAI API key** saved in the project’s ``.env`` file
   (see *Agent Setup → Installation* for details)
+
+.. note::
+   To install Poetry (optional but recommended for developers):
+   
+   .. code-block:: bash
+   
+      pip install poetry
+
+.. note::
+   The ``.env`` file should be placed at ``Main/backend/.env`` (not in the datascraper subdirectory).
 
 .. _step-0-update:
 
@@ -71,13 +83,37 @@ Install Back-End & Build Front-End
 2.1  Install Python dependencies
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+**Option A: Using Poetry (Recommended for developers)**
+
+If you have Poetry installed and want to manage dependencies:
+
+.. code-block:: bash
+
+   cd Main/backend
+   poetry install
+   # To update requirements files:
+   poetry run export-requirements
+
+**Option B: Using pip with requirements files**
+
 .. code-block:: bash
 
    # macOS / Linux
    pip install -r Requirements/requirements_mac.txt
+   # Then install mcp[cli] separately due to shell escaping issues:
+   pip install 'mcp[cli]'
 
    # Windows
    pip install -r Requirements/requirements_win.txt
+   pip install mcp[cli]
+
+.. note::
+   The ``mcp[cli]`` package requires special handling on macOS/Linux due to 
+   shell escaping of brackets. The installer scripts handle this automatically.
+
+.. note::
+   The installer scripts automatically check for Poetry and export updated 
+   requirements if available. For manual installation, you can use either method.
 
 2.2  Build the front-end bundle
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
