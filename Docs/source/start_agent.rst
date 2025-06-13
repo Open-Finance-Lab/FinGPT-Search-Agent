@@ -124,6 +124,10 @@ Step 6: Activate the Python Virtual Environment
    .. code-block:: bash
 
       pip install -r Requirements/requirements_mac.txt
+   
+   .. note::
+      If Poetry is installed, the installer scripts will automatically 
+      export updated requirements files from ``pyproject.toml``.
 
 Step 7: Start the Backend Server
 ---------------------------------

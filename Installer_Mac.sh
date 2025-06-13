@@ -111,6 +111,15 @@ if [ $? -ne 0 ]; then
     echo "ERROR: Failed to install dependencies."
     press_any_key_to_exit 1
 fi
+
+# Install mcp[cli] separately due to shell escaping issues
+echo
+echo "Installing mcp[cli] package..."
+pip install 'mcp[cli]'
+if [ $? -ne 0 ]; then
+    echo "WARNING: Failed to install mcp[cli]. You may need to install it manually with: pip install 'mcp[cli]'"
+fi
+
 echo "All dependencies installed successfully."
 
 ###############################################################################
