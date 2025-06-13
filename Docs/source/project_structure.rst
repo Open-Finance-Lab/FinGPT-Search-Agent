@@ -8,16 +8,31 @@ Top-Level Layout
 
 .. code-block:: text
 
-    Main/
-    ├── backend/
-    │   ├── chat_server/          # Django project – global settings & routing
-    │   ├── chat_server_app/      # Django app – business logic & APIs
-    │   └── datascraper/          # Custom Python utilities (RAG, scraping, etc.)
-    ├── frontend/                 # Browser extension (Webpack-bundled JS)
-    │   ├── dist/                 # Production build artefacts (auto-generated)
-    │   ├── node_modules/         # Local dependencies (auto-generated)
-    │   └── src/                  # Authoritative front-end source code
-    └── Requirements/             # Pinned Python dependencies (pip)
+    fingpt_rcos/                  # Project root
+    ├── Makefile                  # Unix-style build commands
+    ├── make.ps1                  # Windows PowerShell equivalent
+    ├── pyproject.toml            # Root Poetry configuration
+    ├── Installer_Win.ps1         # Windows quick installer
+    ├── Installer_Mac.sh          # macOS quick installer
+    ├── scripts/                  # Monorepo management
+    │   ├── install_all.py        # Unified installer
+    │   └── dev_setup.py          # Development runner
+    ├── Main/
+    │   ├── backend/
+    │   │   ├── chat_server/          # Django project settings
+    │   │   ├── chat_server_app/      # Django app & APIs
+    │   │   ├── datascraper/          # RAG & scraping utilities
+    │   │   ├── scripts/              # Backend scripts
+    │   │   ├── pyproject.toml        # Backend Poetry config
+    │   │   ├── manage_deps.py        # Dependency helper
+    │   │   └── .env                  # API keys (git-ignored)
+    │   └── frontend/                 # Browser extension
+    │       ├── dist/                 # Built extension
+    │       ├── node_modules/         # npm packages
+    │       └── src/                  # Source code
+    └── Requirements/             # Exported dependencies
+        ├── requirements_win.txt  # Windows packages
+        └── requirements_mac.txt  # macOS packages
 
 Backend (`backend/`)
 --------------------

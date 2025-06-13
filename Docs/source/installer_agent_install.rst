@@ -1,48 +1,36 @@
 Tutorial: Install with Installer Scripts
 ========================================
 
-- Step-by-step guide on how to run/install the Agent via the installer script. The scripts automatically installs
-  the agent to **Google Chrome** by default. If you want to install to a different browser, please see **Step 3** of
-  :ref:`pop-up-installation`.
-- Any prerequisites, environment variables, etc.
+This guide shows how to install FinGPT using the new unified installer scripts that handle both backend and frontend setup automatically.
 
 .. note::
    You will need an OpenAI API key for running the agent. Please ask the project leader (FlyM1ss) via Discord /
-   WeChat / Email (felixflyingt@gmail.com) for the key. If you have your own key, feel free to create a ``.env`` file
-   inside ``{rootFolderName}\Main\backend\datascraper`` and put in the form of ``API_KEY7=Your-Key``.
+   WeChat / Email (felixflyingt@gmail.com) for the key. If you have your own key, the installer will create a ``.env`` 
+   file at ``Main\backend\.env`` where you can add it.
 
 .. note::
-   If you are running Python 3 and the commands below don't work, please replace any ``python`` within the command to
-   ``python3``.
-
-.. note::
-   The search agent currently does NOT work on **Brave** browser.
+   The new installers require:
+   
+   - **Python 3.10+** (3.9 no longer supported due to dependencies)
+   - **Node.js 18+** for frontend building
+   - **Google Chrome** (default browser, others can be configured manually)
 
 Clone Repository
 ----------------
 
-Clone the repo into an empty directory of your choice. If you don't know how to clone, below is a guide you can
-follow. If you do, please skip to *Install the Agent* section.
+Clone the repo into an empty directory of your choice. If you don't know how to clone, follow the guide below.
 
 Recommended Cloning Method: GitHub Desktop
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-.. note::
-    You may choose to use Git commands to clone the repository. However, they require more technical knowledge than
-    Github Desktop. If you are interested or do not want to install Github Desktop, feel free to checkout
-    `Github's documentation <https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository?tool=cli>`_
-    on cloning repositories using Git.
 
 1. **Download and Install GitHub Desktop**
 
     - Visit https://desktop.github.com/ to download the latest version for your operating system.
     - Complete the installation.
 
-
 2. **Open GitHub Desktop and Sign In**
 
     - Launch GitHub Desktop and sign in with your GitHub account.
-
 
 3. **Clone the Repository**
 
@@ -53,150 +41,174 @@ Recommended Cloning Method: GitHub Desktop
     - Choose a local path (an empty directory) where you want to store the project files.
     - Click **Clone**.
 
-
 4. **Switch to the Correct Branch**
 
     - In GitHub Desktop, confirm that the repository is open.
-    - At the top center of the app, there’s a dropdown showing the currently active branch.
-    - Change this from ``main`` to ``fingpt_local_singleModel`` by selecting the branch from the dropdown list.
-    - If you don’t see the branch listed, click **Fetch** from the top menu. The branch should show up after fetching
-      is complete.
-
+    - At the top center of the app, there's a dropdown showing the currently active branch.
+    - Select the appropriate branch for your needs.
 
 5. **Verify**
 
-    - Your GitHub Desktop window should now display the `fingpt_local_singleModel` branch as your active branch.
-
-
-
-6. **Prepare your `.env` file**
-
-    - Create (or copy/paste) the file ``.env`` into
-      ``{rootFolderName}\Main\backend\datascraper``.
-    - If creating the file, use an IDE (rather than Notepad) to avoid format issues.
-    - Paste the API key into the file and save.
+    - Your GitHub Desktop window should now display the selected branch as your active branch.
 
 Install the Agent
 -----------------
+
+The new installer system provides multiple ways to install FinGPT, from simple one-click to advanced control.
 
 .. _pop-up-installation:
 
 Windows
 ~~~~~~~
 
-1. **Find Corresponding Installer Scripts**
+**Option 1: Quick Installer (Recommended)**
 
-  Open File Explorer and navigate to the project’s **root folder** (by default it should be called
-  "FinGPT-Search-Agent"). Locate the file ``Installer_Win.ps1``.
+1. Navigate to the project's root folder in File Explorer
+2. **Right-click** ``Installer_Win.ps1`` and select **"Run with PowerShell"**
 
-2. **Execute Installer Script**
+The installer will:
+  - Check prerequisites (Python 3.10+, Node.js 18+)
+  - Run the unified installation system
+  - Create a ``.env`` file template
+  - Offer to start development mode
 
-  **Right-click** the installer script and select **"Run with PowerShell"**.
-   
-  - If you face permission issues, do the following:
+If you encounter permission issues::
 
-    - Navigate to the project’s root folder in File Explorer.
-    - Click the address bar to select the path, then press **Ctrl+C** to copy.
-    - Right-click the task bar and select **Terminal (Admin)**
-    - Type ``cd "``, paste the path you copied, then type ``"`` and press Enter.
-    - Finally, run
-      ::
+    powershell.exe -ExecutionPolicy Bypass -File .\Installer_Win.ps1
 
-        powershell.exe -ExecutionPolicy Bypass -File .\Installer_Win.ps1
+**Option 2: PowerShell Make Commands**
 
-      - This bypasses the execution policy **only** for this script run.
+For more control, use the PowerShell make script::
 
-  The installer will attempt to:
+    # See all available commands
+    .\make.ps1 help
+    
+    # Install everything
+    .\make.ps1 install
+    
+    # Start development servers
+    .\make.ps1 dev
+    
+    # Clean and rebuild
+    .\make.ps1 clean
+    .\make.ps1 build
 
-    - Create and start a Python virtual environment.
-    - Start the back-end
-    - Install the Extension in Google Chrome
+**Option 3: Direct Python Scripts**
 
-3. **Check Front-end Installation**
+Run the unified installer directly::
 
-  Open Google Chrome, navigate to any supported websites and see if the agent pops up. If **nothing is showing**, or you
-  want to **use another browser**:
-
-    - Find and open the Extension Page. It's usually opened by clicking a "puzzle piece" button or under **Settings**.
-    - Find and enable Developer Mode in that browser’s Extensions/Plugins panel.
-    - Click **"Load Unpacked"** and navigate to ``{rootFolderName}/Main/frontend``, click ``dist``
-      to select the folder, and hit Enter or click **Select Folder**.
-    - Make sure you see "FinGPT" inside the Extension/Plugin page.
-
-4. **Check Back-end Installation**
-
-  A successful start of the back-end should create a separate terminal window and have something like "**Quit the server
-  with CTRL-BREAK**" displayed at the last line. If the back-end isn’t started automatically or the starting failed:
-
-    - Open a terminal and navigate to
-      ``{rootFolderName}\Main\backend``
-
-    - Run:
-      ::
-
-        FinGPTenv\Scripts\activate
-        python manage.py runserver
-
-    - Wait a few seconds for the server to start.
-
-  If issues persists, they are most likely issues one without technical abilities won't be able to solve. You may ask
-  AI chatbots to help you debug and start the agent, or kindly request those possessing the holy power of programming
-  to assist with the dire situation.
+    python scripts\install_all.py
+    python scripts\dev_setup.py
 
 Mac
 ~~~
 
-1. **Find Corresponding Installer Scripts**
+**Option 1: Quick Installer (Recommended)**
 
-  Open Finder and navigate to the project’s **root folder** (by default it should be called "FinGPT-Search-Agent").
-  Locate the file ``Installer_Mac.sh``.
+1. Open Terminal and navigate to the project's root folder
+2. Make the script executable and run it::
 
-2. **Execute Installer Script**
+    chmod +x Installer_Mac.sh
+    ./Installer_Mac.sh
 
-  Right-click it and select **"Open with Terminal"**. If you can't see such options:
+The installer will:
+  - Check prerequisites (Python 3.10+, Node.js 18+)
+  - Run the unified installation system
+  - Create a ``.env`` file template
+  - Offer to start development mode
 
-    - Manually open Terminal.
-    - ``cd`` into this project's **root folder**. If you don't know how to do this, refer to `this tutorial <https://www.youtube.com/watch?v=VRFcEMPES7U>`_.
-    - Give the script execute permission by typing ``chmod +x Installer_Mac.sh`` and hit Enter.
-    - Type ``./Installer_Mac.sh`` to run the script.
+**Option 2: Make Commands**
 
-  The installer will attempt to:
+If you have ``make`` installed::
 
-    - Install the Extension in Google Chrome
-    - Create and start a Python virtual environment.
-    - Start the back-end
+    # See all available commands
+    make help
+    
+    # Install everything
+    make install
+    
+    # Start development servers
+    make dev
+    
+    # Clean and rebuild
+    make clean
+    make build
 
-3. **Check Front-end Installation**
+**Option 3: Direct Python Scripts**
 
-  Open Google Chrome, navigate to any supported websites and see if the agent pops up. If **nothing is showing**, or you
-  want to **use another browser**:
+Run the unified installer directly::
 
-    - Find and open the Extension Page. It's usually opened by clicking a "puzzle piece" button or under **Settings**.
-    - Find and enable Developer Mode in that browser’s Extensions/Plugins panel.
-    - Click **"Load Unpacked"** and navigate to ``{rootFolderName}/Main/frontend``, click ``dist``
-      to select the folder, and hit Enter or click **Select Folder**.
-    - Make sure you see "FinGPT" inside the Extension/Plugin page.
+    python3 scripts/install_all.py
+    python3 scripts/dev_setup.py
 
-4. **Check Back-end Installation**
+Post-Installation Setup
+~~~~~~~~~~~~~~~~~~~~~~~
 
-  A successful start of the back-end should create a separate terminal window and have something like "**Quit the server
-  with CTRL-BREAK**" displayed at the last line. If the back-end isn’t started automatically or the starting failed:
+1. **Configure API Key**
 
-    - Open a terminal and navigate to
-      ``{rootFolderName}/Main/backend``
+   Edit ``Main/backend/.env`` and add your OpenAI API key::
+   
+       API_KEY7=your-actual-api-key-here
 
-    - Run:
-      ::
+2. **Load Browser Extension**
 
-        source FinGPTenv/bin/activate
-        python manage.py runserver
+   - Open Chrome and navigate to ``chrome://extensions``
+   - Enable **Developer mode** (toggle in top right)
+   - Click **Load unpacked**
+   - Select ``Main/frontend/dist`` folder
+   - The FinGPT icon should appear in your extensions
 
-    - Wait a few seconds for the server to start.
+3. **Start Using FinGPT**
 
-Final Steps
-~~~~~~~~~~~
+   - Navigate to any supported financial website
+   - The FinGPT chat interface should appear automatically
+   - Start asking questions!
 
-- Navigate to any supported website.
-- The search agent should automatically load and scrape the homepage.  
-- **Start chatting!**
+Development Mode
+~~~~~~~~~~~~~~~~
 
+The new system includes a development mode that runs both servers concurrently:
+
+**Windows**::
+
+    .\make.ps1 dev
+
+**Mac/Linux**::
+
+    make dev
+    # or
+    python3 scripts/dev_setup.py
+
+This will:
+- Start the Django backend server on port 8000
+- Start the frontend build watcher (if configured)
+- Show combined logs from both servers
+- Handle graceful shutdown with Ctrl+C
+
+Troubleshooting
+~~~~~~~~~~~~~~~
+
+**Installation Issues**
+
+- **"Python not found"**: Install Python 3.10+ from https://www.python.org/downloads/
+- **"Node.js not found"**: Install Node.js 18+ from https://nodejs.org/
+- **"make not found" (Windows)**: Use ``.\make.ps1`` instead
+- **Port 8000 in use**: Close other servers or choose to continue anyway
+
+**Extension Issues**
+
+- **Extension doesn't appear**: Ensure you selected the ``dist`` folder, not ``src``
+- **Agent doesn't pop up**: Check that the backend server is running
+- **API errors**: Verify your API key in ``Main/backend/.env``
+
+**For Developers**
+
+The new monorepo setup includes:
+
+- ``Makefile`` - Unix-style commands
+- ``make.ps1`` - Windows PowerShell equivalent  
+- ``scripts/install_all.py`` - Unified Python installer
+- ``scripts/dev_setup.py`` - Development mode runner
+- ``MONOREPO_SETUP.md`` - Detailed documentation
+
+See ``make help`` or ``.\make.ps1 help`` for all available commands.

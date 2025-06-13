@@ -1,224 +1,134 @@
-# Requires Windows PowerShell 5.1 or PowerShell 7+
-# Usage: Right-Click -> "Run with PowerShell"
-#        from the root folder of your FinGPT project.
+# FinGPT Quick Installer for Windows
+# Simplified installer that uses the new monorepo setup
+# Usage: Right-Click -> "Run with PowerShell" from the root folder
 
 #-------------------#
-# Helper: Exit Safe #
+# Helper Functions  #
 #-------------------#
 Function PressAnyKeyToExit ([int]$exitCode = 0) {
     Write-Host "`nPress any key to exit..."
-    [void][System.Console]::ReadKey($true)  # Wait for keypress
+    [void][System.Console]::ReadKey($true)
     exit $exitCode
 }
 
-Write-Host "`n========== FinGPT Installer for Windows =========="
+Write-Host "`n========== FinGPT Quick Installer for Windows ==========" -ForegroundColor Cyan
+Write-Host "This installer will set up FinGPT using the unified build system.`n" -ForegroundColor Gray
 
 ###############################################################################
-# 1. Check if Python is installed
+# 1. Check Prerequisites
 ###############################################################################
-Write-Host "`nChecking if Python is installed..."
+Write-Host "📋 Checking prerequisites..." -ForegroundColor Yellow
+
+# Check Python
 $python = Get-Command python -ErrorAction SilentlyContinue
-
 if (-not $python) {
-    Write-Host "`nERROR: Python is not installed on this system."
-    Write-Host "Please download and install Python 3.9+ from here:"
-    Write-Host "  https://www.python.org/downloads/"
-    Write-Host "Once installed, please rerun this script."
+    Write-Host "❌ Python is not installed." -ForegroundColor Red
+    Write-Host "   Please install Python 3.10+ from https://www.python.org/downloads/"
     PressAnyKeyToExit 1
 }
+Write-Host "✅ Python found: $($python.Source)" -ForegroundColor Green
 
-Write-Host "Python found at: $($python.Source)"
+# Check Node.js
+$node = Get-Command node -ErrorAction SilentlyContinue
+if (-not $node) {
+    Write-Host "❌ Node.js is not installed." -ForegroundColor Red
+    Write-Host "   Please install Node.js 18+ from https://nodejs.org/"
+    PressAnyKeyToExit 1
+}
+Write-Host "✅ Node.js found: $(node --version)" -ForegroundColor Green
 
-###############################################################################
-# 2. Check if Django’s default port is already in use
-###############################################################################
-Write-Host "`nChecking if port 8000 is already in use..."
+# Check port 8000
+$portInUse = $false
 try {
-    $portCheck = Test-NetConnection -ComputerName 127.0.0.1 -Port 8000 -WarningAction SilentlyContinue
+    $tcpConnection = New-Object System.Net.Sockets.TcpClient
+    $tcpConnection.Connect("127.0.0.1", 8000)
+    $portInUse = $true
+    $tcpConnection.Close()
 } catch {
-    Write-Host "Test-NetConnection not available; using netstat fallback..."
-    $netstatResult = netstat -ano | Select-String ":8000"
-    if ($netstatResult) {
-        Write-Host "`nERROR: Port 8000 is already in use. Please close whatever is running on 127.0.0.1:8000"
-        Write-Host "Then rerun this script."
-        PressAnyKeyToExit 1
-    } else {
-        Write-Host "Port 8000 appears to be free."
-    }
+    # Port is free
 }
 
-if ($portCheck -and $portCheck.TcpTestSucceeded -eq $true) {
-    Write-Host "`nERROR: Port 8000 is in use. Possibly another Django or a different server is running."
-    Write-Host "Please stop that process, then rerun this script."
-    PressAnyKeyToExit 1
-} else {
-    Write-Host "Port 8000 appears to be free."
-}
-
-###############################################################################
-# 3. Create / Activate Virtual Environment
-###############################################################################
-Write-Host "`nEnsuring a virtual environment is set up..."
-
-# Path to your venv folder - adjust as desired
-$venvPath = Join-Path $PSScriptRoot "FinGPTenv"
-
-if (!(Test-Path $venvPath)) {
-    Write-Host "Creating a new virtual environment at: $venvPath"
-    python -m venv $venvPath
-    if ($LASTEXITCODE -ne 0) {
-        Write-Host "ERROR: Could not create virtual environment. Check your Python installation."
+if ($portInUse) {
+    Write-Host "⚠️  Port 8000 is in use. Please close any running servers." -ForegroundColor Yellow
+    $continue = Read-Host "Continue anyway? (y/n)"
+    if ($continue -ne 'y') {
         PressAnyKeyToExit 1
     }
-} else {
-    Write-Host "Virtual environment folder already exists at $venvPath."
 }
 
-Write-Host "Activating the virtual environment..."
+###############################################################################
+# 2. Run Unified Installer
+###############################################################################
+Write-Host "`n🚀 Running unified installer..." -ForegroundColor Yellow
 
-# Activate script for Windows
-$activateScript = Join-Path $venvPath "Scripts\Activate.ps1"
-if (!(Test-Path $activateScript)) {
-    Write-Host "ERROR: Could not find the activate.ps1 script in $activateScript"
+# Check if we have the new setup
+$makeScript = Join-Path $PSScriptRoot "make.ps1"
+$installScript = Join-Path $PSScriptRoot "scripts\install_all.py"
+
+if (Test-Path $makeScript) {
+    # Use PowerShell make script
+    Write-Host "Using PowerShell build system..." -ForegroundColor Gray
+    & $makeScript install
+} elseif (Test-Path $installScript) {
+    # Use Python installer directly
+    Write-Host "Using Python installer..." -ForegroundColor Gray
+    python $installScript
+} else {
+    Write-Host "❌ New installer scripts not found!" -ForegroundColor Red
+    Write-Host "   Please ensure you have the latest version from Git." -ForegroundColor Gray
     PressAnyKeyToExit 1
 }
 
-# Dot-source the activation script in this session
-. $activateScript
-
 ###############################################################################
-# 4. Install Dependencies
+# 3. Create .env file if needed
 ###############################################################################
-Write-Host "`nUpgrading pip in the virtual environment..."
-pip install --upgrade pip
+$envPath = Join-Path $PSScriptRoot "Main\backend\.env"
+if (!(Test-Path $envPath)) {
+    Write-Host "`n📝 Creating .env file..." -ForegroundColor Yellow
+    @"
+# FinGPT Environment Configuration
+# Add your OpenAI API key below:
+API_KEY7=your-api-key-here
 
-# Check if Poetry is available
-$poetry = Get-Command poetry -ErrorAction SilentlyContinue
-$backendPath = Join-Path $PSScriptRoot "Main\backend"
-
-if ($poetry -and (Test-Path (Join-Path $backendPath "pyproject.toml"))) {
-    Write-Host "`nPoetry detected. Using Poetry to manage dependencies..."
+# Optional: Add other API keys
+# ANTHROPIC_API_KEY=your-anthropic-key-here
+"@ | Out-File -FilePath $envPath -Encoding UTF8
     
-    # Export requirements files using Poetry
-    Write-Host "Exporting platform-specific requirements..."
-    Push-Location $backendPath
-    poetry run export-requirements
-    Pop-Location
-    
-    Write-Host "Requirements files updated from Poetry configuration."
-}
-
-# Install from requirements file
-$requirementsFile = Join-Path $PSScriptRoot "Requirements\requirements_win.txt"
-if (!(Test-Path $requirementsFile)) {
-    Write-Host "ERROR: requirements_win.txt not found at $requirementsFile"
-    PressAnyKeyToExit 1
-}
-
-Write-Host "`nInstalling dependencies from requirements_win.txt..."
-pip install -r $requirementsFile
-Write-Host "All dependencies installed successfully."
-
-###############################################################################
-# 5. Start Django Back-End (in new PowerShell window)
-###############################################################################
-Write-Host "`nStarting Django back-end..."
-
-# Path to your Django project folder
-$serverPath = Join-Path $PSScriptRoot "Main\backend"
-
-if (!(Test-Path $serverPath)) {
-    Write-Host "ERROR: Main\\backend folder not found at $serverPath"
-    PressAnyKeyToExit 1
-}
-
-# Build a command that:
-# 1) changes directory, 2) re-activates venv, 3) runs server
-$serverCommand = "
-cd `"$serverPath`"
-. `"$venvPath\Scripts\Activate.ps1`"
-python manage.py runserver
-"
-
-Write-Host "Launching Django server in new PowerShell window..."
-Start-Process "powershell.exe" -ArgumentList "-NoExit","-Command $serverCommand" -WindowStyle Normal
-
-###############################################################################
-# 6. Uninstall existing FinGPT extension (Best-effort)
-###############################################################################
-Write-Host "`nAttempting to remove any existing FinGPT extension..."
-
-# If your extension is from the Chrome Web Store, put the ID here
-$extensionID = "YOUR_STORE_EXTENSION_ID_HERE"  # e.g.: "abcdefg..."
-
-if ($extensionID -ne "YOUR_STORE_EXTENSION_ID_HERE") {
-    # Attempt Chrome CLI uninstall
-    Write-Host "Using Chrome CLI to uninstall extension ID: $extensionID"
-
-    $chromePaths = @(
-        "C:\Program Files\Google\Chrome\Application\chrome.exe",
-        "C:\Program Files (x86)\Google\Chrome\Application\chrome.exe"
-    )
-    $chromeExe = $chromePaths | Where-Object { Test-Path $_ } | Select-Object -First 1
-
-    if ($chromeExe) {
-        Start-Process $chromeExe -ArgumentList "--uninstall-extension=$extensionID","--user-data-dir=$($env:TEMP)\ChromeCleanProfile","--no-first-run" -Wait
-    } else {
-        Write-Host "Chrome not found in default locations; skipping uninstall step."
-    }
-} else {
-    Write-Host "No store extension ID specified or dev-mode extension; skipping direct uninstall."
+    Write-Host "⚠️  Please edit $envPath and add your OpenAI API key!" -ForegroundColor Yellow
 }
 
 ###############################################################################
-# 7. Close Chrome (if open) and load/refresh FinGPT extension
+# 4. Quick Start Options
 ###############################################################################
-Write-Host "`nAttempting to close Chrome if running..."
-Stop-Process -Name chrome -Force -ErrorAction SilentlyContinue
-Write-Host "Chrome closed (or was not running)."
+Write-Host "`n✨ Installation complete!" -ForegroundColor Green
+Write-Host "`nQuick start options:" -ForegroundColor Cyan
 
+Write-Host "`n1. Start Development Mode (recommended):" -ForegroundColor Yellow
+Write-Host "   .\make.ps1 dev" -ForegroundColor White
+Write-Host "   This will start both backend and frontend servers"
 
-Write-Host "`n🔧 Building and verifying FinGPT extension..."
-$OriginalDir = Get-Location
-# Change to extension directory
-Set-Location -Path "$PSScriptRoot\Main\frontend"
-npm i # install dependencies
-npm run build:full # build frontend and verify dist/ contents
+Write-Host "`n2. Manual Start:" -ForegroundColor Yellow
+Write-Host "   # Terminal 1 - Backend:" -ForegroundColor Gray
+Write-Host "   cd Main\backend" -ForegroundColor White
+Write-Host "   python manage.py runserver" -ForegroundColor White
+Write-Host "   # Terminal 2 - Frontend (optional):" -ForegroundColor Gray
+Write-Host "   cd Main\frontend" -ForegroundColor White
+Write-Host "   npm run watch" -ForegroundColor White
 
-Set-Location -Path $OriginalDir
-$BUILD_STATUS = $LASTEXITCODE
-if ($BUILD_STATUS -ne 0) {
-    Write-Host "❌ Build or file check failed. Aborting further steps." -ForegroundColor Red
-    exit 1
-} else {
-    Write-Host "✅ Build passed! Proceeding..." -ForegroundColor Green
+Write-Host "`n3. Load Extension in Chrome:" -ForegroundColor Yellow
+Write-Host "   - Open chrome://extensions" -ForegroundColor White
+Write-Host "   - Enable Developer mode" -ForegroundColor White
+Write-Host "   - Click 'Load unpacked'" -ForegroundColor White
+Write-Host "   - Select: Main\frontend\dist" -ForegroundColor White
+
+Write-Host "`n📚 For more options, run: .\make.ps1 help" -ForegroundColor Gray
+
+# Optional: Auto-start development mode
+Write-Host "`n" -NoNewline
+$autoStart = Read-Host "Start development servers now? (y/n)"
+if ($autoStart -eq 'y') {
+    Write-Host "`nStarting development mode..." -ForegroundColor Green
+    & $makeScript dev
 }
 
-
-Write-Host "`nLoading FinGPT extension in Chrome..."
-$extensionPath = Join-Path $PSScriptRoot "Main\frontend\dist"
-if (!(Test-Path $extensionPath)) {
-    Write-Host "ERROR: Extension source folder not found at $extensionPath"
-    PressAnyKeyToExit 1
-}
-
-$chromePaths = @(
-    "C:\Program Files\Google\Chrome\Application\chrome.exe",
-    "C:\Program Files (x86)\Google\Chrome\Application\chrome.exe"
-)
-$chromeExe = $chromePaths | Where-Object { Test-Path $_ } | Select-Object -First 1
-
-if (-not $chromeExe) {
-    Write-Host "ERROR: Google Chrome not found in default locations."
-    Write-Host "Please install Chrome or update the paths in this script."
-    PressAnyKeyToExit 1
-}
-
-# Start Chrome with the extension loaded
-Start-Process $chromeExe --load-extension=$extensionPath
-
-Write-Host "`n========== FinGPT Installation Complete =========="
-Write-Host "The Django server is running in a separate PowerShell window."
-Write-Host "Chrome has been launched with the FinGPT extension loaded."
-Write-Host "You can now start using the FinGPT Agent!"
 PressAnyKeyToExit 0

@@ -1,217 +1,143 @@
 #!/bin/bash
+# FinGPT Quick Installer for macOS
+# Simplified installer that uses the new monorepo setup
+# Usage: Run from the root folder
 
-###############################################################################
-# Helper: Safe Exit
-###############################################################################
+#-------------------#
+# Helper Functions  #
+#-------------------#
 press_any_key_to_exit() {
-  echo
-  echo "Press any key to exit..."
-  # Wait for a single keypress (silent, no echo)
-  read -n 1 -s
-  exit "$1"
+    echo
+    echo "Press any key to exit..."
+    read -n 1 -s
+    exit "$1"
 }
 
 echo
-echo "========== FinGPT Installer for macOS =========="
+echo "========== FinGPT Quick Installer for macOS =========="
+echo "This installer will set up FinGPT using the unified build system."
+echo
 
 ###############################################################################
-# 1. Check if Python is installed
+# 1. Check Prerequisites
 ###############################################################################
-echo
-echo "Checking if Python 3 is installed..."
-if ! command -v python3 &> /dev/null
-then
-    echo
-    echo "ERROR: Python 3 is not installed on this system."
-    echo "Please install Python 3.9+ from https://www.python.org/downloads/ (or via Homebrew)."
+echo "📋 Checking prerequisites..."
+
+# Check Python
+if ! command -v python3 &> /dev/null; then
+    echo "❌ Python 3 is not installed."
+    echo "   Please install Python 3.10+ from https://www.python.org/downloads/"
+    echo "   Or via Homebrew: brew install python@3.10"
     press_any_key_to_exit 1
-else
-    echo "Python 3 found at: $(which python3)"
 fi
+echo "✅ Python found: $(python3 --version)"
 
-###############################################################################
-# 2. Check if Django’s default port (8000) is already in use
-###############################################################################
-echo
-echo "Checking if port 8000 is already in use..."
-# We'll use lsof to detect a process bound to :8000
-if lsof -Pi :8000 -sTCP:LISTEN -t &> /dev/null
-then
-    echo
-    echo "ERROR: Port 8000 is in use. Possibly another Django or a different server is running."
-    echo "Please stop that process, then rerun this script."
+# Check Node.js
+if ! command -v node &> /dev/null; then
+    echo "❌ Node.js is not installed."
+    echo "   Please install Node.js 18+ from https://nodejs.org/"
+    echo "   Or via Homebrew: brew install node"
     press_any_key_to_exit 1
-else
-    echo "Port 8000 appears to be free."
 fi
+echo "✅ Node.js found: $(node --version)"
 
-###############################################################################
-# 3. Create / Activate Virtual Environment
-###############################################################################
-echo
-echo "Ensuring a virtual environment is set up..."
-
-# We’ll store the venv in "FinGPTenv" in the script's directory.
-# Get current script directory (works even if run via relative path).
-SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-VENV_PATH="${SCRIPT_DIR}/FinGPTenv"
-
-if [ ! -d "$VENV_PATH" ]; then
-    echo "Creating a new virtual environment at: $VENV_PATH"
-    python3 -m venv "$VENV_PATH"
-    if [ $? -ne 0 ]; then
-        echo "ERROR: Could not create virtual environment. Check your Python installation."
+# Check port 8000
+if lsof -Pi :8000 -sTCP:LISTEN -t &> /dev/null; then
+    echo "⚠️  Port 8000 is in use. Please close any running servers."
+    echo -n "Continue anyway? (y/n): "
+    read -n 1 continue_choice
+    echo
+    if [ "$continue_choice" != "y" ]; then
         press_any_key_to_exit 1
     fi
-else
-    echo "Virtual environment folder already exists at $VENV_PATH."
 fi
 
-echo "Activating the virtual environment..."
-# Source the venv's activate script
-source "${VENV_PATH}/bin/activate" 2>/dev/null
-if [ $? -ne 0 ]; then
-    echo "ERROR: Could not activate virtual environment at ${VENV_PATH}/bin/activate"
+# Get script directory
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
+###############################################################################
+# 2. Run Unified Installer
+###############################################################################
+echo
+echo "🚀 Running unified installer..."
+
+# Check if we have the new setup
+if [ -f "$SCRIPT_DIR/Makefile" ] && command -v make &> /dev/null; then
+    # Use Makefile
+    echo "Using Makefile build system..."
+    make install
+elif [ -f "$SCRIPT_DIR/scripts/install_all.py" ]; then
+    # Use Python installer directly
+    echo "Using Python installer..."
+    python3 "$SCRIPT_DIR/scripts/install_all.py"
+else
+    echo "❌ New installer scripts not found!"
+    echo "   Please ensure you have the latest version from Git."
     press_any_key_to_exit 1
 fi
 
 ###############################################################################
-# 4. Install Dependencies
+# 3. Create .env file if needed
 ###############################################################################
-echo
-echo "Upgrading pip in the virtual environment..."
-pip install --upgrade pip
-
-# Check if Poetry is available
-BACKEND_PATH="${SCRIPT_DIR}/Main/backend"
-if command -v poetry &> /dev/null && [ -f "${BACKEND_PATH}/pyproject.toml" ]; then
+ENV_PATH="$SCRIPT_DIR/Main/backend/.env"
+if [ ! -f "$ENV_PATH" ]; then
     echo
-    echo "Poetry detected. Using Poetry to manage dependencies..."
-    
-    # Export requirements files using Poetry
-    echo "Exporting platform-specific requirements..."
-    cd "$BACKEND_PATH"
-    poetry run export-requirements
-    cd "$SCRIPT_DIR"
-    
-    echo "Requirements files updated from Poetry configuration."
-fi
+    echo "📝 Creating .env file..."
+    cat > "$ENV_PATH" << 'EOF'
+# FinGPT Environment Configuration
+# Add your OpenAI API key below:
+API_KEY7=your-api-key-here
 
-# Use requirements_mac.txt for macOS
-REQUIREMENTS_FILE="${SCRIPT_DIR}/Requirements/requirements_mac.txt"
-if [ ! -f "$REQUIREMENTS_FILE" ]; then
-    echo "ERROR: requirements_mac.txt not found at $REQUIREMENTS_FILE"
-    press_any_key_to_exit 1
-fi
-
-echo
-echo "Installing dependencies from requirements_mac.txt..."
-pip install -r "$REQUIREMENTS_FILE"
-if [ $? -ne 0 ]; then
-    echo "ERROR: Failed to install dependencies."
-    press_any_key_to_exit 1
-fi
-echo "All dependencies installed successfully."
-
-###############################################################################
-# 5. Start Django Back-End
-###############################################################################
-echo
-echo "Starting Django back-end..."
-
-# Path to your Django project folder: ChatBot-Fin/chat_server
-SERVER_PATH="${SCRIPT_DIR}/Main/backend"
-if [ ! -d "$SERVER_PATH" ]; then
-    echo "ERROR: Main/backend folder not found at $SERVER_PATH"
-    press_any_key_to_exit 1
-fi
-
-# We can run it in the background with nohup or open a new Terminal window
-
-# Option A: Start server in background (nohup)
-#   This will let the user keep using the same terminal.
-#   Press Ctrl+C here won't kill the server (since it's backgrounded).
-# cd "$SERVER_PATH"
-# nohup python manage.py runserver 0.0.0.0:8000 > server_log.txt 2>&1 &
-# SERVER_PID=$!
-# echo "Django server running in background (PID: $SERVER_PID). Logs: server_log.txt"
-
-# Option B: Open a new Terminal window and run the server
-#   This is trickier on macOS, but we can do:
-#     open -a "Terminal" <command>
-#   We'll create a small script and ask Terminal to open it.
-TEMP_SCRIPT="${SCRIPT_DIR}/run_django_temp.sh"
-cat <<EOF > "$TEMP_SCRIPT"
-#!/bin/bash
-cd "$SERVER_PATH"
-source "${VENV_PATH}/bin/activate"
-python manage.py runserver 0.0.0.0:8000
+# Optional: Add other API keys
+# ANTHROPIC_API_KEY=your-anthropic-key-here
 EOF
-chmod +x "$TEMP_SCRIPT"
-
-echo "Launching Django server in a new Terminal window..."
-open -a Terminal "$TEMP_SCRIPT"
-
-###############################################################################
-# 6. (Optional) Attempt to remove existing FinGPT extension
-###############################################################################
-# On macOS, there's no official "CLI uninstall" for dev/unpacked Chrome extensions.
-# If your extension is from the Web Store, you can attempt a forced uninstall by ID,
-# but it's not straightforward. We'll omit it here or do a best-effort kill Chrome.
-
-echo
-echo "Attempting to remove any existing FinGPT extension (best effort) -- skipping specialized uninstall on macOS."
-
-###############################################################################
-# 7. Close Chrome (if open) and load/refresh FinGPT extension
-###############################################################################
-echo
-echo "Attempting to close Chrome if running..."
-pkill -f "Google Chrome" 2>/dev/null
-echo "Chrome closed (or was not running)."
-
-echo
-echo "🔧 Building and verifying FinGPT extension..."
-ORIGINAL_DIR=$(pwd)
-# Change to extension directory (relative to script location)
-cd "$SCRIPT_DIR/Main/frontend" || exit 1
-npm i # Install dependencies
-npm run build:full # Build frontend and verify dist/ contents
-cd "$ORIGINAL_DIR"
-
-BUILD_STATUS=$?
-if [ $BUILD_STATUS -ne 0 ]; then
-  echo "❌ Build or file check failed. Aborting further steps."
-  exit 1
-else
-  echo "✅ Build passed! Proceeding..."
+    
+    echo "⚠️  Please edit $ENV_PATH and add your OpenAI API key!"
 fi
 
-echo
-echo "Loading FinGPT extension in Chrome..."
-EXTENSION_PATH="${SCRIPT_DIR}/Main/frontend/dist"
-if [ ! -d "$EXTENSION_PATH" ]; then
-    echo "ERROR: Extension source folder not found at $EXTENSION_PATH"
-    press_any_key_to_exit 1
-fi
-
-# Common Chrome path on macOS
-CHROME_PATH="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-if [ ! -f "$CHROME_PATH" ]; then
-    echo "ERROR: Google Chrome not found at /Applications/Google Chrome.app."
-    echo "Please install Chrome or update the path in this script."
-    press_any_key_to_exit 1
-fi
-
-# Launch Chrome with the extension
-"$CHROME_PATH" --load-extension="$EXTENSION_PATH" &>/dev/null &
-
 ###############################################################################
-# 8. Done!
+# 4. Quick Start Options
 ###############################################################################
 echo
-echo "========== FinGPT Installation Complete (macOS) =========="
-echo "The Django server is launching in a separate Terminal window."
-echo "Chrome has been launched with the FinGPT extension loaded."
-echo "You can now start using the FinGPT Agent!"
+echo "✨ Installation complete!"
+echo
+echo "Quick start options:"
+echo
+echo "1. Start Development Mode (recommended):"
+echo "   make dev"
+echo "   # Or without make:"
+echo "   python3 scripts/dev_setup.py"
+echo "   This will start both backend and frontend servers"
+echo
+echo "2. Manual Start:"
+echo "   # Terminal 1 - Backend:"
+echo "   cd Main/backend"
+echo "   python3 manage.py runserver"
+echo "   # Terminal 2 - Frontend (optional):"
+echo "   cd Main/frontend"
+echo "   npm run watch"
+echo
+echo "3. Load Extension in Chrome:"
+echo "   - Open chrome://extensions"
+echo "   - Enable Developer mode"
+echo "   - Click 'Load unpacked'"
+echo "   - Select: Main/frontend/dist"
+echo
+echo "📚 For more options, run: make help"
+
+# Optional: Auto-start development mode
+echo
+echo -n "Start development servers now? (y/n): "
+read -n 1 auto_start
+echo
+if [ "$auto_start" = "y" ]; then
+    echo
+    echo "Starting development mode..."
+    if command -v make &> /dev/null; then
+        make dev
+    else
+        python3 "$SCRIPT_DIR/scripts/dev_setup.py"
+    fi
+fi
+
 press_any_key_to_exit 0

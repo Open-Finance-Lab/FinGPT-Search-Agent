@@ -4,11 +4,13 @@ Tutorial: Manual Install
 .. admonition:: When to use this section
    :class: note
 
-   These steps are **only** necessary if the *installer script* has **not** run
-   (or failed) (Or if you prefer manual install).
-   If you have already run the installer successfully, skip to
-   :ref:`start-agent-ready` to verify the extension's installation and how to use
-   the agent.
+   With the new unified installer system, manual installation is rarely needed.
+   Consider using the automated installers first:
+   
+   - **Windows**: ``.\Installer_Win.ps1`` or ``.\make.ps1 install``
+   - **Mac/Linux**: ``./Installer_Mac.sh`` or ``make install``
+   
+   Use manual steps only if automated installation fails or you need custom setup.
 
 .. note::
    The search agent currently does NOT work on **Brave** browser.
