@@ -28,13 +28,22 @@ function postWebTextToServer(textContent, currentUrl) {
         });
 }
 
-// Function to get chat response from server
-function getChatResponse(question, selectedModel, isAdvanced, useRAG) {
+// Function to get chat response from server (now supports MCP mode)
+function getChatResponse(question, selectedModel, promptMode, useRAG, useMCP) {
     const encodedQuestion = encodeURIComponent(question);
-    const endpoint = isAdvanced ? 'get_adv_response' : 'get_chat_response';
+
+    let endpoint;
+    if (useMCP) {
+      endpoint = 'get_mcp_response';
+    } else {
+      endpoint = promptMode ? 'get_adv_response' : 'get_chat_response';
+    }
 
     return fetch(
-        `http://127.0.0.1:8000/${endpoint}/?question=${encodedQuestion}&models=${selectedModel}&is_advanced=${isAdvanced}&use_rag=${useRAG}`,
+        `http://127.0.0.1:8000/${endpoint}/?question=${encodedQuestion}` +
+        `&models=${selectedModel}` +
+        `&is_advanced=${promptMode}` +
+        `&use_rag=${useRAG}`,
         { method: 'GET' }
     )
         .then(response => response.json())

@@ -25,3 +25,56 @@
     display: flex;
     align-items: center;
 }
+
+/* Additional Header */
+#additionalHeader {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding: 10px;
+    cursor: move;
+}
+
+#additionalHeader span {
+    font-size: 1.2em;
+    font-weight: bold;
+}
+
+/* Headers for Settings Window */
+#model_selection_header,
+#preferred_links_header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-weight: bold;
+    margin-bottom: 10px;
+    cursor: pointer;
+}
+
+#model_selection_header span,
+#preferred_links_header span {
+    margin-left: 8px;
+    font-size: 1.2em;
+}
+
+/* Sources Window Header */
+#sources_window_header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+#sources_window_header h2 {
+    margin: 0;
+    color: #dddddd;
+    font-size: 1.5em;
+    font-weight: bold;
+}
+
+#sources_window_header .icon {
+    cursor: pointer;
+    font-size: 1.2em;
+    margin-left: 10px;
+}

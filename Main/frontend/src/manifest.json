@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "FinGPT",
-  "version": "4.0.0",
+  "version": "0.5.0",
   "description": "A demo to initialize the extension for FinGPT. This is the locally deployed, dual model display version.",
   "icons": {
     "16": "assets/16x16_icon.png",
@@ -18,10 +18,12 @@
         "https://www.cnbc.com/*"
       ],
       "js": [
-        "bundle.js"
+        "vendors.js",
+        "katex.js",
+        "main.js"
       ],
       "css": [
-        "textbox.css"
+        "styles.css"
       ]
     }
   ],
@@ -31,5 +33,11 @@
   ],
   "host_permissions": [
     "http://127.0.0.1:8000/*"
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [ "fonts/*.woff", "fonts/*.woff2" ],
+      "matches": [ "<all_urls>" ]
+    }
   ]
 }

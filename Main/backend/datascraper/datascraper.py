@@ -1,20 +1,37 @@
-from dotenv import load_dotenv
 import time
 import requests
-from bs4 import BeautifulSoup
 import os
-import openai
 import re
 import logging
+import asyncio
+# import torch
+
+from dotenv import load_dotenv
+from bs4 import BeautifulSoup
+
+from openai import OpenAI
+from anthropic import Anthropic
+
 from googlesearch import search
 from urllib.parse import urljoin
 # from transformers import AutoTokenizer, AutoModelForCausalLM
 # from accelerate import init_empty_weights, load_checkpoint_and_dispatch
-# import torch
+
 from . import cdm_rag
+from mcp_client.agent import create_fin_agent, USER_ONLY_MODELS, DEFAULT_PROMPT
+from .models_config import (
+    MODELS_CONFIG, 
+    PROVIDER_CONFIGS, 
+    get_model_config, 
+    get_provider_config,
+    validate_model_support
+)
 
 load_dotenv()
-api_key = os.getenv("API_KEY7")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "")
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
+
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 req_headers = {
@@ -23,8 +40,31 @@ req_headers = {
                   "Chrome/115.0.0.0 Safari/537.36"
 }
 
+# Initialize clients
+clients = {}
+
+# OpenAI client
+if OPENAI_API_KEY:
+    clients["openai"] = OpenAI(api_key=OPENAI_API_KEY)
+
+# DeepSeek client (OpenAI-compatible)
+if DEEPSEEK_API_KEY:
+    clients["deepseek"] = OpenAI(
+        api_key=DEEPSEEK_API_KEY,
+        base_url="https://api.deepseek.com"
+    )
+
+# Anthropic client
+if ANTHROPIC_API_KEY:
+    clients["anthropic"] = Anthropic(api_key=ANTHROPIC_API_KEY)
+
+INSTRUCTION = (
+    "When provided context, use provided context as fact and not your own knowledge; "
+    "the context provided is the most up-to-date information."
+)
+
 # A module-level set to keep track of used URLs
-used_urls = set()
+used_urls: set[str] = set()
 
 # Helper
 def remove_duplicate_sentences(text):
@@ -167,144 +207,215 @@ def create_rag_response(user_input, message_list, model):
         return error_message
 
 
-def create_response(user_input, message_list, model="o3-mini"):
+def create_response(
+        user_input: str,
+        message_list: list[dict],
+        model: str = "o4-mini"
+) -> str:
     """
-    Creates a response using OpenAI's API and a specified model.
+    Creates a chat completion using the appropriate provider based on model configuration.
     """
-
-    # If the user selected "o3-preview" or "gpt-4o", we stick with standard openai
-    # If "deepseek-R1" is chosen, we call the Deepseek client
-    if model == "deepseek-reasoner":
-        # Deepseek logic
-        from openai import OpenAI
-        deepseek_api_key = os.getenv("DEEPSEEK_API_KEY", "")
-
-        client = OpenAI(
-            api_key=deepseek_api_key,
-            base_url="https://api.deepseek.com"  # can use https://api.deepseek.com/v1
+    # Get model configuration
+    model_config = get_model_config(model)
+    if not model_config:
+        raise ValueError(f"Unsupported model: {model}")
+    
+    provider = model_config["provider"]
+    model_name = model_config["model_name"]
+    
+    # Get the appropriate client
+    client = clients.get(provider)
+    if not client:
+        raise ValueError(f"No client available for provider: {provider}. Please check API key configuration.")
+    
+    # Prepare messages
+    msgs = [msg for msg in message_list if msg.get("role") != "system"]
+    msgs.insert(0, {"role": "system", "content": INSTRUCTION})
+    msgs.append({"role": "user", "content": user_input})
+    
+    # Provider-specific handling
+    if provider == "anthropic":
+        # Anthropic uses a different API structure
+        response = client.messages.create(
+            model=model_name,
+            messages=msgs[1:],  # Anthropic doesn't use system messages the same way
+            system=INSTRUCTION,  # System message as separate parameter
+            max_tokens=1024
         )
-
-        # The "system" prompt in Deepseek is optional, but we can keep it for consistency
-        # Filter out 'system' role if needed, or adapt them. For now, we assume it is fine:
-        filtered_message_list = [msg for msg in message_list if msg["role"] != "system"]
-        filtered_message_list.append({"role": "user", "content": "You are to use provided context as fact and not " +
-                                                                 "your own knowledge as the context provided is the " +
-                                                                 "most up-to-date information.\n\n" +
-                                                                 user_input})
-
-        # Convert message_list to the shape Deepseek needs
-        # Usually: messages=[{"role": "system", "content": ...}, {"role": "user", "content": ...}]
-        # We'll just assume it’s the same shape as OpenAI
+        return response.content[0].text
+    else:
+        # OpenAI and DeepSeek use the same API structure
+        # Handle DeepSeek temperature recommendations
+        kwargs = {}
+        if provider == "deepseek" and "recommended_temperature" in model_config:
+            kwargs["temperature"] = model_config["recommended_temperature"]
+        
         response = client.chat.completions.create(
-            model="deepseek-reasoner",  # This is the actual model name on their side
-            messages=filtered_message_list
+            model=model_name,
+            messages=msgs,
+            **kwargs
         )
         return response.choices[0].message.content
 
-    else:
-        # For o1-preview or gpt-4o
-        openai.api_key = api_key
 
-        # Filter out 'system' role messages (o1-preview does not support this)
-        filtered_message_list = [msg for msg in message_list if msg["role"] != "system"]
-        filtered_message_list.append({"role": "user", "content": "You are to use provided context as fact and not " +
-                                                                 "your own knowledge as the context provided is the " +
-                                                                 "most up-to-date information.\n\n" +
-                                                                 user_input})
-
-        completion = openai.ChatCompletion.create(
-            model=model,
-            messages=filtered_message_list,
-        )
-        return completion.choices[0].message.content
-
-        # openai.api_key = api_key
-        #
-        # # Simply append the user's message to the existing list (including system messages)
-        # message_list.append({"role": "user", "content": user_input})
-        #
-        # completion = openai.ChatCompletion.create(
-        #     model=model,
-        #     messages=message_list,  # Pass the entire message_list directly
-        # )
-        # return completion.choices[0].message.content
-
-
-def create_advanced_response(user_input, message_list, model="o3-mini"):
+def create_advanced_response(
+        user_input: str,
+        message_list: list[dict],
+        model: str = "o4-mini"
+) -> str:
     """
-    Creates an advanced response by searching user-preferred URLs first and then
+    Creates an advanced response by searching user-preferred URLs first, then
     falling back to a general web search if needed. Appends metadata and content
-    from the scraped results.
-
-    Also collects all "used" URLs in the module-level 'used_urls' set.
+    from scraped results, and returns the final assistant reply.
     """
     logging.info("Starting advanced response creation...")
-    openai.api_key = api_key
 
-    # Clear any previous used URLs
+    # clear any previous used URLs
     used_urls.clear()
+    context_messages: list[str] = []
 
-    context_messages = []  # Collect context messages here
-
-    # 1. Search in preferred URLs first
+    # Search in preferred URLs
     logging.info("Searching user-preferred URLs...")
     preferred_info_list = search_preferred_urls(user_input)
     for info in preferred_info_list:
         if info.get('status') == 'success' and keyword_match(user_input, info.get('content', '')):
-            used_urls.add(info.get('url'))
-            metadata = info.get('metadata', {})
-            title = metadata.get('title', '')
-            description = metadata.get('description', '')
-            content = info.get('content', '')
+            url = info['url']
+            used_urls.add(url)
+            meta = info.get('metadata', {})
             combined = (
-                f"URL: {info.get('url')}\n"
-                f"Title: {title}\n"
-                f"Description: {description}\n"
-                f"Content: {content}"
+                f"URL: {url}\n"
+                f"Title: {meta.get('title', '')}\n"
+                f"Description: {meta.get('description', '')}\n"
+                f"Content: {info.get('content', '')}"
             )
-            # Add context as a 'user' message since system messages aren't supported.
-            context_messages.append({"role": "user", "content": combined})
+            context_messages.append(combined)
 
-    # 2. If no successful preferred result, fall back to general web search.
-    if not any(info.get('status') == 'success' and keyword_match(user_input, info.get('content', ''))
-               for info in preferred_info_list):
-        logging.info("No relevant preferred URL results; falling back to general web search.")
+    # Fallback to general web search
+    if not context_messages:
+        logging.info("No preferred results; falling back to general web search.")
         for url in search(user_input, num=5, stop=5, pause=0):
             info = data_scrape(url)
             if info.get('status') == 'success' and keyword_match(user_input, info.get('content', '')):
-                used_urls.add(info.get('url'))
-                metadata = info.get('metadata', {})
-                title = metadata.get('title', '')
-                description = metadata.get('description', '')
-                content = info.get('content', '')
+                used_urls.add(info['url'])
+                meta = info.get('metadata', {})
                 combined = (
-                    f"URL: {info.get('url')}\n"
-                    f"Title: {title}\n"
-                    f"Description: {description}\n"
-                    f"Content: {content}"
+                    f"URL: {info['url']}\n"
+                    f"Title: {meta.get('title', '')}\n"
+                    f"Description: {meta.get('description', '')}\n"
+                    f"Content: {info.get('content', '')}"
                 )
-                context_messages.append({"role": "user", "content": combined})
+                context_messages.append(combined)
             else:
-                logging.info(f"Keyword '{user_input}' not found or scraping failed for URL: {info.get('url')}")
+                logging.info(f"Failed for URL: {info.get('url')}")
 
-    # Append all context messages (as user messages) to the conversation.
-    for context_msg in context_messages:
-        message_list.append(context_msg)
+    # Get model configuration
+    model_config = get_model_config(model)
+    if not model_config:
+        raise ValueError(f"Unsupported model: {model}")
+    
+    provider = model_config["provider"]
+    model_name = model_config["model_name"]
+    
+    # Get the appropriate client
+    client = clients.get(provider)
+    if not client:
+        raise ValueError(f"No client available for provider: {provider}. Please check API key configuration.")
+    
+    # construct messages
+    msgs = [msg for msg in message_list if msg.get('role') != 'system']
+    msgs.insert(0, {"role": "system", "content": INSTRUCTION})
+    for snippet in context_messages:
+        msgs.append({"role": "user", "content": snippet})
+    msgs.append({"role": "user", "content": user_input})
 
-    # 3. Append the user's actual query as the final message.
-    message_list.append({"role": "user", "content": "You are to use provided context as fact and not " +
-                                                    "your own knowledge as the context provided is the " +
-                                                    "most up-to-date information.\n\n" +
-                                                    user_input})
-
-    # 4. Generate and return the advanced response from OpenAI.
-    completion = openai.ChatCompletion.create(
-        model=model,
-        messages=message_list,
-    )
-    answer = completion.choices[0].message.content
-    logging.info(f"Generated answer: {answer}")
+    # Provider-specific handling
+    if provider == "anthropic":
+        # Anthropic uses a different API structure
+        response = client.messages.create(
+            model=model_name,
+            messages=msgs[1:],  # Anthropic doesn't use system messages the same way
+            system=INSTRUCTION,  # System message as separate parameter
+            max_tokens=4096  # Longer for advanced responses
+        )
+        answer = response.content[0].text
+    else:
+        # OpenAI and DeepSeek use the same API structure
+        kwargs = {}
+        if provider == "deepseek" and "recommended_temperature" in model_config:
+            kwargs["temperature"] = model_config["recommended_temperature"]
+        
+        response = client.chat.completions.create(
+            model=model_name,
+            messages=msgs,
+            **kwargs
+        )
+        answer = response.choices[0].message.content
+    
+    logging.info(f"Generated advanced answer: {answer}")
     return answer
+
+
+def create_rag_advanced_response(user_input: str, message_list: list[dict], model: str = "o4-mini") -> str:
+    """
+    Creates an advanced response using the RAG pipeline.
+    Combines RAG functionality with advanced web search.
+    """
+    try:
+        # First try to get response from RAG
+        rag_response = cdm_rag.get_rag_advanced_response(user_input, model)
+        if rag_response:
+            return rag_response
+    except Exception as e:
+        logging.warning(f"RAG advanced response failed: {e}, falling back to advanced search")
+    
+    # Fallback to advanced search if RAG fails
+    return create_advanced_response(user_input, message_list, model)
+
+
+def create_mcp_response(user_input: str, message_list: list[dict], model: str = "o4-mini") -> str:
+    """
+    Creates a response using the MCP-enabled Agent.
+    """
+    try:
+        # Check if model supports MCP
+        if not validate_model_support(model, "mcp"):
+            logging.warning(f"Model {model} doesn't support MCP, falling back to regular response")
+            return create_response(user_input, message_list, model)
+        
+        # Run the MCP agent asynchronously
+        return asyncio.run(_create_mcp_response_async(user_input, message_list, model))
+        
+    except Exception as e:
+        logging.error(f"MCP response failed: {e}, falling back to regular response")
+        return create_response(user_input, message_list, model)
+
+async def _create_mcp_response_async(user_input: str, message_list: list[dict], model: str) -> str:
+    """
+    Async helper for creating MCP response.
+    """
+    from mcp_client.agent import create_fin_agent
+    from agents import Runner
+    
+    # Convert message list to context
+    context = ""
+    for msg in message_list:
+        if msg.get("role") == "user":
+            context += f"User: {msg.get('content', '')}\n"
+        elif msg.get("role") == "assistant":
+            context += f"Assistant: {msg.get('content', '')}\n"
+    
+    # Combine context with current input
+    full_prompt = f"{context}User: {user_input}"
+    
+    # Create MCP agent using async context manager
+    async with create_fin_agent(model) as agent:
+        # Run the agent with the full prompt
+        logging.info(f"[MCP DEBUG] Running agent with prompt: {full_prompt}")
+        result = await Runner.run(agent, full_prompt)
+        logging.info(f"[MCP DEBUG] Runner result: {result}")
+        logging.info(f"[MCP DEBUG] Result type: {type(result)}")
+        logging.info(f"[MCP DEBUG] Result final_output: {result.final_output}")
+        return result.final_output
 
 
 def get_sources(query):

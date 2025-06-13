@@ -13,7 +13,7 @@ import logging
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
 load_dotenv()
-api_key = os.getenv("API_KEY7")
+api_key = os.getenv("OPENAI_API_KEY")
 openai.api_key = api_key
 
 # Configure logging
