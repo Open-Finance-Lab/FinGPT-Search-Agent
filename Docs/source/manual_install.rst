@@ -18,7 +18,8 @@ Prerequisites
 
 * **Python 3.10 +** (or newer) with ``pip``
 * **Node.js 18 +** (includes ``npm``) – for building the front-end
-* A modern browser that supports Web-Extensions (Chrome, Edge, Brave, Arc …)
+* A modern browser that supports Web-Extensions (Chrome, Edge, Arc …). Brave, with its default settings, is
+currently not supported.
 * **Poetry** (optional but recommended) – for modern dependency management
 * Your **OpenAI API key** saved in the project’s ``.env`` file
   (see *Agent Setup → Installation* for details)
