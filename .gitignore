@@ -1,5 +1,8 @@
 # environment variables
 chat_interface/backend_modules/.env
+# older ver has env in here
+Main/backend/.env
+
 
 # google cookie
 Main/backend/.google-cookie
@@ -16,9 +19,35 @@ Main/backend/node_modules/
 # npm packages
 Main/frontend/package-lock.json
 
-# pycache
-/Main/backend/chat_server/__pycache__
-/Main/backend/chat_server_app/__pycache__
+# Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+
+# Python distribution / packaging
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Poetry
+poetry.lock
 
 # venv
 /FinGPTenv
@@ -39,4 +68,23 @@ Main/backend/chat_server_app/questionLog.csv
 # user preferred links
 Main/backend/preferred_urls.txt
 
+# django debug log
 Main/backend/django_debug.log
+
+# mcp
+/mcp-server/.venv
+
+# claude code local settings
+.claude/settings.local.json
+
+# uv
+mcp-server/uv.lock
+
+# npm packages
+Main/backend/package-lock.json
+
+# additional cache directories
+/Main/backend/datascraper/__pycache__
+/Main/backend/django_config/__pycache__
+/Main/backend/mcp_client/__pycache__
+/Main/backend/api/__pycache__
