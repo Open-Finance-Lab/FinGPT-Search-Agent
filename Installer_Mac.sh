@@ -82,21 +82,6 @@ echo
 echo "Upgrading pip in the virtual environment..."
 pip install --upgrade pip
 
-# Check if Poetry is available
-BACKEND_PATH="${SCRIPT_DIR}/Main/backend"
-if command -v poetry &> /dev/null && [ -f "${BACKEND_PATH}/pyproject.toml" ]; then
-    echo
-    echo "Poetry detected. Using Poetry to manage dependencies..."
-    
-    # Export requirements files using Poetry
-    echo "Exporting platform-specific requirements..."
-    cd "$BACKEND_PATH"
-    poetry run export-requirements
-    cd "$SCRIPT_DIR"
-    
-    echo "Requirements files updated from Poetry configuration."
-fi
-
 # Use requirements_mac.txt for macOS
 REQUIREMENTS_FILE="${SCRIPT_DIR}/Requirements/requirements_mac.txt"
 if [ ! -f "$REQUIREMENTS_FILE" ]; then
