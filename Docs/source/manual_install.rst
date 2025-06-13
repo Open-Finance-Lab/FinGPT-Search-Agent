@@ -98,9 +98,16 @@ If you have Poetry installed and want to manage dependencies:
 
    # macOS / Linux
    pip install -r Requirements/requirements_mac.txt
+   # Then install mcp[cli] separately due to shell escaping issues:
+   pip install 'mcp[cli]'
 
    # Windows
    pip install -r Requirements/requirements_win.txt
+   pip install mcp[cli]
+
+.. note::
+   The ``mcp[cli]`` package requires special handling on macOS/Linux due to 
+   shell escaping of brackets. The installer scripts handle this automatically.
 
 .. note::
    The installer scripts automatically check for Poetry and export updated 

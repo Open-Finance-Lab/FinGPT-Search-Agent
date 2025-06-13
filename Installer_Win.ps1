@@ -117,6 +117,14 @@ if (!(Test-Path $requirementsFile)) {
 
 Write-Host "`nInstalling dependencies from requirements_win.txt..."
 pip install -r $requirementsFile
+
+# Install mcp[cli] separately (for consistency with Mac, though Windows doesn't have escaping issues)
+Write-Host "`nInstalling mcp[cli] package..."
+pip install mcp[cli]
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "WARNING: Failed to install mcp[cli]. You may need to install it manually with: pip install mcp[cli]"
+}
+
 Write-Host "All dependencies installed successfully."
 
 ###############################################################################
