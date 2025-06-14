@@ -147,8 +147,8 @@ class MonorepoInstaller:
         if not env_path.exists():
             print("\n📝 Creating .env file...")
             print("⚠️  Please add your OpenAI API key to Main/backend/.env:")
-            print("   API_KEY7=your-api-key-here")
-            env_path.write_text("# Add your OpenAI API key here\nAPI_KEY7=your-api-key-here\n")
+            print("   OPENAI_API_KEY=your-api-key-here")
+            env_path.write_text("# Add your OpenAI API key here\nOPENAI_API_KEY=your-api-key-here\n")
     
     def print_next_steps(self):
         """Print next steps for the user."""

@@ -148,7 +148,7 @@ Post-Installation Setup
 
    Edit ``Main/backend/.env`` and add your OpenAI API key::
    
-       API_KEY7=your-actual-api-key-here
+       OPENAI_API_KEY=your-actual-api-key-here
 
 2. **Load Browser Extension**
 

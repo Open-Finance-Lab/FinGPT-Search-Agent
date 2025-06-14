@@ -88,7 +88,7 @@ if (!(Test-Path $envPath)) {
     @"
 # FinGPT Environment Configuration
 # Add your OpenAI API key below:
-API_KEY7=your-api-key-here
+OPENAI_API_KEY=your-api-key-here
 
 # Optional: Add other API keys
 # ANTHROPIC_API_KEY=your-anthropic-key-here

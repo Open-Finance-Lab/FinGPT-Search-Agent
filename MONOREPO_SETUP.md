@@ -181,7 +181,7 @@ The root `pyproject.toml` defines custom commands:
 
 Create `Main/backend/.env`:
 ```env
-API_KEY7=your-openai-api-key
+OPENAI_API_KEY=your-openai-api-key
 DEBUG=True
 ```
 
