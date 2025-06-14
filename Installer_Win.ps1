@@ -2,6 +2,10 @@
 # Simplified installer that uses the new monorepo setup
 # Usage: Right-Click -> "Run with PowerShell" from the root folder
 
+# Set UTF-8 encoding for proper language support
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$OutputEncoding = [System.Text.Encoding]::UTF8
+
 #-------------------#
 # Helper Functions  #
 #-------------------#
@@ -17,25 +21,26 @@ Write-Host "This installer will set up FinGPT using the unified build system.`n"
 ###############################################################################
 # 1. Check Prerequisites
 ###############################################################################
-Write-Host "📋 Checking prerequisites..." -ForegroundColor Yellow
+Write-Host "Checking prerequisites..." -ForegroundColor Yellow
 
 # Check Python
 $python = Get-Command python -ErrorAction SilentlyContinue
 if (-not $python) {
-    Write-Host "❌ Python is not installed." -ForegroundColor Red
+    Write-Host "ERROR: Python is not installed." -ForegroundColor Red
     Write-Host "   Please install Python 3.10+ from https://www.python.org/downloads/"
     PressAnyKeyToExit 1
 }
-Write-Host "✅ Python found: $($python.Source)" -ForegroundColor Green
+Write-Host "OK: Python found: $($python.Source)" -ForegroundColor Green
 
 # Check Node.js
 $node = Get-Command node -ErrorAction SilentlyContinue
 if (-not $node) {
-    Write-Host "❌ Node.js is not installed." -ForegroundColor Red
+    Write-Host "ERROR: Node.js is not installed." -ForegroundColor Red
     Write-Host "   Please install Node.js 18+ from https://nodejs.org/"
     PressAnyKeyToExit 1
 }
-Write-Host "✅ Node.js found: $(node --version)" -ForegroundColor Green
+$nodeVersion = & node --version 2>&1
+Write-Host "OK: Node.js found: $nodeVersion" -ForegroundColor Green
 
 # Check port 8000
 $portInUse = $false
@@ -49,7 +54,7 @@ try {
 }
 
 if ($portInUse) {
-    Write-Host "⚠️  Port 8000 is in use. Please close any running servers." -ForegroundColor Yellow
+    Write-Host "WARNING: Port 8000 is in use. Please close any running servers." -ForegroundColor Yellow
     $continue = Read-Host "Continue anyway? (y/n)"
     if ($continue -ne 'y') {
         PressAnyKeyToExit 1
@@ -59,7 +64,7 @@ if ($portInUse) {
 ###############################################################################
 # 2. Run Unified Installer
 ###############################################################################
-Write-Host "`n🚀 Running unified installer..." -ForegroundColor Yellow
+Write-Host "`nRunning unified installer..." -ForegroundColor Yellow
 
 # Check if we have the new setup
 $makeScript = Join-Path $PSScriptRoot "make.ps1"
@@ -72,9 +77,12 @@ if (Test-Path $makeScript) {
 } elseif (Test-Path $installScript) {
     # Use Python installer directly
     Write-Host "Using Python installer..." -ForegroundColor Gray
+    # Set environment variables for UTF-8
+    $env:PYTHONIOENCODING = "utf-8"
+    $env:PYTHONUTF8 = "1"
     python $installScript
 } else {
-    Write-Host "❌ New installer scripts not found!" -ForegroundColor Red
+    Write-Host "ERROR: New installer scripts not found!" -ForegroundColor Red
     Write-Host "   Please ensure you have the latest version from Git." -ForegroundColor Gray
     PressAnyKeyToExit 1
 }
@@ -84,7 +92,7 @@ if (Test-Path $makeScript) {
 ###############################################################################
 $envPath = Join-Path $PSScriptRoot "Main\backend\.env"
 if (!(Test-Path $envPath)) {
-    Write-Host "`n📝 Creating .env file..." -ForegroundColor Yellow
+    Write-Host "`nCreating .env file..." -ForegroundColor Yellow
     @"
 # FinGPT Environment Configuration
 # Add your OpenAI API key below:
@@ -94,13 +102,13 @@ OPENAI_API_KEY=your-api-key-here
 # ANTHROPIC_API_KEY=your-anthropic-key-here
 "@ | Out-File -FilePath $envPath -Encoding UTF8
     
-    Write-Host "⚠️  Please edit $envPath and add your OpenAI API key!" -ForegroundColor Yellow
+    Write-Host "WARNING: Please edit $envPath and add your OpenAI API key!" -ForegroundColor Yellow
 }
 
 ###############################################################################
 # 4. Quick Start Options
 ###############################################################################
-Write-Host "`n✨ Installation complete!" -ForegroundColor Green
+Write-Host "`nInstallation complete!" -ForegroundColor Green
 Write-Host "`nQuick start options:" -ForegroundColor Cyan
 
 Write-Host "`n1. Start Development Mode (recommended):" -ForegroundColor Yellow
@@ -121,7 +129,7 @@ Write-Host "   - Enable Developer mode" -ForegroundColor White
 Write-Host "   - Click 'Load unpacked'" -ForegroundColor White
 Write-Host "   - Select: Main\frontend\dist" -ForegroundColor White
 
-Write-Host "`n📚 For more options, run: .\make.ps1 help" -ForegroundColor Gray
+Write-Host "`nFor more options, run: .\make.ps1 help" -ForegroundColor Gray
 
 # Optional: Auto-start development mode
 Write-Host "`n" -NoNewline

@@ -44,18 +44,18 @@ python scripts/dev_setup.py
 
 ### Makefile Commands
 
-| Command | Description |
-|---------|-------------|
-| `make install` | Install all dependencies (backend + frontend) |
-| `make install-backend` | Install only backend dependencies |
-| `make install-frontend` | Install only frontend dependencies |
-| `make dev` | Start development servers with hot-reloading |
-| `make build` | Build frontend for production |
-| `make clean` | Clean build artifacts and caches |
-| `make update` | Update all dependencies to latest versions |
-| `make export-reqs` | Export requirements.txt files from Poetry |
-| `make test` | Run all tests |
-| `make lint` | Run linters for both backend and frontend |
+| Command                 | Description                                   |
+|-------------------------|-----------------------------------------------|
+| `make install`          | Install all dependencies (backend + frontend) |
+| `make install-backend`  | Install only backend dependencies             |
+| `make install-frontend` | Install only frontend dependencies            |
+| `make dev`              | Start development servers with hot-reloading  |
+| `make build`            | Build frontend for production                 |
+| `make clean`            | Clean build artifacts and caches              |
+| `make update`           | Update all dependencies to latest versions    |
+| `make export-reqs`      | Export requirements.txt files from Poetry     |
+| `make test`             | Run all tests                                 |
+| `make lint`             | Run linters for both backend and frontend     |
 
 ### Features
 

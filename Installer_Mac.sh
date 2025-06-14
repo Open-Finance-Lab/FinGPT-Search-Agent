@@ -3,6 +3,10 @@
 # Simplified installer that uses the new monorepo setup
 # Usage: Run from the root folder
 
+# Set UTF-8 locale for proper character handling
+export LANG=en_US.UTF-8
+export LC_ALL=en_US.UTF-8
+
 #-------------------#
 # Helper Functions  #
 #-------------------#
@@ -21,29 +25,29 @@ echo
 ###############################################################################
 # 1. Check Prerequisites
 ###############################################################################
-echo "📋 Checking prerequisites..."
+echo "Checking prerequisites..."
 
 # Check Python
 if ! command -v python3 &> /dev/null; then
-    echo "❌ Python 3 is not installed."
+    echo "ERROR: Python 3 is not installed."
     echo "   Please install Python 3.10+ from https://www.python.org/downloads/"
     echo "   Or via Homebrew: brew install python@3.10"
     press_any_key_to_exit 1
 fi
-echo "✅ Python found: $(python3 --version)"
+echo "OK: Python found: $(python3 --version)"
 
 # Check Node.js
 if ! command -v node &> /dev/null; then
-    echo "❌ Node.js is not installed."
+    echo "ERROR: Node.js is not installed."
     echo "   Please install Node.js 18+ from https://nodejs.org/"
     echo "   Or via Homebrew: brew install node"
     press_any_key_to_exit 1
 fi
-echo "✅ Node.js found: $(node --version)"
+echo "OK: Node.js found: $(node --version)"
 
 # Check port 8000
 if lsof -Pi :8000 -sTCP:LISTEN -t &> /dev/null; then
-    echo "⚠️  Port 8000 is in use. Please close any running servers."
+    echo "WARNING: Port 8000 is in use. Please close any running servers."
     echo -n "Continue anyway? (y/n): "
     read -n 1 continue_choice
     echo
@@ -59,7 +63,7 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 # 2. Run Unified Installer
 ###############################################################################
 echo
-echo "🚀 Running unified installer..."
+echo "Running unified installer..."
 
 # Check if we have the new setup
 if [ -f "$SCRIPT_DIR/Makefile" ] && command -v make &> /dev/null; then
@@ -71,7 +75,7 @@ elif [ -f "$SCRIPT_DIR/scripts/install_all.py" ]; then
     echo "Using Python installer..."
     python3 "$SCRIPT_DIR/scripts/install_all.py"
 else
-    echo "❌ New installer scripts not found!"
+    echo "ERROR: New installer scripts not found!"
     echo "   Please ensure you have the latest version from Git."
     press_any_key_to_exit 1
 fi
@@ -82,7 +86,7 @@ fi
 ENV_PATH="$SCRIPT_DIR/Main/backend/.env"
 if [ ! -f "$ENV_PATH" ]; then
     echo
-    echo "📝 Creating .env file..."
+    echo "Creating .env file..."
     cat > "$ENV_PATH" << 'EOF'
 # FinGPT Environment Configuration
 # Add your OpenAI API key below:
@@ -92,14 +96,14 @@ OPENAI_API_KEY=your-api-key-here
 # ANTHROPIC_API_KEY=your-anthropic-key-here
 EOF
     
-    echo "⚠️  Please edit $ENV_PATH and add your OpenAI API key!"
+    echo "WARNING: Please edit $ENV_PATH and add your OpenAI API key!"
 fi
 
 ###############################################################################
 # 4. Quick Start Options
 ###############################################################################
 echo
-echo "✨ Installation complete!"
+echo "Installation complete!"
 echo
 echo "Quick start options:"
 echo
@@ -123,7 +127,7 @@ echo "   - Enable Developer mode"
 echo "   - Click 'Load unpacked'"
 echo "   - Select: Main/frontend/dist"
 echo
-echo "📚 For more options, run: make help"
+echo "For more options, run: make help"
 
 # Optional: Auto-start development mode
 echo
