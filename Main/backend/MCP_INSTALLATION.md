@@ -29,23 +29,21 @@ pip install -r Requirements/requirements_mac.txt
 pip install 'mcp[cli]'
 ```
 
-### Option 3: Update Installer Scripts
+### Option 3: Unified Installer Handles This Automatically
 
-The installer scripts can handle this automatically. They already install from requirements.txt and could add an additional step:
+The unified installer (`scripts/install_all.py`) already handles this automatically. It detects the platform and installs mcp[cli] with proper escaping:
 
-**For Mac (Installer_Mac.sh):**
+**For Mac/Linux:**
 ```bash
-# After installing from requirements
-pip install 'mcp[cli]'
+pip install 'mcp[cli]'  # Properly escaped
 ```
 
-**For Windows (Installer_Win.ps1):**
+**For Windows:**
 ```powershell
-# After installing from requirements
-pip install mcp[cli]
+pip install mcp[cli]  # No escaping needed
 ```
 
-Note: Windows PowerShell doesn't require escaping for brackets.
+This is handled in the installer when Poetry installation fails and it falls back to pip.
 
 ## Poetry Export Consideration
 

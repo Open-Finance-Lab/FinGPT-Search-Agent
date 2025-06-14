@@ -27,6 +27,51 @@ class DevRunner:
                 subprocess.run(['chcp', '65001'], shell=True, capture_output=True)
             except:
                 pass
+    
+    def check_api_keys(self):
+        """Check if at least one API key is configured."""
+        env_path = self.backend_dir / ".env"
+        if not env_path.exists():
+            print(f"ERROR: .env file not found at {env_path}")
+            print("Please run the installer first: python scripts/install_all.py")
+            return False
+            
+        with open(env_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+            
+        # Check if any real API key is present (not the placeholder)
+        has_openai = 'OPENAI_API_KEY=' in content and 'your-openai-api-key-here' not in content
+        has_anthropic = 'ANTHROPIC_API_KEY=' in content and 'your-anthropic-api-key-here' not in content
+        has_deepseek = 'DEEPSEEK_API_KEY=' in content and 'your-deepseek-api-key-here' not in content
+        
+        if not (has_openai or has_anthropic or has_deepseek):
+            print("\n" + "="*60)
+            print("ERROR: No API keys configured!")
+            print("="*60)
+            print(f"\nPlease edit the .env file at:\n   {env_path}")
+            print("\nAdd at least one of the following:")
+            print("  - OPENAI_API_KEY=your-actual-key")
+            print("  - ANTHROPIC_API_KEY=your-actual-key")
+            print("  - DEEPSEEK_API_KEY=your-actual-key")
+            print("\nNote: MCP features require an OpenAI API key.")
+            print("\nYou can get API keys from:")
+            print("  - OpenAI: https://platform.openai.com/api-keys")
+            print("  - Anthropic: https://console.anthropic.com/")
+            print("  - DeepSeek: https://platform.deepseek.com/")
+            print("="*60)
+            return False
+            
+        # Show which API keys are configured
+        print("\nConfigured API keys:")
+        if has_openai:
+            print("  - OpenAI API key found")
+        if has_anthropic:
+            print("  - Anthropic API key found")
+        if has_deepseek:
+            print("  - DeepSeek API key found")
+        print()
+        
+        return True
         
     def run_backend(self):
         """Run Django development server."""
@@ -133,6 +178,34 @@ class DevRunner:
                     return False
         return True
     
+    def check_dependencies(self):
+        """Check if required dependencies are installed."""
+        print("Checking backend dependencies...")
+        
+        # Check for django-cors-headers using the same Python as the script
+        result = subprocess.run(
+            [sys.executable, "-c", "import corsheaders"],
+            capture_output=True
+        )
+        
+        if result.returncode != 0:
+            print("WARNING: django-cors-headers not installed. Installing...")
+            install_result = subprocess.run(
+                [sys.executable, "-m", "pip", "install", "django-cors-headers"],
+                capture_output=True,
+                text=True
+            )
+            if install_result.returncode == 0:
+                print("OK: django-cors-headers installed successfully")
+            else:
+                print(f"ERROR: Failed to install django-cors-headers: {install_result.stderr}")
+                print("Please run: pip install django-cors-headers")
+                return False
+        else:
+            print("OK: django-cors-headers is installed")
+        
+        return True
+    
     def run(self):
         """Run both backend and frontend in development mode."""
         print("FinGPT Development Mode")
@@ -159,6 +232,15 @@ class DevRunner:
             return 1
         else:
             print(f"Virtual environment: {os.environ.get('VIRTUAL_ENV', sys.prefix)}\n")
+        
+        # Check API keys FIRST before any other checks
+        if not self.check_api_keys():
+            print("\nCannot start server without API keys configured!")
+            return 1
+        
+        # Check dependencies
+        if not self.check_dependencies():
+            return 1
         
         # Check if watch script exists
         self.check_watch_script()

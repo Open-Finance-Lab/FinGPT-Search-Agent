@@ -1,19 +1,24 @@
-Tutorial: Install with Installer Scripts
+Tutorial: Install with Unified Installer
 ========================================
 
-This guide shows how to install FinGPT using the new unified installer scripts that handle both backend and frontend setup automatically.
+This guide shows how to install FinGPT using the unified installer that works across MacOS and Windows.
 
 .. note::
-   You will need an OpenAI API key for running the agent. Please ask the project leader (FlyM1ss) via Discord /
-   WeChat / Email (felixflyingt@gmail.com) for the key. If you have your own key, the installer will create a ``.env`` 
-   file at ``Main\backend\.env`` where you can add it.
+   You will need at least one API Key from OpenAI, Anthropic or DeepSeek for running the agent. Please ask the project
+   leader (FlyM1ss) via Discord / WeChat / Email (felixflyingt@gmail.com) for the key(s). If you have your own key, the
+   installer will create a ``.env`` file at ``Main\backend\.env`` where you can add it.
+   Note, that the MCP function currently only supports OpenAI models, meaning you will need OpenAI API Keys for
+   running the MCP function.
 
 .. note::
-   The new installers require:
+   The installers require:
    
    - **Python 3.10+** (3.9 no longer supported due to dependencies)
    - **Node.js 18+** for frontend building
    - **Google Chrome** (default browser, others can be configured manually)
+
+.. note::
+   The search agent currently does NOT support **Brave** browser on this browser's default settings.
 
 Clone Repository
 ----------------
@@ -54,92 +59,61 @@ Recommended Cloning Method: GitHub Desktop
 Install the Agent
 -----------------
 
-The new installer system provides multiple ways to install FinGPT, from simple one-click to advanced control.
+The unified installer works across all platforms (Windows, macOS, Linux) and handles all system languages properly.
 
-.. _pop-up-installation:
+.. _unified-installation:
 
-Windows
-~~~~~~~
-
-**Option 1: Quick Installer (Recommended)**
-
-1. Navigate to the project's root folder in File Explorer
-2. **Right-click** ``Installer_Win.ps1`` and select **"Run with PowerShell"**
-
-The installer will:
-  - Check prerequisites (Python 3.10+, Node.js 18+)
-  - Run the unified installation system
-  - Create a ``.env`` file template
-  - Offer to start development mode
-
-If you encounter permission issues::
-
-    powershell.exe -ExecutionPolicy Bypass -File .\Installer_Win.ps1
-
-**Option 2: PowerShell Make Commands**
-
-For more control, use the PowerShell make script::
-
-    # See all available commands
-    .\make.ps1 help
-    
-    # Install everything
-    .\make.ps1 install
-    
-    # Start development servers
-    .\make.ps1 dev
-    
-    # Clean and rebuild
-    .\make.ps1 clean
-    .\make.ps1 build
-
-**Option 3: Direct Python Scripts**
-
-Run the unified installer directly::
-
-    python scripts\install_all.py
-    python scripts\dev_setup.py
-
-Mac
-~~~
-
-**Option 1: Quick Installer (Recommended)**
-
-1. Open Terminal and navigate to the project's root folder
-2. Make the script executable and run it::
-
-    chmod +x Installer_Mac.sh
-    ./Installer_Mac.sh
-
-The installer will:
-  - Check prerequisites (Python 3.10+, Node.js 18+)
-  - Run the unified installation system
-  - Create a ``.env`` file template
-  - Offer to start development mode
-
-**Option 2: Make Commands**
+Option 1: Using Make (macOS/Linux)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 If you have ``make`` installed::
 
-    # See all available commands
-    make help
-    
     # Install everything
     make install
     
-    # Start development servers
+    # Start development mode
     make dev
     
-    # Clean and rebuild
-    make clean
-    make build
+    # See all available commands
+    make help
 
-**Option 3: Direct Python Scripts**
+Option 2: Using PowerShell Make (Windows)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Run the unified installer directly::
+Windows users can use the PowerShell equivalent::
+
+    # Install everything
+    .\make.ps1 install
+    
+    # Start development mode
+    .\make.ps1 dev
+    
+    # See all available commands
+    .\make.ps1 help
+
+Option 3: Direct Python Installation (All Platforms)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Run the unified installer directly:
+
+**Windows**::
+
+    python scripts\install_all.py
+    
+**macOS/Linux**::
 
     python3 scripts/install_all.py
-    python3 scripts/dev_setup.py
+
+The installer will:
+
+1. Check prerequisites (Python, Node.js)
+2. Create a virtual environment (``FinGPTenv``)
+3. Install all backend dependencies using Poetry or pip
+4. Install all frontend dependencies using npm
+5. Build the frontend extension
+6. Create a ``.env`` template file
+7. **Prompt you to configure API keys before proceeding**
+8. Only offer to start the dev server after API keys are configured
 
 Post-Installation Setup
 ~~~~~~~~~~~~~~~~~~~~~~~
@@ -149,6 +123,8 @@ Post-Installation Setup
    Edit ``Main/backend/.env`` and add your OpenAI API key::
    
        OPENAI_API_KEY=your-actual-api-key-here
+
+   Add your other API keys as needed in the same file and format.
 
 2. **Load Browser Extension**
 
@@ -160,23 +136,36 @@ Post-Installation Setup
 
 3. **Start Using FinGPT**
 
+   - Make sure the FinGPT back-end server is running. You should see the line ``Quit the server with CTRL-BREAK.`` as
+     the last line inside the terminal you are running the server from. If it isn't, inside your terminal, cd to the
+     root folder of the project and run ``python scripts/dev_setup.py`` or ``python3 scripts/dev_setup.py`` if the former
+     doesn't work.
+
    - Navigate to any supported financial website
+
    - The FinGPT chat interface should appear automatically
+
    - Start asking questions!
 
 Development Mode
 ~~~~~~~~~~~~~~~~
 
-The new system includes a development mode that runs both servers concurrently:
+The development mode runs both backend and frontend with hot-reloading:
 
 **Windows**::
 
+    # Using PowerShell make
     .\make.ps1 dev
+    
+    # Or directly
+    python scripts\dev_setup.py
 
-**Mac/Linux**::
+**macOS/Linux**::
 
+    # Using make
     make dev
-    # or
+    
+    # Or directly
     python3 scripts/dev_setup.py
 
 This will:
@@ -206,7 +195,7 @@ Troubleshooting
 **Extension Issues**
 
 - **Extension doesn't appear**: Ensure you selected the ``dist`` folder, not ``src``
-- **Agent doesn't pop up**: Check that the backend server is running
+- **Agent doesn't pop up**: Check that your browser and the website are both supported
 - **API errors**: Verify your API key in ``Main/backend/.env``
 - **CORS errors**: Ensure django-cors-headers is installed
 
@@ -218,11 +207,11 @@ Troubleshooting
 
 **For Developers**
 
-The new monorepo setup includes:
+The monorepo setup includes:
 
 - ``Makefile`` - Unix-style commands
 - ``make.ps1`` - Windows PowerShell equivalent  
-- ``scripts/install_all.py`` - Unified Python installer
+- ``scripts/install_all.py`` - Unified Python installer (UTF-8 compatible)
 - ``scripts/dev_setup.py`` - Development mode runner
 - ``MONOREPO_SETUP.md`` - Detailed documentation
 

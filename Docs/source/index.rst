@@ -16,9 +16,9 @@ documentation for details.
    :caption: Contents:
 
    introduction
-   installer_agent_install
+   install_agent_with_installer
    manual_install
-   start_agent
+   start_agent_mac
+   start_agent_win
    usage/index
    project_structure
-   recent_improvements

@@ -177,9 +177,72 @@ class MonorepoInstaller:
         env_path = self.backend_dir / ".env"
         if not env_path.exists():
             print("\nCreating .env file...")
-            print("WARNING: Please add your OpenAI API key to Main/backend/.env:")
-            print("   OPENAI_API_KEY=your-api-key-here")
-            env_path.write_text("# Add your OpenAI API key here\nOPENAI_API_KEY=your-api-key-here\n")
+            env_content = """# FinGPT API Configuration
+# Add your API keys below
+
+# Required: At least one of these API keys
+OPENAI_API_KEY=your-openai-api-key-here
+ANTHROPIC_API_KEY=your-anthropic-api-key-here
+DEEPSEEK_API_KEY=your-deepseek-api-key-here
+
+# Note: MCP features currently only work with OpenAI models
+"""
+            env_path.write_text(env_content, encoding='utf-8')
+            print(f"Created .env file at: {env_path}")
+            return True
+        else:
+            print(f"\n.env file already exists at: {env_path}")
+            return False
+    
+    def check_api_keys(self):
+        """Check if at least one API key is configured."""
+        env_path = self.backend_dir / ".env"
+        if not env_path.exists():
+            return False
+            
+        with open(env_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+            
+        # Check if any real API key is present (not the placeholder)
+        has_openai = 'OPENAI_API_KEY=' in content and 'your-openai-api-key-here' not in content
+        has_anthropic = 'ANTHROPIC_API_KEY=' in content and 'your-anthropic-api-key-here' not in content
+        has_deepseek = 'DEEPSEEK_API_KEY=' in content and 'your-deepseek-api-key-here' not in content
+        
+        return has_openai or has_anthropic or has_deepseek
+    
+    def prompt_for_api_keys(self):
+        """Prompt user to add API keys before continuing."""
+        env_path = self.backend_dir / ".env"
+        
+        print("\n" + "="*60)
+        print("IMPORTANT: API Key Configuration Required")
+        print("="*60)
+        print("\nFinGPT requires at least one API key to function.")
+        print(f"\nPlease edit the .env file at:\n   {env_path}")
+        print("\nAdd at least one of the following:")
+        print("  - OPENAI_API_KEY=your-actual-key")
+        print("  - ANTHROPIC_API_KEY=your-actual-key")
+        print("  - DEEPSEEK_API_KEY=your-actual-key")
+        print("\nNote: MCP features require an OpenAI API key.")
+        print("\n" + "="*60)
+        
+        while True:
+            response = input("\nHave you added your API key(s)? (y/n): ").lower()
+            if response == 'y':
+                if self.check_api_keys():
+                    print("OK: API key(s) detected!")
+                    return True
+                else:
+                    print("WARNING: No valid API keys found. Please check your .env file.")
+                    print("Make sure to replace the placeholder text with your actual API key.")
+            elif response == 'n':
+                print("\nPlease add your API key(s) to the .env file before continuing.")
+                print("You can get API keys from:")
+                print("  - OpenAI: https://platform.openai.com/api-keys")
+                print("  - Anthropic: https://console.anthropic.com/")
+                print("  - DeepSeek: https://platform.deepseek.com/")
+            else:
+                print("Please enter 'y' or 'n'")
     
     def print_next_steps(self):
         """Print next steps for the user."""
@@ -192,16 +255,34 @@ class MonorepoInstaller:
         activate_cmd = f"   {self.venv_name}\\Scripts\\activate" if self.is_windows else f"   source {self.venv_name}/bin/activate"
         print(activate_cmd)
         
-        print("\n2. Add your OpenAI API key to Main/backend/.env")
+        print("\n2. Start the development server:")
+        dev_cmd = "   python scripts\\dev_setup.py" if self.is_windows else "   python3 scripts/dev_setup.py"
+        print(dev_cmd)
         
-        print("\n3. Start the backend server:")
-        print("   cd Main/backend")
-        print("   python manage.py runserver")
-        
-        print("\n4. Load the extension in your browser")
-        print("   - Open Chrome extensions page")
+        print("\n3. Load the browser extension:")
+        print("   - Open Chrome and go to chrome://extensions")
         print("   - Enable Developer mode")
-        print("   - Load unpacked: Main/frontend/dist")
+        print("   - Click 'Load unpacked'")
+        print("   - Select: Main/frontend/dist")
+        
+        print("\n4. Start using FinGPT:")
+        print("   - Navigate to a financial website")
+        print("   - The FinGPT chat interface should appear")
+    
+    def offer_start_dev_server(self):
+        """Offer to start the development server."""
+        print("\n" + "-"*50)
+        response = input("\nWould you like to start the development server now? (y/n): ").lower()
+        if response == 'y':
+            print("\nStarting development server...")
+            dev_script = self.root_dir / "scripts" / "dev_setup.py"
+            if dev_script.exists():
+                python_cmd = "python" if self.is_windows else "python3"
+                subprocess.run([python_cmd, str(dev_script)])
+            else:
+                print("ERROR: dev_setup.py not found!")
+                print("You can start it manually with:")
+                print("   python scripts\\dev_setup.py" if self.is_windows else "   python3 scripts/dev_setup.py")
     
     def run(self):
         """Run the installation process."""
@@ -237,8 +318,25 @@ class MonorepoInstaller:
         if not self.install_frontend_dependencies():
             return 1
             
-        self.create_env_file()
+        # Create .env file and prompt for API keys
+        env_created = self.create_env_file()
+        
+        # Always check for API keys
+        if not self.check_api_keys():
+            print("\n" + "!"*60)
+            print("IMPORTANT: You must configure API keys before starting the server!")
+            print("!"*60)
+            self.prompt_for_api_keys()
+        
         self.print_next_steps()
+        
+        # Only offer to start dev server if API keys are configured
+        if self.check_api_keys():
+            self.offer_start_dev_server()
+        else:
+            print("\n" + "!"*60)
+            print("Remember to add your API keys before starting the server!")
+            print("!"*60)
         
         return 0
 

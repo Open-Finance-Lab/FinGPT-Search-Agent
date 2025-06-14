@@ -1,6 +1,8 @@
 # FinGPT Monorepo Setup Guide
 
 This guide explains the unified dependency management system for FinGPT that handles both backend (Python/Poetry) and frontend (Node.js/npm) dependencies.
+Same info are available in this project's [documentation](https://fingpt-search-agent-docs.readthedocs.io/en/latest/)
+, but **this** documentation is added so we can directly see if from the repo.
 
 ## Quick Start
 

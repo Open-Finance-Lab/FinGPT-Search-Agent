@@ -12,8 +12,6 @@ Top-Level Layout
     ├── Makefile                  # Unix-style build commands
     ├── make.ps1                  # Windows PowerShell equivalent
     ├── pyproject.toml            # Root Poetry configuration
-    ├── Installer_Win.ps1         # Windows quick installer
-    ├── Installer_Mac.sh          # macOS quick installer
     ├── scripts/                  # Monorepo management
     │   ├── install_all.py        # Unified installer (UTF-8 compatible)
     │   ├── dev_setup.py          # Development runner
@@ -70,6 +68,11 @@ API Application (`api/`)
 +--------------------------------------+----------------------------------------------------------------------------------------+
 | **Item**                             | **Purpose**                                                                            |
 +======================================+========================================================================================+
+| apps.py                              | Django app configuration with fail-fast API key validation:                            |
+|                                      | - Checks for valid API keys on server startup                                          |
+|                                      | - Raises ``ImproperlyConfigured`` if no keys found                                     |
+|                                      | - Prevents server from starting without configuration                                  |
++--------------------------------------+----------------------------------------------------------------------------------------+
 | views.py                             | Main API endpoints:                                                                    |
 |                                      |                                                                                        |
 |                                      | - ``/get_chat_response/`` – Basic chat completion                                      |
@@ -200,10 +203,11 @@ Development Workflow
 Quick Start
 ~~~~~~~~~~~
 
-1. **One-click installation:**
+1. **Installation:**
 
-   - Windows: Right-click ``Installer_Win.ps1`` → Run with PowerShell
-   - Mac: ``chmod +x Installer_Mac.sh && ./Installer_Mac.sh``
+   - All platforms: ``python scripts/install_all.py`` (or ``python3`` on Mac/Linux)
+   - Windows with make: ``./make.ps1 install``
+   - Mac/Linux with make: ``make install``
 
 2. **Development mode:**
 
@@ -230,7 +234,13 @@ Key Scripts
 **Installation & Setup:**
 
 - ``scripts/install_all.py`` – Unified installer with UTF-8 support for all languages
+  - Prompts for API key configuration before allowing server start
+  - Checks for valid API keys (not placeholders)
+  - Only offers to start dev server if keys are configured
 - ``scripts/dev_setup.py`` – Runs both backend and frontend in development mode
+  - Verifies API keys are configured before starting
+  - Shows which API keys are available
+  - Refuses to start without at least one valid key
 - ``scripts/fix_dependencies.py`` – Troubleshoots missing dependencies
 
 **Dependency Management:**
