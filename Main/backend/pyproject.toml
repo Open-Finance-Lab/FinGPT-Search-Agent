@@ -1,12 +1,12 @@
 [tool.poetry]
 name = "fingpt-backend"
-version = "0.1.0"
+version = "0.5.0"
 description = "FinGPT Backend - Financial GPT Assistant"
 authors = ["FinGPT Team"]
-readme = "README.md"
+package-mode = false
 
 [tool.poetry.dependencies]
-python = "^3.8"
+python = "^3.10"
 beautifulsoup4 = "4.12.3"
 django-request = "1.6.3"
 google = "3.0.0"
@@ -27,9 +27,9 @@ django-mcp = "*"
 
 # Platform-specific Django versions
 Django = [
-    {version = "5.0.11", markers = "sys_platform == 'win32'"},
-    {version = "4.2.18", markers = "sys_platform == 'darwin'"},
-    {version = "4.2.18", markers = "sys_platform == 'linux'"}
+    {version = "5.1.11", markers = "sys_platform == 'win32'"},
+    {version = "4.2.23", markers = "sys_platform == 'darwin'"},
+    {version = "4.2.23", markers = "sys_platform == 'linux'"}
 ]
 
 # Mac-specific dependency
