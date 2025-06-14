@@ -1,3 +1,1 @@
-from api import *
-import datascraper.datascraper as ds
-
+default_app_config = 'api.apps.ApiConfig'

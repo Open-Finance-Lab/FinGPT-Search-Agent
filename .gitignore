@@ -1,8 +1,7 @@
 # environment variables
 chat_interface/backend_modules/.env
+# older ver has env in here
 Main/backend/.env
-# older ver
-Main/backend/datascraper/.env
 
 # google cookie
 Main/backend/.google-cookie
