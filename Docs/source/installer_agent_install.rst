@@ -194,12 +194,27 @@ Troubleshooting
 - **"Node.js not found"**: Install Node.js 18+ from https://nodejs.org/
 - **"make not found" (Windows)**: Use ``.\make.ps1`` instead
 - **Port 8000 in use**: Close other servers or choose to continue anyway
+- **Poetry errors**: Run ``pip install poetry`` in your virtual environment
+- **"No module named corsheaders"**: Run ``pip install django-cors-headers``
+
+**Character Encoding Issues (Non-English Systems)**
+
+- **Emoji display errors**: The scripts now use plain text instead of emojis
+- **UTF-8 errors**: All scripts automatically set UTF-8 encoding
+- **npm build errors on Chinese/Japanese systems**: Fixed with proper encoding
 
 **Extension Issues**
 
 - **Extension doesn't appear**: Ensure you selected the ``dist`` folder, not ``src``
 - **Agent doesn't pop up**: Check that the backend server is running
 - **API errors**: Verify your API key in ``Main/backend/.env``
+- **CORS errors**: Ensure django-cors-headers is installed
+
+**Development Server Issues**
+
+- **Backend ModuleNotFoundError**: The dev script now uses the correct Python from venv
+- **Frontend "file not found"**: Uses shell=True on Windows to find npm
+- **"Export requirements error"**: Fixed with new export_requirements.py script
 
 **For Developers**
 

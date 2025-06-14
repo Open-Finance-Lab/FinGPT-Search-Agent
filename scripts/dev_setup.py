@@ -133,34 +133,6 @@ class DevRunner:
                     return False
         return True
     
-    def check_dependencies(self):
-        """Check if required dependencies are installed."""
-        print("Checking backend dependencies...")
-        
-        # Check for django-cors-headers using the same Python as the script
-        result = subprocess.run(
-            [sys.executable, "-c", "import corsheaders"],
-            capture_output=True
-        )
-        
-        if result.returncode != 0:
-            print("WARNING: django-cors-headers not installed. Installing...")
-            install_result = subprocess.run(
-                [sys.executable, "-m", "pip", "install", "django-cors-headers"],
-                capture_output=True,
-                text=True
-            )
-            if install_result.returncode == 0:
-                print("OK: django-cors-headers installed successfully")
-            else:
-                print(f"ERROR: Failed to install django-cors-headers: {install_result.stderr}")
-                print("Please run: pip install django-cors-headers")
-                return False
-        else:
-            print("OK: django-cors-headers is installed")
-        
-        return True
-    
     def run(self):
         """Run both backend and frontend in development mode."""
         print("FinGPT Development Mode")
@@ -187,10 +159,6 @@ class DevRunner:
             return 1
         else:
             print(f"Virtual environment: {os.environ.get('VIRTUAL_ENV', sys.prefix)}\n")
-        
-        # Check dependencies
-        if not self.check_dependencies():
-            return 1
         
         # Check if watch script exists
         self.check_watch_script()

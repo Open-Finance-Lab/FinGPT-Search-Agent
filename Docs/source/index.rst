@@ -21,3 +21,4 @@ documentation for details.
    start_agent
    usage/index
    project_structure
+   recent_improvements
