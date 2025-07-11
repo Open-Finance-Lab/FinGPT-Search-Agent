@@ -7,10 +7,7 @@ import numpy as np
 import faiss
 import json
 # OpenAI API key
-# Load .env from the backend root directory
-from pathlib import Path
-backend_dir = Path(__file__).resolve().parent.parent
-load_dotenv(backend_dir / '.env')
+load_dotenv()
 api_key = os.getenv("OPENAI_API_KEY")
 openai.api_key = api_key
 

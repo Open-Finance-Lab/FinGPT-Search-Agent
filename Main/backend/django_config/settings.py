@@ -19,12 +19,7 @@ import sys
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Load environment variables
-env_path = BASE_DIR / '.env'
-print(f"[DEBUG] Looking for .env at: {env_path}")
-print(f"[DEBUG] .env exists: {env_path.exists()}")
-load_dotenv(env_path)
-print(f"[DEBUG] OPENAI_API_KEY loaded: {'OPENAI_API_KEY' in os.environ}")
-print(f"[DEBUG] Current working directory: {os.getcwd()}")
+load_dotenv(BASE_DIR / '.env')
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
