@@ -22,7 +22,7 @@ Prerequisites
 * **Python 3.10 +** (or newer) with ``pip``
 * **Node.js 18 +** (includes ``npm``) – for building the front-end
 * A modern browser that supports Web-Extensions (Chrome, Edge, Arc …). Brave, with its default settings, is currently
-not supported.
+  not supported.
 * **Poetry** (optional but recommended) – for modern dependency management
 * Your **OpenAI API key** saved in the project’s ``.env`` file (see *Agent Setup → Installation* for details)
 
@@ -151,7 +151,7 @@ Load / Reload the Browser Extension
    ``Main/frontend/dist`` and select the **``dist``** folder.
 
 If the extension loads without error you will see
-*FinGPT Search Agent 4.0.0* in the list.
+*FinGPT Search Agent 0.5.1* in the list.
 
 Use the Agent
 -------------

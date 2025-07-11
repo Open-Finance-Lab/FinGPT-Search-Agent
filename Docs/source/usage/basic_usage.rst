@@ -56,3 +56,23 @@ Two more buttons appear above the prompt box and below where conversations are s
 
 These components make up the current FinGPT Search Agent demo. The documentation will be updated regularly to keep up
 with latest progress.
+
+Supported Websites
+------------------
+
+The FinGPT Search Agent automatically activates on the following financial websites:
+
+* **Bloomberg**: ``https://www.bloomberg.com/*``
+* **Yahoo Finance**: ``https://finance.yahoo.com/*``
+* **CDM/FINOS**: ``https://cdm.finos.org/*`` and ``https://www.finos.org/*``
+* **MathCup**: ``https://mathcup.com/*``
+* **CNBC**: ``https://www.cnbc.com/*``
+
+When you navigate to any of these websites, the FinGPT popup will automatically appear, ready for your financial queries.
+
+.. tip::
+   If the popup doesn't appear on a supported site:
+   
+   1. Refresh the page
+   2. Check that the extension is enabled in your browser
+   3. Ensure the backend server is running
