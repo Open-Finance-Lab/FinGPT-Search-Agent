@@ -75,7 +75,13 @@ def main():
         
     elif command == "export":
         print("Exporting platform-specific requirements files...")
-        return run_command("poetry run export-requirements", cwd=backend_dir)
+        # Run the export script directly
+        export_script = backend_dir / "export_requirements.py"
+        if export_script.exists():
+            return run_command(f"python {export_script}", cwd=backend_dir)
+        else:
+            print("ERROR: export_requirements.py not found")
+            return 1
         
     elif command == "shell":
         print("Activating Poetry shell...")

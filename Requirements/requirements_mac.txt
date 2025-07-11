@@ -1,12 +1,12 @@
 beautifulsoup4==4.12.3
-Django==4.2.18
+Django==4.2.23
 django_request==1.6.3
 google==3.0.0
 Markdown==3.7
 numpy
 openai
 openai-agents
-Requests==2.32.4
+Requests==2.32.3
 python-dotenv
 bs4~=0.0.2
 faiss_cpu

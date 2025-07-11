@@ -1,0 +1,34 @@
+[tool.poetry]
+name = "fingpt-monorepo"
+version = "0.5.1"
+description = "FinGPT - Financial GPT Assistant Monorepo"
+authors = ["FinGPT Team"]
+readme = "README.md"
+packages = [
+    { include = "scripts" },
+]
+
+[tool.poetry.dependencies]
+python = "^3.10"
+
+[tool.poetry.scripts]
+fingpt-install = "scripts.install_all:main"
+fingpt-dev = "scripts.dev_setup:main"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+# Monorepo configuration
+[tool.fingpt]
+backend_path = "Main/backend"
+frontend_path = "Main/frontend"
+venv_name = "FinGPTenv"
+
+# Commands that can be run from root
+[tool.poe.tasks]
+install = { shell = "python scripts/install_all.py" }
+dev = { shell = "python scripts/dev_setup.py" }
+backend = { cmd = "cd Main/backend && python manage.py runserver", help = "Start backend server" }
+frontend = { cmd = "cd Main/frontend && npm run build:full", help = "Build frontend" }
+clean = { shell = "find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true", help = "Clean Python cache" }

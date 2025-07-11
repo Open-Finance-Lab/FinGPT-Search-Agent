@@ -1,6 +1,6 @@
 {
   "name": "extension-chatbot-fin",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "",
   "main": "src/main.js",
   "scripts": {
@@ -8,7 +8,8 @@
     "build:css": "node build-css.js",
     "build": "webpack",
     "check": "node check-dist.js",
-    "build:full": "node build-css.js && webpack && node check-dist.js"
+    "build:full": "node build-css.js && webpack && node check-dist.js",
+    "watch": "webpack --watch --config webpack.config.js"
   },
   "keywords": [],
   "author": "",
