@@ -54,7 +54,10 @@ def test_api_keys():
     print("\n=== Testing API Keys ===")
     
     from dotenv import load_dotenv
-    load_dotenv()
+    # Load .env from the backend root directory
+    from pathlib import Path
+    backend_dir = Path(__file__).resolve().parent
+    load_dotenv(backend_dir / '.env')
     
     keys = {
         'OpenAI': os.getenv('OPENAI_API_KEY'),
