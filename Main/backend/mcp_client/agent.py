@@ -8,7 +8,10 @@ from agents import Agent
 from agents.mcp import MCPServerSse
 from agents.model_settings import ModelSettings
 
-load_dotenv()
+# Load .env from the backend root directory
+from pathlib import Path
+backend_dir = Path(__file__).resolve().parent.parent
+load_dotenv(backend_dir / '.env')
 
 USER_ONLY_MODELS = {"o3-mini"}
 DEFAULT_PROMPT = (

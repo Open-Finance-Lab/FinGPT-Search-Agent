@@ -27,7 +27,10 @@ from .models_config import (
     validate_model_support
 )
 
-load_dotenv()
+# Load .env from the backend root directory
+from pathlib import Path
+backend_dir = Path(__file__).resolve().parent.parent
+load_dotenv(backend_dir / '.env')
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
