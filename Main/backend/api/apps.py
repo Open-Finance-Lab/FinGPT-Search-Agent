@@ -7,14 +7,14 @@ class ApiConfig(AppConfig):
     default_auto_field = 'django.db.models.BigAutoField'
     name = 'api'
     
-    def ready(self):
-        """
-        Check for API keys when the Django app is ready.
-        This runs before the server starts serving requests.
-        """
-        # Only check when running the development server
-        if 'runserver' in sys.argv:
-            self.check_api_keys()
+    # def ready(self):
+    #     """
+    #     Check for API keys when the Django app is ready.
+    #     This runs before the server starts serving requests.
+    #     """
+    #     # Only check when running the development server
+    #     if 'runserver' in sys.argv:
+    #         self.check_api_keys()
     
     def check_api_keys(self):
         """Check if at least one valid API key is configured."""
