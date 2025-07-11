@@ -57,7 +57,13 @@ def test_api_keys():
     # Load .env from the backend root directory
     from pathlib import Path
     backend_dir = Path(__file__).resolve().parent
-    load_dotenv(backend_dir / '.env')
+    env_path = backend_dir / '.env'
+    
+    print(f"\n[DEBUG] test_models.py is looking for .env at: {env_path}")
+    print(f"[DEBUG] .env file exists: {env_path.exists()}")
+    print(f"[DEBUG] Current working directory: {os.getcwd()}")
+    
+    load_dotenv(env_path)
     
     keys = {
         'OpenAI': os.getenv('OPENAI_API_KEY'),
