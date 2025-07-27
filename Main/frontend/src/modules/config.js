@@ -14,7 +14,7 @@ async function fetchAvailableModels() {
         throw new Error(`Failed to fetch models from backend. HTTP error! status: ${response.status}`);
     }
     const data = await response.json();
-    
+
     modelDetails = {};
     data.models.forEach(model => {
         modelDetails[model.id] = model;
