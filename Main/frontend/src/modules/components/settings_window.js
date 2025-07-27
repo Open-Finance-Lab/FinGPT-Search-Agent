@@ -1,5 +1,5 @@
 // settings_window.js
-import { availableModels, selectedModel, setSelectedModel } from '../config.js';
+import { availableModels, selectedModel, setSelectedModel, fetchAvailableModels, getAvailableModels, getModelDetails } from '../config.js';
 import { loadPreferredLinks, createAddLinkButton } from '../helpers.js';
 
 // Extract text from pdf and docx
@@ -44,14 +44,42 @@ function createSettingsWindow(isFixedModeRef, settingsIcon, positionModeIcon) {
         modelHeader.appendChild(modelToggleIcon);
     }
 
-    availableModels.forEach(model => {
-        const item = document.createElement('div');
-        item.className = 'model-selection-item';
-        item.innerText = model;
-        if (model === selectedModel) item.classList.add('selected-model');
-        item.onclick = () => handleModelSelection(item, model);
-        modelContent.appendChild(item);
-    });
+    // Function to populate model list
+    async function populateModelList() {
+        // Clear existing items
+        modelContent.innerHTML = '';
+        
+        try {
+            // Fetch models from backend
+            await fetchAvailableModels();
+            const models = getAvailableModels();
+            
+            const modelDetails = getModelDetails();
+            
+            models.forEach(model => {
+                const item = document.createElement('div');
+                item.className = 'model-selection-item';
+                
+                // Use description if available, otherwise just the model ID
+                const details = modelDetails[model];
+                if (details && details.description) {
+                    item.innerHTML = `<strong>${model}</strong><br><small style="color: #888;">${details.description}</small>`;
+                } else {
+                    item.innerText = model;
+                }
+                
+                if (model === selectedModel) item.classList.add('selected-model');
+                item.onclick = () => handleModelSelection(item, model);
+                modelContent.appendChild(item);
+            });
+        } catch (error) {
+            console.error("Failed to populate model list:", error);
+            modelContent.innerHTML = '<div style="color: red; padding: 10px;">Error: Unable to fetch models from backend</div>';
+        }
+    }
+
+    // Populate model list when settings window is created
+    populateModelList();
 
     modelContainer.appendChild(modelContent);
     settings_window.appendChild(modelContainer);

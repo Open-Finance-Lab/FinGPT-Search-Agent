@@ -47,32 +47,23 @@ MODELS_CONFIG = {
     },
     
     # Anthropic Claude Models
-    "claude-3.5": {
+    "claude-3.5-sonnet": {
         "provider": "anthropic",
         "model_name": "claude-3-5-sonnet-latest",
         "supports_rag": True,
         "supports_mcp": True,
         "supports_advanced": True,
         "max_tokens": 200000,
-        "description": "Claude 3.5 Sonnet - Balanced performance"
+        "description": "Claude 3.5 Sonnet - Previous generation balanced model"
     },
-    "claude-3.7": {
+    "claude-4-sonnet": {
         "provider": "anthropic",
-        "model_name": "claude-3-opus-latest",
+        "model_name": "claude-sonnet-4-20250514",
         "supports_rag": True,
         "supports_mcp": True,
         "supports_advanced": True,
         "max_tokens": 200000,
-        "description": "Claude 3 Opus - High performance"
-    },
-    "claude-4": {
-        "provider": "anthropic",
-        "model_name": "claude-4-opus-latest",
-        "supports_rag": True,
-        "supports_mcp": True,
-        "supports_advanced": True,
-        "max_tokens": 200000,
-        "description": "Claude 4 Opus - Latest and most capable"
+        "description": "Claude 4 Sonnet - Latest generation model"
     }
 }
 

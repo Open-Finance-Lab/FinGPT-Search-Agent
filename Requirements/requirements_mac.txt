@@ -18,7 +18,7 @@ sphinx_rtd_theme
 nbsphinx
 nbsphinx_link
 anthropic
-
+tiktoken
 mammoth
 
 

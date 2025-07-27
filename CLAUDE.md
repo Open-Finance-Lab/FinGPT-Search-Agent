@@ -4,29 +4,31 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-FinGPT Search Agents is a financial information retrieval and analysis system consisting of:
-- A Django backend with RAG capabilities for processing financial documents
-- A browser extension frontend built with Webpack
+FinGPT Search Agents is a financial information retrieval and analysis system with advanced context management:
+- Django backend with RAG capabilities and R2C context compression
+- Browser extension frontend built with Webpack
 - MCP (Model Context Protocol) server integration
-- Data scraping and embedding utilities for financial information
+- Session-based conversation management with automatic compression
 
 ## Architecture
 
 ### Backend (Main/backend/)
-- **Django Project**: `django_config/` contains global settings, ASGI/WSGI configuration
-- **API Layer**: `api/` handles HTTP endpoints, chat completion, RAG triggers, question logging
-- **Data Pipeline**: `datascraper/` provides RAG orchestration, embeddings creation, and web scraping utilities
-- **MCP Integration**: `mcp_client/` contains Model Context Protocol client and agent functionality
+- **Django Project**: `django_config/` contains global settings, URL routing, session management
+- **API Layer**: `api/views.py` handles all endpoints with unified R2C context management
+- **R2C Context Manager**: `datascraper/r2c_context_manager.py` implements hierarchical compression
+- **Data Pipeline**: `datascraper/` provides RAG orchestration, embeddings, web scraping
+- **MCP Integration**: `mcp_client/` contains Model Context Protocol client functionality
 
 ### Frontend (Main/frontend/)
 - **Browser Extension**: Webpack-bundled JavaScript with Babel transpilation
-- **Build System**: Uses Webpack with CSS processing and KaTeX support for LaTeX rendering
-- **Entry Point**: `src/main.js` bootstraps the extension
+- **Build System**: Uses Webpack with CSS processing and KaTeX support
+- **API Integration**: Sends `use_r2c=true` by default for context management
 
-### MCP Server (mcp-server/)
-- **Official MCP SDK**: Uses the official Model Context Protocol Python SDK
-- **Stdio Transport**: Provides subprocess-based communication with OpenAI Agents
-- **Python 3.10+**: Compatible with modern Python versions
+### Context Management System (R2C)
+- **Session-based**: Each browser session has isolated context (no cross-user data leakage)
+- **Automatic Compression**: Triggers at 4096 tokens using financial-aware importance scoring
+- **Hierarchical Algorithm**: Two-level compression (chunk-level then sentence-level)
+- **Global Integration**: All response modes (normal, RAG, advanced, MCP) use R2C by default
 
 ## Development Commands
 
@@ -58,20 +60,23 @@ uv run server_official.py         # Run with uv
 
 ## Key Components
 
+### R2C Context Management
+- **Helper Functions** in `api/views.py`:
+  - `_prepare_context_messages()`: Unified context preparation
+  - `_add_response_to_context()`: Response storage
+  - `_prepare_response_with_stats()`: JSON response with R2C stats
+- **Compression Algorithm**: Financial keyword weighting, recency scoring, Q&A pattern recognition
+- **Token Management**: Uses tiktoken for accurate token counting
+
 ### Model Configuration System
-- `datascraper/models_config.py` centralizes model provider settings
+- `datascraper/models_config.py` centralizes provider settings
 - Supports OpenAI, DeepSeek, and Anthropic models
-- Feature flags for RAG, MCP, and advanced capabilities
+- All models integrate with R2C context management
 
 ### RAG Pipeline
 - `datascraper/cdm_rag.py` orchestrates retrieval-augmented generation
-- `datascraper/create_embeddings.py` processes documents with OpenAI embeddings
+- Works seamlessly with R2C compressed context
 - FAISS indexing for efficient vector search
-
-### Browser Extension
-- Modular architecture in `frontend/src/modules/`
-- Component-based structure (chat, header, popup, settings)
-- KaTeX support for LaTeX rendering in financial contexts
 
 ## Environment Setup
 
@@ -81,30 +86,38 @@ uv run server_official.py         # Run with uv
 - `ANTHROPIC_API_KEY`: Anthropic API key
 
 ### Dependencies
-- Backend: Django 4.2.18, OpenAI, FAISS, BeautifulSoup4
+- Backend: Django 4.2.18, OpenAI, FAISS, BeautifulSoup4, tiktoken, numpy
 - Frontend: Webpack 5, Babel, KaTeX, Marked
-- MCP Server: Official MCP Python SDK 1.1.0+
+- R2C: tiktoken (token counting), numpy (importance calculations)
 
-## Testing
+## API Endpoints & Parameters
 
-**Important**: Claude Code runs in WSL and this project environment is not set up there. 
+### Core Endpoints
+- `/get_chat_response/` - Standard chat (supports `use_r2c=true`)
+- `/get_mcp_response/` - MCP-enabled chat
+- `/get_adv_response/` - Advanced with web search
+- `/clear_messages/` - Clears session context
+- `/api/get_r2c_stats/` - Get compression statistics
 
-Regarding testing code, if tests are needed, please directly tell me how to test the code and I will run the test commands manually.
+### Important Parameters
+- `use_r2c`: Enable R2C context management (default: "true")
+- `models`: Comma-separated model names
+- `question`: User query
+- Session managed via Django session framework
 
-- Use `pytest` for Python tests
-- Run `python test_models.py` to verify model configuration
-- Frontend testing not currently configured
+## Critical Information Flow
 
-## Build Artifacts
-- `Main/frontend/dist/`: Compiled extension bundle (auto-generated)
-- `*.pkl`: Embedding indices (git-ignored)
-- `questionLog.csv`: Query telemetry (git-ignored)
-- `db.sqlite3`: Local database (git-ignored)
+1. **Request**: Browser → Django → `_prepare_context_messages()` → R2C/legacy context
+2. **Compression**: When tokens > 4096 → Hierarchical compression → Store compressed + recent msgs
+3. **API Call**: Context → Model API → Response → `_add_response_to_context()`
+4. **Response**: Include R2C stats → Browser
 
-## IDE Configuration
+## Security & Best Practices
 
-When indexing files on IDE start, do not index any test files.
-These include everything under src/test/.
+- **Session Isolation**: R2C uses Django sessions - no cross-user data leakage
+- **No Persistent Storage**: Context cleared on session end
+- **Token Efficiency**: Automatic compression reduces API costs
+- **Error Handling**: Falls back to legacy system if R2C fails
 
 ## Development Principles
 

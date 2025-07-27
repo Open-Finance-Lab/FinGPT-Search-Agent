@@ -1,5 +1,0 @@
-Button,URL,Question,Date,Time,Response_Preview
-add_webtext,https://finance.yahoo.com/,"Added web content: Yahoo Finance
-Yahoo ...",2025-06-11,18:49:26,N/A
-Ask,https://finance.yahoo.com/,What did the local file say?,2025-06-11,19:02:40,N/A
-chat,,What did the local file say?,2025-06-11,19:03:40,The local file (test_file_2.txt) contains exactly 

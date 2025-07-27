@@ -1,15 +1,25 @@
 // api.js
 
+// Session ID management
+let currentSessionId = null;
+
+function setSessionId(sessionId) {
+    currentSessionId = sessionId;
+}
+
 // Function to POST JSON to the server endpoint
 function postWebTextToServer(textContent, currentUrl) {
     return fetch("http://127.0.0.1:8000/input_webtext/", {
         method: "POST",
+        credentials: "include",
         headers: {
             "Content-Type": "application/json",
         },
         body: JSON.stringify({
             textContent: textContent,
-            currentUrl: currentUrl
+            currentUrl: currentUrl,
+            use_r2c: true,
+            session_id: currentSessionId
         }),
     })
         .then(response => {
@@ -43,8 +53,10 @@ function getChatResponse(question, selectedModel, promptMode, useRAG, useMCP) {
         `http://127.0.0.1:8000/${endpoint}/?question=${encodedQuestion}` +
         `&models=${selectedModel}` +
         `&is_advanced=${promptMode}` +
-        `&use_rag=${useRAG}`,
-        { method: 'GET' }
+        `&use_rag=${useRAG}` +
+        `&use_r2c=true` +
+        `&session_id=${currentSessionId}`,
+        { method: 'GET', credentials: 'include' }
     )
         .then(response => response.json())
         .catch(error => {
@@ -55,7 +67,7 @@ function getChatResponse(question, selectedModel, promptMode, useRAG, useMCP) {
 
 // Function to clear messages
 function clearMessages() {
-    return fetch(`http://127.0.0.1:8000/clear_messages/`, { method: "POST" })
+    return fetch(`http://127.0.0.1:8000/clear_messages/?use_r2c=true&session_id=${currentSessionId}`, { method: "POST", credentials: "include" })
         .then(response => {
             if (!response.ok) {
                 throw new Error('Network response was not ok');
@@ -70,7 +82,7 @@ function clearMessages() {
 
 // Function to get sources
 function getSourceUrls(searchQuery) {
-    return fetch(`http://127.0.0.1:8000/get_source_urls/?query=${String(searchQuery)}`, { method: "GET" })
+    return fetch(`http://127.0.0.1:8000/get_source_urls/?query=${String(searchQuery)}`, { method: "GET", credentials: "include" })
         .then(response => response.json())
         .catch(error => {
             console.error('There was a problem with your fetch operation:', error);
@@ -84,7 +96,7 @@ function logQuestion(question, button) {
 
     return fetch(
         `http://127.0.0.1:8000/log_question/?question=${encodeURIComponent(question)}&button=${encodeURIComponent(button)}&current_url=${encodeURIComponent(currentUrl)}`,
-        { method: "GET" }
+        { method: "GET", credentials: "include" }
     )
         .then(response => response.json())
         .then(data => {
@@ -103,6 +115,7 @@ function logQuestion(question, button) {
 function addPreferredUrl(url) {
     return fetch('http://127.0.0.1:8000/api/add_preferred_url/', {
         method: 'POST',
+        credentials: 'include',
         headers: {
             'Content-Type': 'application/x-www-form-urlencoded',
         },
@@ -117,7 +130,7 @@ function addPreferredUrl(url) {
 
 // Function to get preferred URLs
 function getPreferredUrls() {
-    return fetch('http://127.0.0.1:8000/api/get_preferred_urls/')
+    return fetch('http://127.0.0.1:8000/api/get_preferred_urls/', { credentials: 'include' })
         .then(response => response.json())
         .catch(error => {
             console.error('Error loading preferred links:', error);
@@ -132,5 +145,6 @@ export {
     getSourceUrls, 
     logQuestion,
     addPreferredUrl,
-    getPreferredUrls
+    getPreferredUrls,
+    setSessionId
 };
