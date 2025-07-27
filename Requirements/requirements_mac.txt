@@ -6,7 +6,7 @@ Markdown==3.7
 numpy
 openai
 openai-agents
-Requests==2.32.3
+Requests==2.32.4
 python-dotenv
 bs4~=0.0.2
 faiss_cpu
