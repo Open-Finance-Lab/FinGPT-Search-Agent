@@ -9,45 +9,33 @@ from django.http import JsonResponse
 from datascraper import datascraper as ds
 from datascraper import create_embeddings as ce
 
-from django.shortcuts import render
-from django.http import HttpResponse
-
 from django.views import View
 from mcp_client.agent import create_fin_agent
 from agents import Runner
+from datascraper.r2c_context_manager import R2CContextManager
+from datascraper.models_config import MODELS_CONFIG
 
 # Constants
 QUESTION_LOG_PATH = os.path.join(os.path.dirname(__file__), 'questionLog.csv')
 PREFERRED_URLS_FILE = 'preferred_urls.txt'
 
-# Initial message list
+# Initial message list (kept for backward compatibility)
+# This is a global message list
 message_list = [
     {"role": "user",
      "content": "You are a helpful financial assistant. Always answer questions to the best of your ability."}
 ]
 
-# mcp
-# class MCPGreetView(View):
-#     def get(self, request):
-#         # read name from querystring, default to "world"
-#         name = request.GET.get("name", "world")
-#
-#         agent = create_fin_agent(model="o4-mini")
-#
-#         # Initialize by connecting to mcp server first
-#         mcp_server = agent.mcp_servers[0]
-#
-#         # establish the session with the mcp server
-#         asyncio.run(mcp_server.connect())
-#
-#         # run it using asyncio.run to create its own loop
-#         result = asyncio.run(Runner.run(agent, name))
-#
-#         return JsonResponse({"reply": result.final_output})
+# R2C
+r2c_manager = R2CContextManager(
+    max_tokens=20000,
+    compression_ratio=0.5,
+    rho=0.5,
+    gamma=1.0
+)
 
 class MCPGreetView(View):
     def get(self, request):
-        # Read name parameter (default: "world")
         name = request.GET.get("name", "world")
         
         # Use the OpenAI Agents SDK to run MCP tools
@@ -84,6 +72,107 @@ class MCPGreetView(View):
 
 
 # Helper functions
+def _get_session_id(request):
+    """Get or create session ID for R2C context management."""
+    # custom session ID from frontend
+    custom_session_id = request.GET.get('session_id')
+    
+    # For POST requests, check body data
+    if not custom_session_id and request.method == 'POST':
+        try:
+            body_data = json.loads(request.body)
+            custom_session_id = body_data.get('session_id')
+        except:
+            pass
+    
+    if custom_session_id:
+        logging.info(f"[R2C DEBUG] Using custom session ID: {custom_session_id}")
+        return custom_session_id
+    
+    # Fall back to Django session
+    if not request.session.session_key:
+        request.session.create()
+        logging.info(f"[R2C DEBUG] Created new Django session: {request.session.session_key}")
+    else:
+        logging.info(f"[R2C DEBUG] Using existing Django session: {request.session.session_key}")
+    return request.session.session_key
+
+def _prepare_context_messages(request, question, use_r2c=True):
+    """
+    Prepare context messages using R2C or legacy system.
+    
+    Args:
+        request: Django request object
+        question: User's question to add
+        use_r2c: Whether to use R2C context management
+        
+    Returns:
+        tuple: (legacy_messages, session_id)
+    """
+    session_id = _get_session_id(request) if use_r2c else None
+    
+    if use_r2c and session_id:
+        r2c_manager.add_message(session_id, "user", question)
+
+        context_messages = r2c_manager.get_context(session_id)
+        
+        # R2C already includes system prompt and handles compression
+        # Just use the context messages directly
+        legacy_messages = context_messages
+    else:
+        # Use legacy message_list - append the question with a header
+        message_list.append({"role": "user", "content": f"[USER QUESTION]: {question}"})
+        legacy_messages = message_list.copy()
+    
+    return legacy_messages, session_id
+
+def _add_response_to_context(session_id, response, use_r2c=True):
+    """Add assistant response to R2C manager if enabled."""
+    if use_r2c and session_id:
+        r2c_manager.add_message(session_id, "assistant", response)
+    else:
+        # Add to legacy message_list with clear header
+        message_list.append({"role": "user", "content": f"[ASSISTANT RESPONSE]: {response}"})
+
+def _prepare_response_with_stats(responses, session_id, use_r2c=True, single_response_mode=False):
+    """
+    Prepare JSON response with optional R2C stats.
+    
+    Args:
+        responses: Dictionary of model responses or single response string
+        session_id: Session ID for R2C
+        use_r2c: Whether R2C is enabled
+        single_response_mode: Whether to use 'reply' field for single response
+        
+    Returns:
+        JsonResponse object
+    """
+    if use_r2c and session_id:
+        stats = r2c_manager.get_session_stats(session_id)
+        
+        if single_response_mode and isinstance(responses, dict) and len(responses) == 1:
+            # Single model - return as 'reply' for MCP frontend compatibility
+            single_response = next(iter(responses.values()))
+            return JsonResponse({
+                'reply': single_response,
+                'r2c_stats': stats
+            })
+        else:
+            # Multiple models or not in single response mode
+            response_key = 'resp' if isinstance(responses, dict) else 'reply'
+            return JsonResponse({
+                response_key: responses,
+                'r2c_stats': stats
+            })
+    else:
+        # No R2C stats
+        if single_response_mode and isinstance(responses, dict) and len(responses) == 1:
+            single_response = next(iter(responses.values()))
+            return JsonResponse({'reply': single_response})
+        else:
+            response_key = 'resp' if isinstance(responses, dict) else 'reply'
+            return JsonResponse({response_key: responses})
+
 def _ensure_log_file_exists():
     """Create log file with headers if it doesn't exist, using UTF-8 encoding."""
     if not os.path.isfile(QUESTION_LOG_PATH):
@@ -102,13 +191,12 @@ def _log_interaction(button_clicked, current_url, question, response=None):
     date_str = now.strftime('%Y-%m-%d')
     time_str = now.strftime('%H:%M:%S')
 
-    # Safeguard each field in case it contains invalid chars.
+    # Handles invalid chars.
     def safe_str(s):
-        # Convert to string, encode to utf-8 ignoring errors, then decode back.
         return str(s).encode('utf-8', errors='replace').decode('utf-8')
 
-    # Only record first 50 chars of the response
-    response_preview = response[:50] if response else "N/A"
+    # Only record first 80 chars of the response
+    response_preview = response[:80] if response else "N/A"
 
     # Clean each field before writing
     button_clicked = safe_str(button_clicked)
@@ -148,17 +236,29 @@ def add_webtext(request):
         body_data = json.loads(request.body)
         text_content = body_data.get('textContent', '')
         current_url = body_data.get('currentUrl', '')
+        use_r2c = body_data.get('use_r2c', True)  # Default to using R2C
+        session_id_from_body = body_data.get('session_id')
+        
+        logging.info(f"[R2C DEBUG] add_webtext - URL: {current_url}, use_r2c: {use_r2c}, session_id: {session_id_from_body}, content_length: {len(text_content)}")
         
         if not text_content:
+            logging.warning("[R2C DEBUG] No text content provided")
             return JsonResponse({"error": "No textContent provided."}, status=400)
-        
-        # Store in USER role
+
         message_list.append({
             "role": "user",
             "content": text_content
         })
-        
-        # Log the action
+
+        if use_r2c:
+            session_id = _get_session_id(request)
+            if session_id:
+                logging.info(f"[R2C DEBUG] Adding web content to session {session_id}, URL: {current_url}, content length: {len(text_content)}")
+                r2c_manager.add_message(session_id, "user", f"[Web Content from {current_url}]: {text_content}")
+                # Log session stats after adding
+                stats = r2c_manager.get_session_stats(session_id)
+                logging.info(f"[R2C DEBUG] Session {session_id} stats after web content: {stats}")
+
         _log_interaction("add_webtext", current_url, f"Added web content: {text_content[:20]}...")
         
         return JsonResponse({"resp": "Text added successfully as user message"})
@@ -171,6 +271,9 @@ def chat_response(request):
     selected_models = request.GET.get('models', '')
     use_rag = request.GET.get('use_rag', 'false').lower() == 'true'
     current_url = request.GET.get('current_url', '')
+    use_r2c = request.GET.get('use_r2c', 'true').lower() == 'true'  # Default to using R2C
+    
+    logging.info(f"[R2C DEBUG] chat_response - Question: '{question[:50]}...', Models: {selected_models}, use_r2c: {use_r2c}")
     
     # Validate and parse models
     if not selected_models:
@@ -182,23 +285,37 @@ def chat_response(request):
     
     responses = {}
     
+    # Prepare context messages using R2C or legacy system
+    legacy_messages, session_id = _prepare_context_messages(request, question, use_r2c)
+    logging.info(f"[R2C DEBUG] Prepared {len(legacy_messages)} messages for session {session_id}")
+    
+    # Log message contents for debugging
+    for i, msg in enumerate(legacy_messages[:3]):  # Log first 3 messages
+        content_preview = msg.get('content', '')[:100]
+        logging.info(f"[R2C DEBUG] Message {i}: role={msg.get('role')}, content_preview='{content_preview}...'")
+    
     for model in models:
         try:
             if use_rag:
                 # Use the RAG pipeline
-                responses[model] = ds.create_rag_response(question, message_list.copy(), model)
+                response = ds.create_rag_response(question, legacy_messages, model)
             else:
                 # Use regular response
-                responses[model] = ds.create_response(question, message_list.copy(), model)
+                response = ds.create_response(question, legacy_messages, model)
+            
+            responses[model] = response
+            
+            # Add assistant response to R2C manager
+            _add_response_to_context(session_id, response, use_r2c)
+                
         except Exception as e:
             logging.error(f"Error processing model {model}: {e}")
             responses[model] = f"Error: {str(e)}"
-    
-    # Log the interaction with response preview from first model
+
     first_model_response = next(iter(responses.values())) if responses else "No response"
     _log_interaction("chat", current_url, question, first_model_response)
-    
-    return JsonResponse({'resp': responses})
+
+    return _prepare_response_with_stats(responses, session_id, use_r2c)
 
 @csrf_exempt
 def mcp_chat_response(request):
@@ -206,6 +323,7 @@ def mcp_chat_response(request):
     question = request.GET.get('question', '')
     selected_models = request.GET.get('models', '')
     current_url = request.GET.get('current_url', '')
+    use_r2c = request.GET.get('use_r2c', 'true').lower() == 'true'
     
     # Validate and parse models
     if not selected_models:
@@ -216,17 +334,23 @@ def mcp_chat_response(request):
         return JsonResponse({'error': 'No valid models specified'}, status=400)
 
     responses = {}
+    
+    # Prepare context messages using R2C or legacy system
+    legacy_messages, session_id = _prepare_context_messages(request, question, use_r2c)
 
     for model in models:
         try:
             # Always use the MCP Agent path
             response = ds.create_mcp_response(
                 question,
-                message_list.copy(),
+                legacy_messages,
                 model
             )
             # logging.info(f"[MCP DEBUG] Model {model} response: {response}")
             responses[model] = response
+
+            _add_response_to_context(session_id, response, use_r2c)
+                
         except Exception as e:
             logging.error(f"Error processing MCP model {model}: {e}")
             responses[model] = f"Error: {str(e)}"
@@ -235,21 +359,8 @@ def mcp_chat_response(request):
     first_model_response = next(iter(responses.values())) if responses else "No response"
     _log_interaction("mcp_chat", current_url, question, first_model_response)
 
-    # For MCP mode, frontend expects 'reply' field with single response
-    if len(responses) == 1:
-        # Single model - return as 'reply' for MCP frontend compatibility
-        single_response = next(iter(responses.values()))
-        logging.info(f"[MCP DEBUG] Single model response for MCP: {single_response}")
-        json_response = JsonResponse({'reply': single_response})
-    else:
-        # Multiple models - return as 'resp' dict
-        logging.info(f"[MCP DEBUG] Multiple model responses: {responses}")
-        json_response = JsonResponse({'resp': responses})
-    
-    # logging.info(f"[MCP DEBUG] JsonResponse object: {json_response}")
-    # logging.info(f"[MCP DEBUG] JsonResponse content: {json_response.content}")
-    
-    return json_response
+    # Return response with optional R2C stats, using single response mode for MCP
+    return _prepare_response_with_stats(responses, session_id, use_r2c, single_response_mode=True)
 
 @csrf_exempt
 def adv_response(request):
@@ -258,6 +369,7 @@ def adv_response(request):
     selected_models = request.GET.get('models', '')
     use_rag = request.GET.get('use_rag', 'false').lower() == 'true'
     current_url = request.GET.get('current_url', '')
+    use_r2c = request.GET.get('use_r2c', 'true').lower() == 'true'  # Default to using R2C
     
     # Validate and parse models
     if not selected_models:
@@ -269,39 +381,64 @@ def adv_response(request):
     
     responses = {}
     
+    # Prepare context messages using R2C or legacy system
+    legacy_messages, session_id = _prepare_context_messages(request, question, use_r2c)
+    
     for model in models:
         try:
             if use_rag:
                 # Use the RAG pipeline for advanced response
-                responses[model] = ds.create_rag_advanced_response(question, message_list.copy(), model)
+                response = ds.create_rag_advanced_response(question, legacy_messages, model)
             else:
                 # Use regular advanced response
-                responses[model] = ds.create_advanced_response(question, message_list.copy(), model)
+                response = ds.create_advanced_response(question, legacy_messages, model)
+                
+            responses[model] = response
+            
+            # Add assistant response to R2C manager
+            _add_response_to_context(session_id, response, use_r2c)
+                
         except Exception as e:
             logging.error(f"Error processing advanced model {model}: {e}")
             responses[model] = f"Error: {str(e)}"
-    
-    # Log the interaction with response preview from first model
+
     first_model_response = next(iter(responses.values())) if responses else "No response"
     _log_interaction("advanced", current_url, question, first_model_response)
     
-    return JsonResponse({'resp': responses})
+    # Return response with optional R2C stats
+    return _prepare_response_with_stats(responses, session_id, use_r2c)
 
 @csrf_exempt
 def clear(request):
-    """Clear the message list"""
-    message_list.clear()
-    # Add back the initial system message
-    message_list.append({
-        "role": "user",
-        "content": "You are a helpful financial assistant. Always answer questions to the best of your ability."
-    })
+    """Clear conversation messages but preserve scraped web content"""
+    use_r2c = request.GET.get('use_r2c', 'true').lower() == 'true'
     
-    # Log the clear action
+    # For legacy system, only clear non-web content messages
+    if message_list:
+        # Keep only the system message and web content
+        preserved_messages = [message_list[0]]  # Keep system message
+        for msg in message_list[1:]:
+            if "[Web Content from" in msg.get("content", "") or msg.get("content", "").startswith("Yahoo Finance") or msg.get("content", "").startswith("<!DOCTYPE"):
+                preserved_messages.append(msg)
+        
+        message_list.clear()
+        message_list.extend(preserved_messages)
+    
+    # Clear only conversation in R2C if enabled
+    if use_r2c:
+        session_id = _get_session_id(request)
+        if session_id:
+            r2c_manager.clear_conversation_only(session_id)
+            message = 'Conversation cleared (web content preserved)'
+        else:
+            message = 'Conversation cleared (no R2C session found)'
+    else:
+        message = 'Conversation cleared'
+
     current_url = request.GET.get('current_url', 'N/A')
-    _log_interaction("clear", current_url, "Cleared message history")
+    _log_interaction("clear", current_url, "Cleared conversation history")
     
-    return JsonResponse({'resp': 'Message list cleared successfully'})
+    return JsonResponse({'resp': message})
 
 @csrf_exempt
 def get_sources(request):
@@ -371,6 +508,30 @@ def add_preferred_url(request):
             return JsonResponse({'status': 'success'})
     
     return JsonResponse({'status': 'failed'}, status=400)
+
+def get_r2c_stats(request):
+    """Get R2C context statistics for current session"""
+    session_id = _get_session_id(request)
+    if session_id:
+        stats = r2c_manager.get_session_stats(session_id)
+        return JsonResponse({'stats': stats})
+    else:
+        return JsonResponse({'error': 'No session found'}, status=404)
+
+def get_available_models(request):
+    """Get list of available models with their configurations"""
+    models = []
+    for model_id, config in MODELS_CONFIG.items():
+        models.append({
+            'id': model_id,
+            'provider': config['provider'],
+            'description': config['description'],
+            'supports_rag': config['supports_rag'],
+            'supports_mcp': config['supports_mcp'],
+            'supports_advanced': config['supports_advanced'],
+            'display_name': f"{model_id} - {config['description']}"
+        })
+    return JsonResponse({'models': models})
 
 @csrf_exempt
 def folder_path(request):

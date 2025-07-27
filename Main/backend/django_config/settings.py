@@ -143,3 +143,10 @@ CORS_ALLOWED_ORIGINS = [
 # During development, you can use this to allow all origins
 CORS_ALLOW_ALL_ORIGINS = True
 
+# Allow credentials to be included in CORS requests
+CORS_ALLOW_CREDENTIALS = True
+
+# Session cookie settings to work with browser extensions
+SESSION_COOKIE_SAMESITE = 'None'
+SESSION_COOKIE_SECURE = False  # Set to True in production with HTTPS
+
