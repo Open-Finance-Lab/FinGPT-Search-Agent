@@ -49,10 +49,10 @@ User may type their prompts inside the prompt box and choose either of the two A
   searching and scraping logs in real-time through the Terminal/PowerShell window running its back-end.
 
 Two more buttons appear above the prompt box and below where conversations are shown.
-- **Clear Button**: Clears the currently shown conversations.
+- **Clear Button**: Clears the conversation history while keeping the web page content in memory. This allows you to start a fresh conversation without losing the context from the current webpage.
 
 - **Source Button**: Shows the sources used by the search agent to answer the user's prompt. The sources are shown in a
-  pop up and may be closed.'
+  pop up and may be closed.
 
 These components make up the current FinGPT Search Agent demo. The documentation will be updated regularly to keep up
 with latest progress.

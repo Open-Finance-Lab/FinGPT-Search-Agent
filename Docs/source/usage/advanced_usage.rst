@@ -30,8 +30,8 @@ Available Models
 - DeepSeek Reasoner
 
 **Anthropic Models:**
-- Claude 3.5 Sonnet
-- Claude 3.7 (Opus 4)
+- Claude 3.5 Sonnet (Previous generation)
+- Claude 4 Sonnet (Latest generation)
 
 Switching Models
 ~~~~~~~~~~~~~~~~
@@ -217,9 +217,24 @@ Managing Context Length
 
 For long conversations:
 
-1. Use the **Clear** button to reset context
+1. Use the **Clear** button to reset conversation while keeping web content
 2. Break complex queries into smaller parts
 3. Summarize previous findings before continuing
+
+Smart Context Management
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+FinGPT now includes intelligent context management that automatically handles long conversations:
+
+**How it works:**
+
+- The agent hard-remembers up to 20,000 tokens (approximately 15,000 words) of conversation
+- When this limit is reached, older messages are automatically compressed
+- Important information is preserved while less relevant details are summarized
+- Web page content is always preserved when you use the Clear button
+
+.. note::
+   Each browser tab maintains its own conversation context. Refreshing the page starts a new session.
 
 Troubleshooting Advanced Features
 ---------------------------------

@@ -10,6 +10,13 @@ FinGPT Search Agent
 
 .. note::
    This documentation covers version 0.5.1 of FinGPT Search Agent.
+   
+   **New in 0.5.1:**
+   
+   - Smart context management for longer conversations
+   - Clear button now preserves web content
+   - Support for Claude 4 Sonnet
+   - Improved session handling for better reliability
 
 Features
 --------
