@@ -48,6 +48,16 @@
     font-family: 'Consolas', 'Monaco', monospace;
 }
 
+/* System Message */
+.system_message {
+    color: #6c757d;
+    font-style: italic;
+    padding: 8px;
+    margin: 10px 0;
+    border-left: 3px solid #6c757d;
+    background-color: rgba(108, 117, 125, 0.1);
+}
+
 /* Input Container */
 #inputContainer {
     display: flex;
