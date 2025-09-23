@@ -4,6 +4,7 @@ import { createPopup } from './components/popup.js';
 import { createHeader } from './components/header.js';
 import { createChatInterface } from './components/chat.js';
 import { createSettingsWindow } from './components/settings_window.js';
+import { createLinkManager } from '../components/link_manager.js';
 
 // Function to create UI elements
 function createUI() {
@@ -27,6 +28,8 @@ function createUI() {
 
     // Settings window
     const settings_window = createSettingsWindow(isFixedModeRef, settingsIcon, positionModeIcon);
+    const linkManager = createLinkManager();
+    settings_window.appendChild(linkManager);
 
     // Position mode toggle logic
     positionModeIcon.onclick = function () {

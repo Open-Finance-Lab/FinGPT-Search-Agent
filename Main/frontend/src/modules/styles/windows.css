@@ -123,6 +123,168 @@
     background-color: #555;
 }
 
+/* new link ui css */
+
+.link-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .link-input {
+      position: relative;
+      transition: all 0.3s ease;
+      display: flex;
+      align-items: center;
+      height: 40px;
+    }
+
+    .plus-btn {
+      width: 40px;
+      height: 40px;
+      border: none;
+      border-radius: 10%;
+      background-color: #000000;
+      color: white;
+      font-size: 20px;
+      cursor: pointer;
+      transition: background-color 0.3s ease;
+    }
+
+    .plus-btn:hover{
+      background-color: grey;
+    }
+
+    input[type="text"] {
+      color: white;
+      width: 0;
+      opacity: 0;
+      padding: 8px;
+      font-size: 16px;
+      border: 2px solid #000000;
+      border-radius: 5px;
+      background-color: rgb(34, 33, 33);
+      transition: width 0.3s ease, opacity 0.3s ease;
+    }
+
+    input:focus {
+      border-color: aquamarine;
+      outline: none;
+    }
+
+    .input-visible input[type="text"] {
+      width: 250px;
+      opacity: 1;
+      margin-left: 0;
+    }
+
+    .input-visible .plus-btn {
+      display: none;
+    }
+
+    .link-preview {
+      position: relative;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+      width:150px;
+      font-size: 16px;
+      color: #ffffff;
+      background: #000000;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      height: 40px;
+      padding: 0 10px;
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+      transition: background-color 0.2s ease;
+    }
+
+    .link-preview span {
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .link-preview:hover {
+      background-color: #1a1a1a;
+    }
+
+    .delete-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 30px;
+      width: 30px;
+      font-size: 20px;
+      background-color: red;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      margin-left:5px;
+      cursor: pointer;
+      box-shadow: 0 2px 4px rgba(93, 0, 0, 0.8);
+      opacity: 0;
+      transition: opacity 0.3s ease, background-color 0.3s ease;
+      flex:0;
+    }
+
+    .link-preview:hover .delete-btn {
+      opacity: 1;
+    }
+
+    .delete-btn:hover {
+      background-color: darkred;
+    }
+
+    .modal {
+      display: none;
+      position: fixed;
+      z-index: 1000;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      overflow: auto;
+      background-color: rgba(0, 0, 0, 0.6);
+    }
+
+    .modal-content {
+      background-color: #000000;
+      color: white;
+      margin: 15% auto;
+      padding: 20px;
+      border-radius: 8px;
+      width: 300px;
+      text-align: center;
+      border: 3px solid aquamarine;
+    }
+
+    .modal-buttons {
+      margin-top: 20px;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .modal-buttons button {
+      padding: 8px 16px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+
+    .confirm-btn {
+      background-color: red;
+      color: white;
+    }
+
+    .cancel-btn {
+      background-color: gray;
+      color: white;
+    }
+
 /* SOURCES WINDOW */
 #sources_window {
     position: fixed;
