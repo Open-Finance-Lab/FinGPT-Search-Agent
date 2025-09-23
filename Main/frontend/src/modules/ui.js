@@ -4,7 +4,7 @@ import { createPopup } from './components/popup.js';
 import { createHeader } from './components/header.js';
 import { createChatInterface } from './components/chat.js';
 import { createSettingsWindow } from './components/settings_window.js';
-import { createLinkManager } from '../components/link_manager.js';
+import { createLinkManager } from './components/link_manager.js';
 
 // Function to create UI elements
 function createUI() {
