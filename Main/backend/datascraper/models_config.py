@@ -14,15 +14,6 @@ MODELS_CONFIG = {
         "max_tokens": 128000,
         "description": "GPT-4o Mini - Fast and efficient"
     },
-    "gpt-4.5-preview": {
-        "provider": "openai", 
-        "model_name": "gpt-4-turbo-preview",
-        "supports_rag": True,
-        "supports_mcp": False,
-        "supports_advanced": True,
-        "max_tokens": 128000,
-        "description": "GPT-4 Turbo Preview - Advanced reasoning"
-    },
     "o1-pro": {
         "provider": "openai",
         "model_name": "o1-pro",
@@ -30,7 +21,25 @@ MODELS_CONFIG = {
         "supports_mcp": True,
         "supports_advanced": True,
         "max_tokens": 128000,
-        "description": "O1 Pro - Advanced model with enhanced capabilities"
+        "description": "O1 Pro - Advanced model with enhanced deep reasoning"
+    },
+    "gpt-5-chat": {
+        "provider": "openai",
+        "model_name": "gpt-5-chat-latest",
+        "supports_rag": True,
+        "supports_mcp": True,
+        "supports_advanced": True,
+        "max_tokens": 128000,
+        "description": "GPT-5 Chat Latest - Latest generation model"
+    },
+    "gpt-5-nano": {
+        "provider": "openai",
+        "model_name": "gpt-5-nano",
+        "supports_rag": True,
+        "supports_mcp": True,
+        "supports_advanced": True,
+        "max_tokens": 400000,
+        "description": "GPT-5 Nano - Fast and with extended context window"
     },
     
     # DeepSeek Models
@@ -47,15 +56,6 @@ MODELS_CONFIG = {
     },
     
     # Anthropic Claude Models
-    "claude-3.5-sonnet": {
-        "provider": "anthropic",
-        "model_name": "claude-3-5-sonnet-latest",
-        "supports_rag": True,
-        "supports_mcp": True,
-        "supports_advanced": True,
-        "max_tokens": 200000,
-        "description": "Claude 3.5 Sonnet - Previous generation balanced model"
-    },
     "claude-4-sonnet": {
         "provider": "anthropic",
         "model_name": "claude-sonnet-4-20250514",
@@ -64,6 +64,15 @@ MODELS_CONFIG = {
         "supports_advanced": True,
         "max_tokens": 200000,
         "description": "Claude 4 Sonnet - Latest generation model"
+    },
+    "claude-haiku-3.5": {
+        "provider": "anthropic",
+        "model_name": "claude-3-5-haiku-20241022",
+        "supports_rag": True,
+        "supports_mcp": True,
+        "supports_advanced": True,
+        "max_tokens": 200000,
+        "description": "Claude 3.5 Haiku - Fast and efficient"
     }
 }
 
