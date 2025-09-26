@@ -109,18 +109,13 @@ function createSettingsWindow(isFixedModeRef, settingsIcon, positionModeIcon) {
     linkManager.id = "preferred_links_content";
     linkManager.style.display = "none";
     preferredLinksContainer.appendChild(linkManager);
-    // preferredLinksContent.appendChild(createAddLinkButton());
-
-    // preferredLinksContainer.appendChild(preferredLinksContent);
-    // settings_window.appendChild(preferredLinksContainer);
+    settings_window.appendChild(preferredLinksContainer);
 
     preferredLinksHeader.onclick = function () {
         const isHidden = linkManager.style.display === "none";
         linkManager.style.display = isHidden ? "block" : "none";
         toggleIcon.innerText = isHidden ? "⯅" : "⯆";
     };
-
-    settings_window.appendChild(preferredLinksContainer);
 
     // Set workerSrc to load PDF.js worker from CDN
     // pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.worker.min.js';
@@ -322,9 +317,9 @@ function createSettingsWindow(isFixedModeRef, settingsIcon, positionModeIcon) {
     ragForm.appendChild(ragFormSubmit);
     ragForm.appendChild(clearRagButton);
 
-    preferredLinksContent.appendChild(createAddLinkButton());
-    preferredLinksContainer.appendChild(preferredLinksContent);
-    settings_window.appendChild(preferredLinksContainer);
+    //preferredLinksContent.appendChild(createAddLinkButton());
+    //preferredLinksContainer.appendChild(preferredLinksContent);
+    //settings_window.appendChild(preferredLinksContainer);
 
     // mcp mode
     settings_window.appendChild(mcpLabel);
