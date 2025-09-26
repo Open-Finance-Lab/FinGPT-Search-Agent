@@ -1,6 +1,7 @@
 // settings_window.js
 import { availableModels, selectedModel, setSelectedModel, fetchAvailableModels, getAvailableModels, getModelDetails } from '../config.js';
 import { loadPreferredLinks, createAddLinkButton } from '../helpers.js';
+import { createLinkManager } from './link_manager.js';
 
 // Extract text from pdf and docx
 // import * as pdfjsLib from "https://cdn.jsdelivr.net/npm/pdfjs-dist@2.11.338/es5/build/pdf.js";
@@ -101,8 +102,13 @@ function createSettingsWindow(isFixedModeRef, settingsIcon, positionModeIcon) {
     preferredLinksHeader.appendChild(toggleIcon);
     preferredLinksContainer.appendChild(preferredLinksHeader);
 
-    const preferredLinksContent = document.createElement('div');
-    preferredLinksContent.id = "preferred_links_content";
+    //const preferredLinksContent = document.createElement('div');
+    //preferredLinksContent.id = "preferred_links_content";
+
+    const linkManager = createLinkManager();
+    linkManager.id = "preferred_links_content";
+    linkManager.style.display = "none";
+    preferredLinksContainer.appendChild(linkManager);
     // preferredLinksContent.appendChild(createAddLinkButton());
 
     // preferredLinksContainer.appendChild(preferredLinksContent);
