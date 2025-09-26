@@ -86,15 +86,12 @@
 
 
 /* PREFERRED LINKS CONTAINER */
-/*
 #preferred_links_content {
     margin: 10px 0;
     display: none;
 }
-    */
 
 /* PREFERRED LINK ITEMS */
-/*
 .preferred-link-item {
     background-color: #444;
     margin: 4px 0;
@@ -105,17 +102,12 @@
     overflow-wrap: break-word;
     word-break: break-word;
 }
-    
 
 .preferred-link-item:hover {
     background-color: #555;
 }
-*/
-
 
 /* ADD LINK (+) BUTTON */
-
-/*
 #add_link_button {
     display: inline-block;
     background-color: #444;
@@ -131,7 +123,6 @@
 #add_link_button:hover {
     background-color: #555;
 }
-*/
 
 /* new link ui css */
 
