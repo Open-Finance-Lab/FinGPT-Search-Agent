@@ -58,6 +58,12 @@ python3 server_official.py        # Run official MCP server
 uv run server_official.py         # Run with uv
 ```
 
+### Documentation
+```bash
+# From Docs/
+sphinx-build -M html ./source ./build  # Build HTML documentation
+```
+
 ## Key Components
 
 ### R2C Context Management
