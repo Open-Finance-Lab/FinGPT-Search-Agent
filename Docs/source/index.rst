@@ -1,4 +1,4 @@
-.. FinGPT Search Agent documentation master file, created by
+﻿.. FinGPT Search Agent documentation master file, created by
    sphinx-quickstart on Sun Mar  9 21:31:47 2025.
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
@@ -22,3 +22,4 @@ documentation for details.
    start_agent_win
    usage/index
    project_structure
+   code_of_conduct
