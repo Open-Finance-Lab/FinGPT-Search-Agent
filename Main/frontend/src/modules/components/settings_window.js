@@ -1,6 +1,6 @@
 // settings_window.js
 import { availableModels, selectedModel, setSelectedModel, fetchAvailableModels, getAvailableModels, getModelDetails } from '../config.js';
-import { loadPreferredLinks, createAddLinkButton } from '../helpers.js';
+//import { loadPreferredLinks, createAddLinkButton } from '../helpers.js';
 import { createLinkManager } from './link_manager.js';
 
 // Extract text from pdf and docx
@@ -115,10 +115,12 @@ function createSettingsWindow(isFixedModeRef, settingsIcon, positionModeIcon) {
     // settings_window.appendChild(preferredLinksContainer);
 
     preferredLinksHeader.onclick = function () {
-        const isHidden = preferredLinksContent.style.display === "none";
-        preferredLinksContent.style.display = isHidden ? "block" : "none";
+        const isHidden = linkManager.style.display === "none";
+        linkManager.style.display = isHidden ? "block" : "none";
         toggleIcon.innerText = isHidden ? "⯅" : "⯆";
     };
+
+    settings_window.appendChild(preferredLinksContainer);
 
     // Set workerSrc to load PDF.js worker from CDN
     // pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.worker.min.js';
@@ -340,7 +342,7 @@ function createSettingsWindow(isFixedModeRef, settingsIcon, positionModeIcon) {
         settings_window.style.left = `${x}px`;
         settings_window.style.display = settings_window.style.display === 'none' ? 'block' : 'none';
         settings_window.style.position = isFixedModeRef.value ? 'fixed' : 'absolute';
-        if (settings_window.style.display === 'block') loadPreferredLinks();
+        //if (settings_window.style.display === 'block') loadPreferredLinks();
     };
 
     document.addEventListener('click', function (event) {
