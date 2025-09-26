@@ -1,23 +1,36 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-The monorepo centers on `Main/`. `Main/backend` hosts the Django service, with `api/` for HTTP views, `datascraper/` for retrieval and embeddings utilities, and `django_config/` for settings. Chrome-extension code lives in `Main/frontend` (`src/` JSX/CSS, `dist/` built assets). Shared automation sits in `scripts/`, while `Docs/` contains the Sphinx documentation source. Use `FinGPTenv/` as the optional virtual environment created by the installers.
+- `Main/backend`: Django API for retrieval and RAG; configs in `django_config/`, agents in `mcp_client/`, scrapers in `datascraper/`.
+- `Main/frontend`: Chrome extension (ES modules in `src/modules/`, assets in `src/assets/`, compiled bundle in `dist/`).
+- `scripts/`: Installer (`install_all.py`) and dev bootstrap (`dev_setup.py`) used by Make and Poetry.
+- `Docs/`: Sphinx sources powering ReadTheDocs. Update alongside workflow or API changes.
+- `Requirements/`: Platform exports generated from Poetry; keep `FinGPTenv/` local-only.
 
 ## Build, Test, and Development Commands
-- `python scripts/install_all.py` (or `python3` on Unix) installs backend and frontend dependencies end-to-end.
-- `make install` mirrors the unified installer on Unix; `make.ps1 install` does the same on Windows PowerShell.
-- `make dev` (or `python scripts/dev_setup.py`) launches the Django API plus frontend watcher with the expected environment variables.
-- `npm run build:full` inside `Main/frontend` rebuilds the extension bundle and verifies the `dist/` output.
-- `make clean` removes caches, the SQLite dev DB, and rebuild artifacts when you need a fresh start.
+- `python scripts/install_all.py` or `make install` - provision Poetry env plus npm deps.
+- `python scripts/dev_setup.py` or `make dev` - launch backend server and extension watcher.
+- `cd Main/backend && python manage.py runserver` - backend only using `.env` keys.
+- `cd Main/frontend && npm run build:full` - rebuild extension and run sanity checks.
+- `make clean` - purge caches, `dist/`, and temporary Django artifacts.
 
 ## Coding Style & Naming Conventions
-Target Python 3.10+, four-space indentation, and module-level constants in `UPPER_SNAKE_CASE`. Follow Django conventions: `snake_case` for functions, `PascalCase` classes, and docstrings for public utilities (see `api/views.py`). Run `cd Main/backend && poetry run ruff check .` before submitting. In the extension, stick to ES modules, `camelCase` helpers, and keep user-facing strings centralized in `src/`. Bundle-time assets should remain under 80 characters per line where practical.
+- Python: 4 spaces, module docstrings when exporting helpers, imports grouped stdlib/third-party/local. Keep app code under `api/` and `datascraper/`.
+- Prefer type hints on new functions and guard network calls with explicit timeouts and logging.
+- JavaScript: ES modules with 4-space indent, camelCase for functions, PascalCase for factory exports (`createPopup`). Keep styles in `modules/styles/` and reuse helpers from `modules/helpers.js`.
+- Run `poetry run ruff check .` in `Main/backend`; add `npm run lint` once configured and keep webpack config formatted.
 
 ## Testing Guidelines
-Backend unit tests run with `cd Main/backend && poetry run python manage.py test`; `make test` wraps backend and frontend checks. Use `Main/backend/test_models.py` to validate model registry updates and API key availability before opening a PR (`poetry run python test_models.py`). Place Django tests alongside the feature under `api/tests.py` using descriptive method names like `test_agent_handles_missing_rag_context`. Frontend automation is not yet wired - document manual verification steps (`npm run build:full`, browser smoke tests) in your PR until Jest or equivalent is introduced.
+- Backend: `cd Main/backend && python manage.py test`; place suites beside the feature (`api/tests.py`, `datascraper/test/`). Use fixtures to isolate network-dependent scrapers.
+- Supplement with `poetry run pytest` for utility-heavy modules if you add pytest plugins.
+- Frontend: add Jest or Playwright harnesses before enabling `npm test`; until then, document manual DOM checks when opening PRs.
 
 ## Commit & Pull Request Guidelines
-Commits should be concise and imperative; the history favors Conventional Commit prefixes (e.g., `feat:`, `fix:`, `docs:`). Keep the subject <=72 characters and describe rationale in the body when needed. For pull requests, include: problem statement, summary of backend/frontend changes, setup notes (e.g., required `.env` keys), and screenshots/GIFs if the extension UI changes. Link related issues and list the commands you ran (`make test`, `npm run build:full`, etc.) so reviewers can reproduce your checks.
+- Write imperative commit titles; Conventional Commit prefixes (`feat:`, `fix:`, `docs:`) reflect recent history and aid changelog tooling.
+- PRs should summarise scope, list verification commands, link issues, and attach extension screenshots or backend logs when behavior shifts.
+- Update README snippets, Sphinx docs, and installer scripts whenever commands or config paths change.
 
-## Security & Configuration Tips
-Never commit `.env` or API keys - `Main/backend/.env.example` should be used for sharing defaults. When testing MCP integrations, rotate keys after public demos. If you create new scripts, ensure they respect the virtual environment and provide cross-platform alternatives (Python + PowerShell). Always confirm new dependencies are added via Poetry or `npm` to keep the lockfiles authoritative.
+## Security & Configuration Notes
+- Store API keys only in `Main/backend/.env`; exclude `db.sqlite3`, `.env`, and logs from commits.
+- Rotate demo credentials regularly and scrub secrets before sharing benchmark artifacts.
+- Validate new entries in `preferred_urls.txt` for terms-of-service compliance and record provenance in the PR body.
