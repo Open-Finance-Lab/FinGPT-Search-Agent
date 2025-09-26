@@ -80,17 +80,30 @@ def remove_duplicate_sentences(text):
     return ' '.join(unique_sentences)
 
 # Helper
-def keyword_match(query, text):
+def keyword_match(query, text, debug=False):
     """
     Returns True if a sufficient number of significant words from the query appear in the text.
     Considers words longer than 3 characters as significant.
     """
     words = [w for w in query.lower().split() if len(w) > 3]
     if not words:
-        return query.lower() in text.lower()
-    count = sum(1 for w in words if w in text.lower())
-    # Require at least one word or half of the significant words (whichever is higher) to match.
-    return count >= max(1, len(words) // 2)
+        result = query.lower() in text.lower()
+        if debug:
+            logging.info(f"  Keyword match (no significant words): query in text = {result}")
+        return result
+
+    matched_words = [w for w in words if w in text.lower()]
+    count = len(matched_words)
+    required = max(1, len(words) // 2)
+    result = count >= required
+
+    if debug:
+        logging.info(f"  Keyword match: {count}/{len(words)} significant words matched (need {required})")
+        logging.info(f"    Significant words: {words}")
+        logging.info(f"    Matched: {matched_words}")
+        logging.info(f"    Result: {result}")
+
+    return result
 
 def data_scrape(url, timeout=10, rate_limit=1):
     """
@@ -180,11 +193,10 @@ def get_preferred_urls():
 
 def search_preferred_urls(query, max_urls=None):
     """
-    Searches within user-preferred URLs using the provided query.
-    Only returns info dictionaries where the scraped content matches the query keywords.
+    Scrapes all user-preferred URLs without keyword filtering.
 
     Args:
-        query: Search query to match against content
+        query: Search query (unused, kept for backward compatibility)
         max_urls: Maximum number of URLs to scrape (None = all)
     """
     preferred_urls = get_preferred_urls()
@@ -195,10 +207,10 @@ def search_preferred_urls(query, max_urls=None):
     for url in preferred_urls:
         info = data_scrape(url)
         logging.info(f"Scraped preferred URL {url}: {info}")
-        if info.get('status') == 'success' and keyword_match(query, info.get('content', '')):
+        if info.get('status') == 'success':
             info_list.append(info)
         else:
-            logging.info(f"Keyword '{query}' not sufficiently found in URL: {url}")
+            logging.info(f"Failed to scrape URL: {url}")
     return info_list
 
 
@@ -230,7 +242,7 @@ def extract_search_keywords(user_query: str, model: str = "o4-mini") -> str:
         extraction_prompt = (
             "You are a search keyword extraction assistant. "
             "Given a user's question or request, extract the most relevant keywords for a Google search. "
-            "Return ONLY the keywords, nothing else. Keep it concise (20 words maximum). "
+            "Return ONLY the keywords, nothing else. Keep it concise (6 words maximum). "
             "Focus on the core topic, entities, and key terms.\n\n"
             f"User query: {user_query}\n\n"
             "Search keywords:"
@@ -357,23 +369,23 @@ def create_advanced_response(
 
     logging.info(f"Found {num_preferred} preferred URLs")
 
-    # Search preferred URLs first (all of them if >=5, or all if <5)
+    # Search preferred URLs first (all of them, no keyword filtering)
     if num_preferred > 0:
-        logging.info(f"Searching {num_preferred} preferred URLs...")
+        logging.info(f"Scraping {num_preferred} preferred URLs...")
         preferred_info_list = search_preferred_urls(user_input)
 
         for info in preferred_info_list:
-            if info.get('status') == 'success' and keyword_match(user_input, info.get('content', '')):
-                url = info['url']
-                used_urls.add(url)
-                meta = info.get('metadata', {})
-                combined = (
-                    f"URL: {url}\n"
-                    f"Title: {meta.get('title', '')}\n"
-                    f"Description: {meta.get('description', '')}\n"
-                    f"Content: {info.get('content', '')}"
-                )
-                context_messages.append(combined)
+            url = info['url']
+            used_urls.add(url)
+            meta = info.get('metadata', {})
+            combined = (
+                f"URL: {url}\n"
+                f"Title: {meta.get('title', '')}\n"
+                f"Description: {meta.get('description', '')}\n"
+                f"Content: {info.get('content', '')}"
+            )
+            context_messages.append(combined)
+            logging.info(f"Added preferred URL to context: {url}")
 
     # Determine how many additional links to search
     links_found = len(context_messages)
@@ -384,9 +396,9 @@ def create_advanced_response(
         logging.info(f"Need {additional_needed} more links. Searching via Google...")
 
         try:
-            # If no preferred URLs, use LLM to extract keywords
-            if num_preferred == 0:
-                logging.info("No preferred URLs. Extracting search keywords via LLM...")
+            # If fewer than 5 preferred URLs, use LLM to extract keywords for better Google results
+            if num_preferred < TARGET_LINKS:
+                logging.info(f"Less than {TARGET_LINKS} preferred URLs. Extracting search keywords via LLM...")
                 search_query = extract_search_keywords(user_input, model)
                 logging.info(f"Using LLM-extracted keywords: '{search_query}'")
             else:
@@ -396,32 +408,86 @@ def create_advanced_response(
 
             # Perform Google search with error handling
             links_scraped = 0
-            for url in search(search_query, num=additional_needed + 5, stop=additional_needed + 5, pause=1):
+            url_index = 0
+
+            # Collect URLs from Google first to log them
+            logging.info(f"Searching Google with query: '{search_query}'")
+            logging.info(f"Requesting {additional_needed + 5} results from Google...")
+
+            try:
+                # googlesearch-python API: search(query, num_results=10, lang="en", advanced=False, sleep_interval=0, timeout=5)
+                google_search_results = search(search_query, num_results=additional_needed + 5, sleep_interval=1)
+                google_urls = list(google_search_results)
+
+                logging.info(f"Google returned {len(google_urls)} URLs:")
+                if len(google_urls) == 0:
+                    logging.warning("Google search returned 0 results. This could be due to:")
+                    logging.warning("  - Google blocking automated requests (most common)")
+                    logging.warning("  - Network connectivity issues")
+                    logging.warning("  - Rate limiting from Google")
+                    logging.warning("  - Invalid search query")
+                    logging.warning("  - googlesearch-python library issues")
+
+                for idx, url in enumerate(google_urls, 1):
+                    logging.info(f"  [{idx}] {url}")
+            except ModuleNotFoundError as e:
+                logging.error(f"googlesearch module not found: {e}")
+                logging.error("Please install googlesearch-python: pip install googlesearch-python")
+                google_urls = []
+            except Exception as search_error:
+                logging.error(f"Error during Google search iteration: {search_error}")
+                logging.error(f"Error type: {type(search_error).__name__}")
+                import traceback
+                logging.error(f"Traceback: {traceback.format_exc()}")
+                google_urls = []
+
+            # Also log the keywords we'll use for matching
+            significant_words = [w for w in user_input.lower().split() if len(w) > 3]
+            logging.info(f"Will match content against keywords from original query: {significant_words}")
+
+            # Now scrape each URL
+            for url in google_urls:
+                url_index += 1
+
                 # Skip if already scraped from preferred URLs
                 if url in used_urls:
+                    logging.info(f"[{url_index}/{len(google_urls)}] Skipping {url} (already scraped from preferred URLs)")
                     continue
+
+                logging.info(f"[{url_index}/{len(google_urls)}] Fetching {url}...")
 
                 try:
                     info = data_scrape(url)
-                    if info.get('status') == 'success' and keyword_match(user_input, info.get('content', '')):
-                        used_urls.add(info['url'])
-                        meta = info.get('metadata', {})
-                        combined = (
-                            f"URL: {info['url']}\n"
-                            f"Title: {meta.get('title', '')}\n"
-                            f"Description: {meta.get('description', '')}\n"
-                            f"Content: {info.get('content', '')}"
-                        )
-                        context_messages.append(combined)
-                        links_scraped += 1
+                    content = info.get('content', '')
+                    content_length = len(content)
 
-                        # Stop if we've reached our target
-                        if links_scraped >= additional_needed:
-                            break
+                    logging.info(f"  -> Status: {info.get('status')}, Content length: {content_length} chars")
+
+                    if info.get('status') == 'success':
+                        if keyword_match(user_input, content, debug=True):
+                            used_urls.add(info['url'])
+                            meta = info.get('metadata', {})
+                            combined = (
+                                f"URL: {info['url']}\n"
+                                f"Title: {meta.get('title', '')}\n"
+                                f"Description: {meta.get('description', '')}\n"
+                                f"Content: {content}"
+                            )
+                            context_messages.append(combined)
+                            links_scraped += 1
+                            logging.info(f"  -> ✓ ADDED to context (match found, total sources: {len(context_messages)})")
+
+                            # Stop if we've reached our target
+                            if links_scraped >= additional_needed:
+                                logging.info(f"Reached target of {additional_needed} additional links")
+                                break
+                        else:
+                            logging.info(f"  -> ✗ SKIPPED (keyword match failed)")
                     else:
-                        logging.info(f"Content from {url} did not match query keywords")
+                        logging.info(f"  -> ✗ FAILED ({info.get('error', 'unknown error')})")
+
                 except Exception as e:
-                    logging.error(f"Error scraping URL {url}: {e}")
+                    logging.error(f"  -> ✗ EXCEPTION: {e}")
                     continue
 
         except Exception as e:
