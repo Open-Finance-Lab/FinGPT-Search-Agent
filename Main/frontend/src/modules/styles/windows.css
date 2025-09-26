@@ -203,7 +203,7 @@
   background-color: grey;
 }
 
-input[type="text"] {
+.link-input input[type="text"] {
   color: white;
   width: 0;
   opacity: 0;
@@ -215,10 +215,6 @@ input[type="text"] {
   transition: width 0.3s ease, opacity 0.3s ease;
 }
 
-input:focus {
-  border-color: aquamarine;
-  outline: none;
-}
 
 .input-visible input[type="text"] {
   width: 250px;
