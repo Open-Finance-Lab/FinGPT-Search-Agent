@@ -187,17 +187,6 @@
   height: 40px;
 }
 
-.link-input input[type="text"]{
-  width:0;
-  opacity: 0;
-  padding: 8px;
-  font-size: 16px;
-  border: none;
-  border-radius: 5px;
-  background-color: #333;
-  transition: width 0.3s ease, opacity 0.3s ease;
-}
-
 .plus-btn {
   width: 40px;
   height: 40px;
@@ -220,9 +209,9 @@ input[type="text"] {
   opacity: 0;
   padding: 8px;
   font-size: 16px;
-  border: 2px solid #000000;
+  border: none;
   border-radius: 5px;
-  background-color: rgb(34, 33, 33);
+  background-color: #333;
   transition: width 0.3s ease, opacity 0.3s ease;
 }
 
@@ -249,7 +238,7 @@ input:focus {
   width:150px;
   font-size: 16px;
   color: #ffffff;
-  background: #000000;
+  background:#333;;
   border-radius: 6px;
   display: flex;
   align-items: center;
@@ -283,7 +272,6 @@ input:focus {
   border-radius: 6px;
   margin-left:5px;
   cursor: pointer;
-  box-shadow: 0 2px 4px rgba(93, 0, 0, 0.8);
   opacity: 0;
   transition: opacity 0.3s ease, background-color 0.3s ease;
   flex:0;
@@ -317,7 +305,7 @@ input:focus {
   border-radius: 8px;
   width: 300px;
   text-align: center;
-  border: 3px solid aquamarine;
+  border: none;
 }
 
 .modal-buttons {
