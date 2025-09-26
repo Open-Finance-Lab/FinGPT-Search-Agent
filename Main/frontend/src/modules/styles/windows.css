@@ -238,7 +238,7 @@ input:focus {
   width:150px;
   font-size: 16px;
   color: #ffffff;
-  background:#333;;
+  background:#444;
   border-radius: 6px;
   display: flex;
   align-items: center;
