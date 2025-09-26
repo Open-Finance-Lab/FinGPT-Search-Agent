@@ -28,8 +28,6 @@ function createUI() {
 
     // Settings window
     const settings_window = createSettingsWindow(isFixedModeRef, settingsIcon, positionModeIcon);
-    const linkManager = createLinkManager();
-    settings_window.appendChild(linkManager);
 
     // Position mode toggle logic
     positionModeIcon.onclick = function () {
