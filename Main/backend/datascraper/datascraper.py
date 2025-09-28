@@ -19,12 +19,13 @@ from urllib.parse import urljoin
 from . import cdm_rag
 from mcp_client.agent import create_fin_agent, USER_ONLY_MODELS, DEFAULT_PROMPT
 from .models_config import (
-    MODELS_CONFIG, 
-    PROVIDER_CONFIGS, 
-    get_model_config, 
+    MODELS_CONFIG,
+    PROVIDER_CONFIGS,
+    get_model_config,
     get_provider_config,
     validate_model_support
 )
+from .preferred_links_manager import get_manager
 
 # Load .env from the backend root directory
 from pathlib import Path
@@ -184,39 +185,32 @@ def data_scrape(url, timeout=10, rate_limit=1):
         return {'url': url, 'status': 'error', 'error': str(e)}
 
 
-def get_preferred_urls():
+def search_preferred_urls(preferred_urls, max_urls=None):
     """
-    Reads user-preferred URLs from a file and returns them as a list.
-    """
-    file_path = 'preferred_urls.txt'
-    preferred_urls = []
-    if os.path.exists(file_path):
-        with open(file_path, 'r') as file:
-            preferred_urls = [line.strip() for line in file.readlines()]
-    logging.info(f"Preferred URLs: {preferred_urls}")
-    return preferred_urls
-
-
-def search_preferred_urls(query, max_urls=None):
-    """
-    Scrapes all user-preferred URLs without keyword filtering.
+    Scrapes provided preferred URLs without keyword filtering.
 
     Args:
-        query: Search query (unused, kept for backward compatibility)
+        preferred_urls: List of URLs to scrape
         max_urls: Maximum number of URLs to scrape (None = all)
+
+    Returns:
+        List of scraped information dictionaries
     """
-    preferred_urls = get_preferred_urls()
+    if not preferred_urls:
+        logging.info("No preferred URLs to search")
+        return []
+
     if max_urls:
         preferred_urls = preferred_urls[:max_urls]
 
     info_list = []
     for url in preferred_urls:
         info = data_scrape(url)
-        logging.info(f"Scraped preferred URL {url}: {info}")
+        logging.info(f"Scraped preferred URL {url}: status={info.get('status')}")
         if info.get('status') == 'success':
             info_list.append(info)
         else:
-            logging.info(f"Failed to scrape URL: {url}")
+            logging.warning(f"Failed to scrape URL: {url}, error: {info.get('error')}")
     return info_list
 
 
@@ -350,7 +344,8 @@ def create_response(
 def create_advanced_response(
         user_input: str,
         message_list: list[dict],
-        model: str = "o4-mini"
+        model: str = "o4-mini",
+        preferred_links: list[str] = None
 ) -> str:
     """
     Creates an advanced response by searching at least 5 URLs total:
@@ -369,16 +364,28 @@ def create_advanced_response(
 
     TARGET_LINKS = 5
 
-    # Get preferred URLs
-    preferred_urls = get_preferred_urls()
-    num_preferred = len(preferred_urls)
+    # Get the preferred links manager
+    manager = get_manager()
 
+    # Sync and get preferred links
+    if preferred_links is not None and len(preferred_links) > 0:
+        # Frontend provided links - sync them to storage (which also deduplicates)
+        manager.sync_from_frontend(preferred_links)
+        # Get the deduplicated links from the manager
+        preferred_urls = manager.get_links()
+        logging.info(f"Synced {len(preferred_links)} links from frontend, using {len(preferred_urls)} deduplicated links")
+    else:
+        # No frontend links - use stored ones
+        preferred_urls = manager.get_links()
+        logging.info(f"Using {len(preferred_urls)} preferred links from storage")
+
+    num_preferred = len(preferred_urls)
     logging.info(f"Found {num_preferred} preferred URLs")
 
     # Search preferred URLs first (all of them, no keyword filtering)
     if num_preferred > 0:
         logging.info(f"Scraping {num_preferred} preferred URLs...")
-        preferred_info_list = search_preferred_urls(user_input)
+        preferred_info_list = search_preferred_urls(preferred_urls)
 
         for info in preferred_info_list:
             url = info['url']
@@ -407,7 +414,7 @@ def create_advanced_response(
 
     # If we need more links, search via Google
     if additional_needed > 0:
-        logging.info(f"Need {additional_needed} more links. Searching via Google...")
+        logging.info(f"Need {additional_needed} more links. Searching via DuckDuckGo...")
 
         # Determine search query - extract keywords if auto-searching with fewer than TARGET_LINKS preferred URLs
         if num_preferred < TARGET_LINKS:
@@ -536,7 +543,7 @@ def create_advanced_response(
     return answer
 
 
-def create_rag_advanced_response(user_input: str, message_list: list[dict], model: str = "o4-mini") -> str:
+def create_rag_advanced_response(user_input: str, message_list: list[dict], model: str = "o4-mini", preferred_links: list[str] = None) -> str:
     """
     Creates an advanced response using the RAG pipeline.
     Combines RAG functionality with advanced web search.
@@ -548,9 +555,9 @@ def create_rag_advanced_response(user_input: str, message_list: list[dict], mode
             return rag_response
     except Exception as e:
         logging.warning(f"RAG advanced response failed: {e}, falling back to advanced search")
-    
-    # Fallback to advanced search if RAG fails
-    return create_advanced_response(user_input, message_list, model)
+
+    # Fallback to advanced search if RAG fails, passing preferred links
+    return create_advanced_response(user_input, message_list, model, preferred_links)
 
 
 def create_mcp_response(user_input: str, message_list: list[dict], model: str = "o4-mini") -> str:
@@ -634,156 +641,3 @@ def handle_multiple_models(question, message_list, models):
         else:
             responses[model] = create_response(question, message_list.copy(), model)
     return responses
-
-
-# def search_websites_with_keyword(keyword):
-#     """
-#     Searches the web using Google and prioritizes user-preferred URLs.
-#     """
-#     # First, search within preferred URLs
-#     message_list = search_preferred_urls(keyword)
-#
-#     # If no relevant information found in preferred URLs, fall back to Google search
-#     if not message_list:
-#         search_query = f"intitle:{keyword}"
-#         search_url = f"https://www.google.com/search?q={search_query}"
-#         headers = req_headers
-#         response = requests.get(search_url, headers=headers)
-#
-#         if response.status_code == 200:
-#             soup = BeautifulSoup(response.text, "html.parser")
-#             search_results = soup.find_all("a")
-#             for result in search_results:
-#                 link = result.get("href")
-#                 if link and link.startswith("/url?q="):
-#                     url = link[7:]
-#                     info = data_scrape(url)
-#                     if info != -1:
-#                         message_list.append({"role": "system", "content": info})
-#         else:
-#             print("Failed to retrieve search results.")
-#
-#     return message_list
-
-# gemma_model_path = os.path.join(os.path.dirname(__file__), 'gemma-2-2b-it')
-# tokenizer = AutoTokenizer.from_pretrained(gemma_model_path)
-#
-# # Initialization
-# with init_empty_weights():
-#     model = AutoModelForCausalLM.from_pretrained(
-#         gemma_model_path,
-#         low_cpu_mem_usage=True,
-#         torch_dtype=torch.bfloat16  # model weights use bfloat16
-#     )
-#
-# # tie the model weights before dispatching
-# model.tie_weights()
-#
-# # Load the model with CPU offloading and layer dispatch to handle limited memory
-# model = load_checkpoint_and_dispatch(
-#     model,
-#     gemma_model_path,
-#     device_map={"": "cpu"},
-#     offload_state_dict=True
-# )
-
-
-# Gemma 2B - Modified response generation to work on CPU
-# def generate_gemma_response(message_list):
-#     # concatenated_input = " ".join([msg["content"] for msg in message_list])
-#     #
-#     # print(concatenated_input)
-#     #
-#     # # keep input_ids as LongTensor
-#     # inputs = tokenizer(concatenated_input, return_tensors="pt")
-#     # inputs = {key: value.to("cpu") for key, value in inputs.items()}
-#     #
-#     # # model weights are in bfloat16
-#     # outputs = model.generate(**inputs, max_length=6000)
-#     #
-#     # # Decode the generated output
-#     # full_output = tokenizer.decode(outputs[0], skip_special_tokens=True)
-#     #
-#     # print("Output prior to stripping: " + full_output)
-#     full_output = "This is a mock output."
-#
-#     # response = full_output.replace(concatenated_input, "").strip()
-#
-#     return full_output
-#
-#
-# # Gemma 2B
-# def create_gemma_response(user_input, message_list):
-#     """
-#     Generates a response from the locally run Gemma 2B model.
-#     """
-#
-#     message_list.append({"role": "user", "content": user_input})
-#
-#     print("The received message list for response generation:", message_list)
-#
-#     response = generate_gemma_response(message_list)
-#     message_list.append({"role": "system", "content": response})
-#
-#     print(response)
-#     return response
-#
-#
-# # Gemma 2B
-# def create_gemma_advanced_response(user_input, message_list):
-#     """
-#     Generates an advanced response from the locally run Gemma 2B model,
-#     searching URLs before generating a response.
-#     """
-#
-#     message_list.append({"role": "user",
-#                          "content": "Answer the following question with the context provided below: " + user_input + "\n" + "Below is context: " + "\n"})
-#
-#     # Search in preferred URLs first
-#     print("Searching user preferred URLs")
-#     preferred_message_list = search_preferred_urls(user_input)  # URL searching logic
-#     message_list.extend(preferred_message_list)
-#
-#     # If no relevant information found, fall back to Gemma 2B response
-#     if not preferred_message_list:
-#         for url in search(user_input, num=10, stop=10, pause=0):
-#             info = data_scrape(url)
-#             if info != -1:
-#                 message_list.append({"role": "system", "content": "url: " + str(url) + " info: " + info})
-#
-#     print(message_list)
-#     response = generate_gemma_response(message_list)
-#
-#     message_list.append({"role": "system", "content": response})
-#
-#     return response
-
-# def create_advanced_response(user_input, message_list, model="o1-preview"):
-#     """
-#     Creates an advanced response by searching through user-preferred URLs first,
-#     and then falling back to a general web search using the specified model.
-#     """
-#     print(f"msg list: {message_list}")
-#     openai.api_key = api_key
-#     print("starting creation")
-#
-#     # Search in preferred URLs first
-#     print("Searching user preferred URLs")
-#     preferred_message_list = search_preferred_urls(user_input)
-#     message_list.extend(preferred_message_list)
-#
-#     # If no relevant information found, fall back to general web search
-#     if not preferred_message_list:
-#         for url in search(user_input, num=5, stop=5, pause=0):
-#             info = data_scrape(url)
-#             if info != -1:
-#                 message_list.append({"role": "system", "content": "url: " + str(url) + " info: " + info})
-#
-#     message_list.append({"role": "user", "content": user_input})
-#     completion = openai.ChatCompletion.create(
-#         model=model,
-#         messages=message_list,
-#     )
-#     print(completion.choices[0].message.content)
-#
-#     return completion.choices[0].message.content

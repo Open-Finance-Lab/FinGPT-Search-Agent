@@ -1,5 +1,5 @@
 // helpers.js
-import { clearMessages, getSourceUrls, addPreferredUrl, getPreferredUrls, logQuestion } from './api.js';
+import { clearMessages, getSourceUrls, logQuestion } from './api.js';
 import { handleChatResponse, handleImageResponse } from './handlers.js';
 import { getCachedSources, hasCachedSources, clearCachedSources } from './sourcesCache.js';
 
@@ -163,54 +163,7 @@ function get_sources(searchQuery) {
     }
 }
 
-// Function to load preferred links
-function loadPreferredLinks() {
-    getPreferredUrls()
-        .then(data => {
-            const preferredLinksContent = document.getElementById('preferred_links_content');
-            preferredLinksContent.innerHTML = ''; // Clear existing content
-            
-            if (data.urls.length > 0) {
-                data.urls.forEach(link => {
-                    const linkItem = document.createElement('div');
-                    linkItem.className = 'preferred-link-item';
-                    linkItem.innerText = link;
-                    preferredLinksContent.appendChild(linkItem);
-                });
-            }
-            
-            // Re-add the '+' button
-            const addLinkButton = document.getElementById('add_link_button') || createAddLinkButton();
-            preferredLinksContent.appendChild(addLinkButton);
-        })
-        .catch(error => console.error('Error loading preferred links:', error));
-}
-
-// Function to create Add Link Button
-function createAddLinkButton() {
-    const addLinkButton = document.createElement('div');
-    addLinkButton.id = "add_link_button";
-    addLinkButton.innerText = "+";
-    addLinkButton.onclick = function() {
-        const newLink = prompt("Enter a new preferred URL:");
-        if (newLink) {
-            addPreferredUrl(newLink)
-                .then(data => {
-                    if (data.status === 'success') {
-                        const preferredLinksContent = document.getElementById('preferred_links_content');
-                        const newLinkItem = document.createElement('div');
-                        newLinkItem.className = 'preferred-link-item';
-                        newLinkItem.innerText = newLink;
-                        preferredLinksContent.insertBefore(newLinkItem, addLinkButton);
-                    } else {
-                        alert('Failed to add the new URL.');
-                    }
-                })
-                .catch(error => console.error('Error adding preferred link:', error));
-        }
-    };
-    return addLinkButton;
-}
+// Removed old preferred links functions - now handled by link_manager.js component
 
 // Function to make an element draggable and resizable
 function makeDraggableAndResizable(element, sourceWindowOffsetX = 10, isFixedMode = false) {
@@ -284,5 +237,5 @@ function makeDraggableAndResizable(element, sourceWindowOffsetX = 10, isFixedMod
     }
 }
 
-export { appendChatElement, clear, get_chat_response, get_adv_chat_response, get_sources, 
-    loadPreferredLinks, createAddLinkButton, makeDraggableAndResizable };
+export { appendChatElement, clear, get_chat_response, get_adv_chat_response, get_sources,
+    makeDraggableAndResizable };

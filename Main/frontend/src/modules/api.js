@@ -49,15 +49,27 @@ function getChatResponse(question, selectedModel, promptMode, useRAG, useMCP) {
       endpoint = promptMode ? 'get_adv_response' : 'get_chat_response';
     }
 
-    return fetch(
-        `http://127.0.0.1:8000/${endpoint}/?question=${encodedQuestion}` +
+    // Get preferred links from localStorage for advanced mode
+    let url = `http://127.0.0.1:8000/${endpoint}/?question=${encodedQuestion}` +
         `&models=${selectedModel}` +
         `&is_advanced=${promptMode}` +
         `&use_rag=${useRAG}` +
         `&use_r2c=true` +
-        `&session_id=${currentSessionId}`,
-        { method: 'GET', credentials: 'include' }
-    )
+        `&session_id=${currentSessionId}`;
+
+    // Add preferred links if in advanced mode
+    if (promptMode) {
+        try {
+            const preferredLinks = JSON.parse(localStorage.getItem('preferredLinks') || '[]');
+            if (preferredLinks.length > 0) {
+                url += `&preferred_links=${encodeURIComponent(JSON.stringify(preferredLinks))}`;
+            }
+        } catch (e) {
+            console.error('Error getting preferred links:', e);
+        }
+    }
+
+    return fetch(url, { method: 'GET', credentials: 'include' })
         .then(response => response.json())
         .catch(error => {
             console.error('There was a problem with your fetch operation:', error);
@@ -111,40 +123,36 @@ function logQuestion(question, button) {
         });
 }
 
-// Function to add preferred URL
-function addPreferredUrl(url) {
-    return fetch('http://127.0.0.1:8000/api/add_preferred_url/', {
-        method: 'POST',
-        credentials: 'include',
-        headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: `url=${encodeURIComponent(url)}`
-    })
-        .then(response => response.json())
-        .catch(error => {
-            console.error('Error adding preferred link:', error);
-            throw error;
-        });
+// Function to sync preferred links with backend
+function syncPreferredLinks() {
+    try {
+        const preferredLinks = JSON.parse(localStorage.getItem('preferredLinks') || '[]');
+        if (preferredLinks.length > 0) {
+            return fetch('http://127.0.0.1:8000/api/sync_preferred_urls/', {
+                method: 'POST',
+                credentials: 'include',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ urls: preferredLinks })
+            })
+            .then(response => response.json())
+            .catch(error => {
+                console.error('Error syncing preferred links:', error);
+            });
+        }
+    } catch (e) {
+        console.error('Error reading preferred links for sync:', e);
+    }
+    return Promise.resolve();
 }
 
-// Function to get preferred URLs
-function getPreferredUrls() {
-    return fetch('http://127.0.0.1:8000/api/get_preferred_urls/', { credentials: 'include' })
-        .then(response => response.json())
-        .catch(error => {
-            console.error('Error loading preferred links:', error);
-            throw error;
-        });
-}
-
-export { 
-    postWebTextToServer, 
-    getChatResponse, 
-    clearMessages, 
-    getSourceUrls, 
+export {
+    postWebTextToServer,
+    getChatResponse,
+    clearMessages,
+    getSourceUrls,
     logQuestion,
-    addPreferredUrl,
-    getPreferredUrls,
-    setSessionId
+    setSessionId,
+    syncPreferredLinks
 };
