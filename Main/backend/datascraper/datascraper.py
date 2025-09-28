@@ -105,6 +105,39 @@ def keyword_match(query, text, debug=False):
 
     return result
 
+def fallback_search(query, num_results=10):
+    """
+    Fallback search using DuckDuckGo HTML scraping when googlesearch fails.
+    Returns a list of URLs.
+    """
+    try:
+        import urllib.parse
+        encoded_query = urllib.parse.quote_plus(query)
+        ddg_url = f"https://html.duckduckgo.com/html/?q={encoded_query}"
+
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
+
+        response = requests.get(ddg_url, headers=headers, timeout=10)
+        if response.status_code != 200:
+            logging.error(f"DuckDuckGo search failed with status code: {response.status_code}")
+            return []
+
+        soup = BeautifulSoup(response.text, 'html.parser')
+        results = []
+
+        for result in soup.find_all('a', class_='result__a', limit=num_results):
+            url = result.get('href')
+            if url and url.startswith('http'):
+                results.append(url)
+
+        logging.info(f"DuckDuckGo fallback returned {len(results)} URLs")
+        return results
+    except Exception as e:
+        logging.error(f"Fallback search failed: {e}")
+        return []
+
 def data_scrape(url, timeout=10, rate_limit=1):
     """
     Scrapes data from the given URL and returns a structured dictionary.
@@ -415,31 +448,26 @@ def create_advanced_response(
             logging.info(f"Requesting {additional_needed + 5} results from Google...")
 
             try:
-                # googlesearch-python API: search(query, num_results=10, lang="en", advanced=False, sleep_interval=0, timeout=5)
-                google_search_results = search(search_query, num_results=additional_needed + 5, sleep_interval=1)
+                # Try googlesearch-python first
+                google_search_results = search(search_query, num=additional_needed + 5)
                 google_urls = list(google_search_results)
 
-                logging.info(f"Google returned {len(google_urls)} URLs:")
+                logging.info(f"Google search returned {len(google_urls)} URLs")
+
+                # If Google returns 0 results, try fallback
                 if len(google_urls) == 0:
-                    logging.warning("Google search returned 0 results. This could be due to:")
-                    logging.warning("  - Google blocking automated requests (most common)")
-                    logging.warning("  - Network connectivity issues")
-                    logging.warning("  - Rate limiting from Google")
-                    logging.warning("  - Invalid search query")
-                    logging.warning("  - googlesearch-python library issues")
+                    logging.warning("Google search returned 0 results (likely blocked). Trying DuckDuckGo fallback...")
+                    google_urls = fallback_search(search_query, num_results=additional_needed + 5)
 
                 for idx, url in enumerate(google_urls, 1):
                     logging.info(f"  [{idx}] {url}")
+
             except ModuleNotFoundError as e:
-                logging.error(f"googlesearch module not found: {e}")
-                logging.error("Please install googlesearch-python: pip install googlesearch-python")
-                google_urls = []
+                logging.warning(f"googlesearch module not found. Using DuckDuckGo fallback...")
+                google_urls = fallback_search(search_query, num_results=additional_needed + 5)
             except Exception as search_error:
-                logging.error(f"Error during Google search iteration: {search_error}")
-                logging.error(f"Error type: {type(search_error).__name__}")
-                import traceback
-                logging.error(f"Traceback: {traceback.format_exc()}")
-                google_urls = []
+                logging.warning(f"Google search error ({type(search_error).__name__}). Using DuckDuckGo fallback...")
+                google_urls = fallback_search(search_query, num_results=additional_needed + 5)
 
             # Also log the keywords we'll use for matching
             significant_words = [w for w in user_input.lower().split() if len(w) > 3]
