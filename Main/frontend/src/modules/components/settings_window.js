@@ -1,6 +1,7 @@
 // settings_window.js
 import { availableModels, selectedModel, setSelectedModel, fetchAvailableModels, getAvailableModels, getModelDetails } from '../config.js';
-import { loadPreferredLinks, createAddLinkButton } from '../helpers.js';
+//import { loadPreferredLinks, createAddLinkButton } from '../helpers.js';
+import { createLinkManager } from './link_manager.js';
 
 // Extract text from pdf and docx
 // import * as pdfjsLib from "https://cdn.jsdelivr.net/npm/pdfjs-dist@2.11.338/es5/build/pdf.js";
@@ -101,16 +102,18 @@ function createSettingsWindow(isFixedModeRef, settingsIcon, positionModeIcon) {
     preferredLinksHeader.appendChild(toggleIcon);
     preferredLinksContainer.appendChild(preferredLinksHeader);
 
-    const preferredLinksContent = document.createElement('div');
-    preferredLinksContent.id = "preferred_links_content";
-    // preferredLinksContent.appendChild(createAddLinkButton());
+    //const preferredLinksContent = document.createElement('div');
+    //preferredLinksContent.id = "preferred_links_content";
 
-    // preferredLinksContainer.appendChild(preferredLinksContent);
-    // settings_window.appendChild(preferredLinksContainer);
+    const linkManager = createLinkManager();
+    linkManager.id = "preferred_links_content";
+    linkManager.style.display = "none";
+    preferredLinksContainer.appendChild(linkManager);
+    settings_window.appendChild(preferredLinksContainer);
 
     preferredLinksHeader.onclick = function () {
-        const isHidden = preferredLinksContent.style.display === "none";
-        preferredLinksContent.style.display = isHidden ? "block" : "none";
+        const isHidden = linkManager.style.display === "none";
+        linkManager.style.display = isHidden ? "block" : "none";
         toggleIcon.innerText = isHidden ? "⯅" : "⯆";
     };
 
@@ -314,9 +317,9 @@ function createSettingsWindow(isFixedModeRef, settingsIcon, positionModeIcon) {
     ragForm.appendChild(ragFormSubmit);
     ragForm.appendChild(clearRagButton);
 
-    preferredLinksContent.appendChild(createAddLinkButton());
-    preferredLinksContainer.appendChild(preferredLinksContent);
-    settings_window.appendChild(preferredLinksContainer);
+    //preferredLinksContent.appendChild(createAddLinkButton());
+    //preferredLinksContainer.appendChild(preferredLinksContent);
+    //settings_window.appendChild(preferredLinksContainer);
 
     // mcp mode
     settings_window.appendChild(mcpLabel);
@@ -334,7 +337,7 @@ function createSettingsWindow(isFixedModeRef, settingsIcon, positionModeIcon) {
         settings_window.style.left = `${x}px`;
         settings_window.style.display = settings_window.style.display === 'none' ? 'block' : 'none';
         settings_window.style.position = isFixedModeRef.value ? 'fixed' : 'absolute';
-        if (settings_window.style.display === 'block') loadPreferredLinks();
+        //if (settings_window.style.display === 'block') loadPreferredLinks();
     };
 
     document.addEventListener('click', function (event) {

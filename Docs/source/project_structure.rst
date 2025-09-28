@@ -148,9 +148,9 @@ Model Configuration
 The backend supports multiple AI providers through a centralized configuration:
 
 **Supported Models:**
-- OpenAI: GPT-4, GPT-4 Turbo, GPT-3.5, O1 Pro, O1 Mini
-- DeepSeek: DeepSeek Chat, DeepSeek Reasoner
-- Anthropic: Claude 3.5 Sonnet, Claude 3.7 (Opus 4)
+- OpenAI: GPT-4o Mini (o4-mini), O1 Pro (o1-pro), GPT-5 Chat Latest (gpt-5-chat), GPT-5 Nano (gpt-5-nano)
+- DeepSeek: DeepSeek R1 Reasoner (deepseek-reasoner)
+- Anthropic: Claude 4 Sonnet (claude-4-sonnet), Claude 3.5 Haiku (claude-haiku-3.5)
 
 **Model Capabilities:**
 - Basic chat completion
