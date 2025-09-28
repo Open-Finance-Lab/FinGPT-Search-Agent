@@ -12,7 +12,6 @@ from bs4 import BeautifulSoup
 from openai import OpenAI
 from anthropic import Anthropic
 
-from googlesearch import search
 from urllib.parse import urljoin
 # from transformers import AutoTokenizer, AutoModelForCausalLM
 # from accelerate import init_empty_weights, load_checkpoint_and_dispatch
@@ -78,32 +77,6 @@ def remove_duplicate_sentences(text):
         if not unique_sentences or sentence != unique_sentences[-1]:
             unique_sentences.append(sentence)
     return ' '.join(unique_sentences)
-
-# Helper
-def keyword_match(query, text, debug=False):
-    """
-    Returns True if a sufficient number of significant words from the query appear in the text.
-    Considers words longer than 3 characters as significant.
-    """
-    words = [w for w in query.lower().split() if len(w) > 3]
-    if not words:
-        result = query.lower() in text.lower()
-        if debug:
-            logging.info(f"  Keyword match (no significant words): query in text = {result}")
-        return result
-
-    matched_words = [w for w in words if w in text.lower()]
-    count = len(matched_words)
-    required = max(1, len(words) // 2)
-    result = count >= required
-
-    if debug:
-        logging.info(f"  Keyword match: {count}/{len(words)} significant words matched (need {required})")
-        logging.info(f"    Significant words: {words}")
-        logging.info(f"    Matched: {matched_words}")
-        logging.info(f"    Result: {result}")
-
-    return result
 
 def fallback_search(query, num_results=10):
     """
@@ -409,16 +382,24 @@ def create_advanced_response(
 
         for info in preferred_info_list:
             url = info['url']
+            content = info.get('content', '')
+            content_length = len(content)
+
+            # Check if content has at least 50 characters
+            if content_length < 50:
+                logging.info(f"Skipping preferred URL {url} (content too short: {content_length} chars < 50)")
+                continue
+
             used_urls.add(url)
             meta = info.get('metadata', {})
             combined = (
                 f"URL: {url}\n"
                 f"Title: {meta.get('title', '')}\n"
                 f"Description: {meta.get('description', '')}\n"
-                f"Content: {info.get('content', '')}"
+                f"Content: {content}"
             )
             context_messages.append(combined)
-            logging.info(f"Added preferred URL to context: {url}")
+            logging.info(f"Added preferred URL to context: {url} (content: {content_length} chars)")
 
     # Determine how many additional links to search
     links_found = len(context_messages)
@@ -428,61 +409,41 @@ def create_advanced_response(
     if additional_needed > 0:
         logging.info(f"Need {additional_needed} more links. Searching via Google...")
 
-        try:
-            # If fewer than 5 preferred URLs, use LLM to extract keywords for better Google results
-            if num_preferred < TARGET_LINKS:
-                logging.info(f"Less than {TARGET_LINKS} preferred URLs. Extracting search keywords via LLM...")
-                search_query = extract_search_keywords(user_input, model)
-                logging.info(f"Using LLM-extracted keywords: '{search_query}'")
-            else:
-                # Otherwise use the user input directly
-                search_query = user_input
-                logging.info(f"Using user input as search query: '{search_query}'")
+        # Determine search query - extract keywords if auto-searching with fewer than TARGET_LINKS preferred URLs
+        if num_preferred < TARGET_LINKS:
+            logging.info(f"Less than {TARGET_LINKS} preferred URLs. Extracting search keywords via LLM...")
+            search_query = extract_search_keywords(user_input, model)
+            logging.info(f"Using LLM-extracted keywords: '{search_query}'")
+        else:
+            # Otherwise use the user input directly
+            search_query = user_input
+            logging.info(f"Using user input as search query: '{search_query}'")
 
-            # Perform Google search with error handling
+        # Perform DuckDuckGo search
+        try:
             links_scraped = 0
             url_index = 0
 
-            # Collect URLs from Google first to log them
-            logging.info(f"Searching Google with query: '{search_query}'")
-            logging.info(f"Requesting {additional_needed + 5} results from Google...")
+            # Use DuckDuckGo as the main search
+            logging.info(f"Searching DuckDuckGo with query: '{search_query}'")
+            logging.info(f"Requesting {additional_needed + 5} results...")
 
-            try:
-                # Try googlesearch-python first
-                google_search_results = search(search_query, num=additional_needed + 5)
-                google_urls = list(google_search_results)
+            search_urls = fallback_search(search_query, num_results=additional_needed + 5)
 
-                logging.info(f"Google search returned {len(google_urls)} URLs")
-
-                # If Google returns 0 results, try fallback
-                if len(google_urls) == 0:
-                    logging.warning("Google search returned 0 results (likely blocked). Trying DuckDuckGo fallback...")
-                    google_urls = fallback_search(search_query, num_results=additional_needed + 5)
-
-                for idx, url in enumerate(google_urls, 1):
-                    logging.info(f"  [{idx}] {url}")
-
-            except ModuleNotFoundError as e:
-                logging.warning(f"googlesearch module not found. Using DuckDuckGo fallback...")
-                google_urls = fallback_search(search_query, num_results=additional_needed + 5)
-            except Exception as search_error:
-                logging.warning(f"Google search error ({type(search_error).__name__}). Using DuckDuckGo fallback...")
-                google_urls = fallback_search(search_query, num_results=additional_needed + 5)
-
-            # Also log the keywords we'll use for matching
-            significant_words = [w for w in user_input.lower().split() if len(w) > 3]
-            logging.info(f"Will match content against keywords from original query: {significant_words}")
+            logging.info(f"DuckDuckGo search returned {len(search_urls)} URLs")
+            for idx, url in enumerate(search_urls, 1):
+                logging.info(f"  [{idx}] {url}")
 
             # Now scrape each URL
-            for url in google_urls:
+            for url in search_urls:
                 url_index += 1
 
                 # Skip if already scraped from preferred URLs
                 if url in used_urls:
-                    logging.info(f"[{url_index}/{len(google_urls)}] Skipping {url} (already scraped from preferred URLs)")
+                    logging.info(f"[{url_index}/{len(search_urls)}] Skipping {url} (already scraped from preferred URLs)")
                     continue
 
-                logging.info(f"[{url_index}/{len(google_urls)}] Fetching {url}...")
+                logging.info(f"[{url_index}/{len(search_urls)}] Fetching {url}...")
 
                 try:
                     info = data_scrape(url)
@@ -492,7 +453,11 @@ def create_advanced_response(
                     logging.info(f"  -> Status: {info.get('status')}, Content length: {content_length} chars")
 
                     if info.get('status') == 'success':
-                        if keyword_match(user_input, content, debug=True):
+                        # Check if content has at least 50 characters
+                        if content_length < 50:
+                            logging.info(f"  -> ✗ SKIPPED (content too short: {content_length} chars < 50)")
+                        else:
+                            # Accept successful fetch with sufficient content
                             used_urls.add(info['url'])
                             meta = info.get('metadata', {})
                             combined = (
@@ -503,14 +468,12 @@ def create_advanced_response(
                             )
                             context_messages.append(combined)
                             links_scraped += 1
-                            logging.info(f"  -> ✓ ADDED to context (match found, total sources: {len(context_messages)})")
+                            logging.info(f"  -> ✓ ADDED to context (total sources: {len(context_messages)})")
 
                             # Stop if we've reached our target
                             if links_scraped >= additional_needed:
                                 logging.info(f"Reached target of {additional_needed} additional links")
                                 break
-                        else:
-                            logging.info(f"  -> ✗ SKIPPED (keyword match failed)")
                     else:
                         logging.info(f"  -> ✗ FAILED ({info.get('error', 'unknown error')})")
 
