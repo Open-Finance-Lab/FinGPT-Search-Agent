@@ -404,9 +404,15 @@ def adv_response(request):
 
     first_model_response = next(iter(responses.values())) if responses else "No response"
     _log_interaction("advanced", current_url, question, first_model_response)
-    
-    # Return response with optional R2C stats
-    return _prepare_response_with_stats(responses, session_id, use_r2c)
+
+    # Get the used URLs from datascraper
+    used_urls_list = list(ds.used_urls)
+
+    # Return response with optional R2C stats and used URLs
+    response_data = _prepare_response_with_stats(responses, session_id, use_r2c)
+    response_json = json.loads(response_data.content)
+    response_json['used_urls'] = used_urls_list
+    return JsonResponse(response_json)
 
 @csrf_exempt
 def clear(request):

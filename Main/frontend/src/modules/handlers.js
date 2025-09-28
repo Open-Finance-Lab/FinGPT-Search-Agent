@@ -2,6 +2,7 @@
 import { appendChatElement } from './helpers.js';
 import { getChatResponse } from './api.js';
 import { getSelectedModel, selectedModel } from './config.js';
+import { setCachedSources } from './sourcesCache.js';
 
 
 // Function to handle chat responses (single model)
@@ -43,6 +44,12 @@ function handleChatResponse(question, promptMode = false) {
                 loadingElement.innerText = `FinGPT: Error - ${modelResponse}`;
             } else {
                 loadingElement.innerText = `FinGPT: ${modelResponse}`;
+            }
+
+            // If this is an Advanced Ask response and contains used_urls, cache them
+            if (promptMode && data.used_urls && data.used_urls.length > 0) {
+                setCachedSources(data.used_urls, question);
+                console.log('Cached', data.used_urls.length, 'source URLs from Advanced Ask');
             }
 
             // Clear the user textbox
