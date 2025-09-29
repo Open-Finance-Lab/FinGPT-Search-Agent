@@ -158,6 +158,7 @@ function createSettingsWindow(isFixedModeRef, settingsIcon, positionModeIcon) {
 
     // —– MCP Mode Toggle —–
     const mcpLabel = document.createElement('label');
+    mcpLabel.className = 'settings-checkbox-label';
     mcpLabel.innerText = "MCP Mode";
     const mcpSwitch = document.createElement('input');
     mcpSwitch.type = "checkbox";
@@ -171,6 +172,7 @@ function createSettingsWindow(isFixedModeRef, settingsIcon, positionModeIcon) {
     let RAGPath = '';
 
     const ragLabel = document.createElement('label');
+    ragLabel.className = 'settings-checkbox-label';
     ragLabel.innerText = "Local RAG";
     ragLabel.setAttribute('for', 'ragSwitch');
 
