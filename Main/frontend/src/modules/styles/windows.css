@@ -32,8 +32,6 @@
 
 /* MCP Mode and Local RAG checkbox */
 .settings-checkbox-label {
-  display: flex;
-  align-items: center;
   gap: 8px;
   font-size: 1em;
   margin-bottom: 10px;
