@@ -32,7 +32,7 @@
 
 /* MCP Mode and Local RAG checkbox */
 .settings-checkbox-label {
-  gap: 8px;
+  vertical-align: middle;
   font-size: 1em;
   margin-bottom: 10px;
 }
@@ -40,7 +40,8 @@
 .settings-checkbox-label input[type="checkbox"] {
   width: 1em;
   height: 1em;
-  margin-right: 5px;
+  margin-right: 6px;
+  vertical-align: middle;
 }
 
 #settings_window button:hover,
