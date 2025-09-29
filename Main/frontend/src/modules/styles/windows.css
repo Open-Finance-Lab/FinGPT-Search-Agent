@@ -245,7 +245,7 @@
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
-  width:150px;
+  width:100%;
   font-size: 16px;
   color: #ffffff;
   background:#444;
@@ -275,7 +275,7 @@
   justify-content: center;
   height: 30px;
   width: 30px;
-  font-size: 20px;
+  font-size: 24px;
   background-color: red;
   color: white;
   border: none;
@@ -285,6 +285,8 @@
   opacity: 0;
   transition: opacity 0.3s ease, background-color 0.3s ease;
   flex:0;
+  padding:0;
+  line-height:1;
 }
 
 .link-preview:hover .delete-btn {
@@ -314,6 +316,7 @@
   padding: 20px;
   border-radius: 8px;
   width: 300px;
+  font-size: 20px;
   text-align: center;
   border: none;
 }
