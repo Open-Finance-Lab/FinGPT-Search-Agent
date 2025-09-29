@@ -275,11 +275,11 @@
   justify-content: center;
   height: 30px;
   width: 30px;
-  font-size: 20px;
+  font-size: 18px;
   background-color: red;
   color: white;
   border: none;
-  border-radius: 6px;
+  border-radius: 5px;
   margin-left:5px;
   cursor: pointer;
   opacity: 0;
