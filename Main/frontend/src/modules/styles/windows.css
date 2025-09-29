@@ -284,10 +284,11 @@
   cursor: pointer;
   opacity: 0;
   transition: opacity 0.3s ease, background-color 0.3s ease;
-  flex:0;
-  padding-right:3px;
+  flex: 0;
+  padding: 0;
   line-height:1;
   box-sizing: border-box;
+  text-align: center;
 }
 
 .link-preview:hover .delete-btn {
