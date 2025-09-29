@@ -17,7 +17,6 @@ function createSettingsWindow(isFixedModeRef, settingsIcon, positionModeIcon) {
     label.innerText = "Light Mode";
     const lightSwitch = document.createElement('input');
     lightSwitch.type = "checkbox";
-    lightSwitch.style.transform = 'translate(5px, 2px)';
     lightSwitch.onchange = () => document.body.classList.toggle('light-mode');
     label.appendChild(lightSwitch);
     settings_window.appendChild(label);
@@ -165,9 +164,7 @@ function createSettingsWindow(isFixedModeRef, settingsIcon, positionModeIcon) {
     const mcpSwitch = document.createElement('input');
     mcpSwitch.type = "checkbox";
     mcpSwitch.id = "mcpModeSwitch";
-    mcpSwitch.style.transform = 'translate(5px, 2px)';
     mcpLabel.appendChild(mcpSwitch);
-
 
 
 
