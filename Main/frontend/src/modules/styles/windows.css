@@ -30,6 +30,21 @@
     transition: background-color 0.2s ease-in-out;
 }
 
+/* MCP Mode and Local RAG checkbox */
+.settings-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 1em;
+  margin-bottom: 10px;
+}
+
+.settings-checkbox-label input[type="checkbox"] {
+  width: 1em;
+  height: 1em;
+  margin-right: 5px;
+}
+
 #settings_window button:hover,
 #settings_window .settings-button:hover {
     background-color: #555;
