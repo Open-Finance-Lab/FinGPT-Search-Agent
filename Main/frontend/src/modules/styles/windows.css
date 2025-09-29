@@ -285,7 +285,7 @@
   opacity: 0;
   transition: opacity 0.3s ease, background-color 0.3s ease;
   flex:0;
-  padding-right:1px;
+  padding-right:3px;
   line-height:1;
   box-sizing: border-box;
 }
