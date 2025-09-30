@@ -17,7 +17,7 @@ from datascraper.models_config import MODELS_CONFIG
 
 # Constants
 QUESTION_LOG_PATH = os.path.join(os.path.dirname(__file__), 'questionLog.csv')
-PREFERRED_URLS_FILE = 'preferred_urls.txt'
+PREFERRED_URLS_FILE = 'preferred_urls.json'
 
 # Initial message list (kept for backward compatibility)
 # This is a global message list
@@ -475,11 +475,21 @@ def log_question(request):
     
     return JsonResponse({'status': 'success'})
 
+@csrf_exempt
+def save_preferred_links(request):
+    if request.method == 'POST':
+        data = json.loads(request.body)
+        urls = data.get('urls', [])
+        with open(PREFERRED_URLS_FILE, 'w') as file:
+            json.dump(urls, file)
+        return JsonResponse({'status': 'success'})
+    return JsonResponse({'error': 'Invalid method'}, status=405)
+
 def get_preferred_urls(request):
     """Retrieve preferred URLs from file"""
     if os.path.exists(PREFERRED_URLS_FILE):
         with open(PREFERRED_URLS_FILE, 'r') as file:
-            urls = [line.strip() for line in file.readlines()]
+            urls = json.load(file)
     else:
         urls = []
     

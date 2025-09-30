@@ -25,6 +25,7 @@ urlpatterns = [
     path('get_adv_response/', views.adv_response, name='get_adv_response'),
     path('get_source_urls/', views.get_sources, name = 'get_source_urls'),
     path('clear_messages/', views.clear, name = 'clear_messages'),
+    path('api/save_preferred_links/', save_preferred_links, name='save_preferred_links'),
     path('api/get_preferred_urls/', views.get_preferred_urls, name='get_preferred_urls'),
     path('api/add_preferred_url/', views.add_preferred_url, name='add_preferred_url'),
     path('api/folder_path', views.folder_path, name='folder_path'),
