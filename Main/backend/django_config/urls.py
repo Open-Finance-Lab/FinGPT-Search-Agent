@@ -25,10 +25,6 @@ urlpatterns = [
     path('get_adv_response/', views.adv_response, name='get_adv_response'),
     path('get_source_urls/', views.get_sources, name = 'get_source_urls'),
     path('clear_messages/', views.clear, name = 'clear_messages'),
-<<<<<<< HEAD
-    path('api/save_preferred_links/', views.save_preferred_links, name='save_preferred_links'),
-=======
->>>>>>> parent of 4170172 (working on connecting frontend and backend for preferred urls)
     path('api/get_preferred_urls/', views.get_preferred_urls, name='get_preferred_urls'),
     path('api/add_preferred_url/', views.add_preferred_url, name='add_preferred_url'),
     path('api/sync_preferred_urls/', views.sync_preferred_urls, name='sync_preferred_urls'),
