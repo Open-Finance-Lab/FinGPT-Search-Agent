@@ -31,6 +31,7 @@ urlpatterns = [
 >>>>>>> parent of 4170172 (working on connecting frontend and backend for preferred urls)
     path('api/get_preferred_urls/', views.get_preferred_urls, name='get_preferred_urls'),
     path('api/add_preferred_url/', views.add_preferred_url, name='add_preferred_url'),
+    path('api/sync_preferred_urls/', views.sync_preferred_urls, name='sync_preferred_urls'),
     path('api/folder_path', views.folder_path, name='folder_path'),
     path('get_mcp_response/', views.mcp_chat_response, name='get_mcp_response'),
     path('log_question/', views.log_question, name='log_question'),

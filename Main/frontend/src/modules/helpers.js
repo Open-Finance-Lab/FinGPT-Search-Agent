@@ -1,6 +1,7 @@
 // helpers.js
-import { clearMessages, getSourceUrls, addPreferredUrl, getPreferredUrls, logQuestion } from './api.js';
+import { clearMessages, getSourceUrls, logQuestion } from './api.js';
 import { handleChatResponse, handleImageResponse } from './handlers.js';
+import { getCachedSources, hasCachedSources, clearCachedSources } from './sourcesCache.js';
 
 // Function to append chat elements
 function appendChatElement(parent, className, text) {
@@ -20,7 +21,10 @@ function clear() {
     if (sourceurls) {
         sourceurls.innerHTML = "";
     }
-    
+
+    // Clear cached sources when clearing conversation
+    clearCachedSources();
+
     clearMessages()
         .then(data => {
             console.log(data);
@@ -54,6 +58,9 @@ function get_adv_chat_response() {
         return;
     }
 
+    // Clear previous cached sources before making new advanced request
+    clearCachedSources();
+
     // Text Processing Mode
     handleChatResponse(question, true);
     logQuestion(question, 'Advanced Ask');
@@ -68,86 +75,95 @@ function get_sources(searchQuery) {
     const source_urls = document.getElementById('source_urls');
 
     sources_window.style.display = 'block';
-    loadingSpinner.style.display = 'block'; // Show the spinner
-    source_urls.style.display = 'none'; // Hide the source list initially
 
-    getSourceUrls(searchQuery)
-        .then(data => {
-            console.log(data["resp"]);
-            const sources = data["resp"];
-            source_urls.innerHTML = '';
+    // Check if we have cached sources first
+    if (hasCachedSources()) {
+        console.log('Using cached sources for instant display');
+        const cachedUrls = getCachedSources();
 
-            sources.forEach(source => {
-                const url = source[0];
-                const link = document.createElement('a');
-                link.href = url;
-                link.innerText = url;
-                link.target = "_blank";
+        // Display cached sources immediately without loading
+        source_urls.innerHTML = '';
+        cachedUrls.forEach(url => {
+            const link = document.createElement('a');
+            link.href = url;
+            link.innerText = url;
+            link.target = "_blank";
 
-                const listItem = document.createElement('li');
-                listItem.appendChild(link);
-                listItem.classList.add('source-item');
+            const listItem = document.createElement('li');
+            listItem.appendChild(link);
+            listItem.classList.add('source-item');
 
-                source_urls.appendChild(listItem);
-            });
-
-            loadingSpinner.style.display = 'none'; // Hide spinner
-            source_urls.style.display = 'block'; // Show source list
-        })
-        .catch(error => {
-            console.error('There was a problem getting sources:', error);
-            loadingSpinner.style.display = 'none'; // Hide spinner in case of error
+            source_urls.appendChild(listItem);
         });
-}
 
-// Function to load preferred links
-function loadPreferredLinks() {
-    getPreferredUrls()
-        .then(data => {
-            const preferredLinksContent = document.getElementById('preferred_links_content');
-            preferredLinksContent.innerHTML = ''; // Clear existing content
-            
-            if (data.urls.length > 0) {
-                data.urls.forEach(link => {
-                    const linkItem = document.createElement('div');
-                    linkItem.className = 'preferred-link-item';
-                    linkItem.innerText = link;
-                    preferredLinksContent.appendChild(linkItem);
+        // Show sources immediately without spinner
+        loadingSpinner.style.display = 'none';
+        source_urls.style.display = 'block';
+
+        // Optionally, still fetch from backend to get icons (but don't show spinner)
+        getSourceUrls(searchQuery)
+            .then(data => {
+                // If backend returns sources with icons, update the display
+                if (data["resp"] && data["resp"].length > 0) {
+                    console.log('Updating sources with icons from backend');
+                    source_urls.innerHTML = '';
+                    data["resp"].forEach(source => {
+                        const url = source[0];
+                        const icon = source[1]; // Icon URL if available
+
+                        const link = document.createElement('a');
+                        link.href = url;
+                        link.innerText = url;
+                        link.target = "_blank";
+
+                        const listItem = document.createElement('li');
+                        listItem.appendChild(link);
+                        listItem.classList.add('source-item');
+
+                        source_urls.appendChild(listItem);
+                    });
+                }
+            })
+            .catch(error => {
+                console.error('Error fetching source icons:', error);
+                // Cached sources are still displayed, so no problem
+            });
+    } else {
+        // No cached sources, fetch from backend with loading spinner
+        loadingSpinner.style.display = 'block';
+        source_urls.style.display = 'none';
+
+        getSourceUrls(searchQuery)
+            .then(data => {
+                console.log(data["resp"]);
+                const sources = data["resp"];
+                source_urls.innerHTML = '';
+
+                sources.forEach(source => {
+                    const url = source[0];
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.innerText = url;
+                    link.target = "_blank";
+
+                    const listItem = document.createElement('li');
+                    listItem.appendChild(link);
+                    listItem.classList.add('source-item');
+
+                    source_urls.appendChild(listItem);
                 });
-            }
-            
-            // Re-add the '+' button
-            const addLinkButton = document.getElementById('add_link_button') || createAddLinkButton();
-            preferredLinksContent.appendChild(addLinkButton);
-        })
-        .catch(error => console.error('Error loading preferred links:', error));
+
+                loadingSpinner.style.display = 'none'; // Hide spinner
+                source_urls.style.display = 'block'; // Show source list
+            })
+            .catch(error => {
+                console.error('There was a problem getting sources:', error);
+                loadingSpinner.style.display = 'none'; // Hide spinner in case of error
+            });
+    }
 }
 
-// Function to create Add Link Button
-function createAddLinkButton() {
-    const addLinkButton = document.createElement('div');
-    addLinkButton.id = "add_link_button";
-    addLinkButton.innerText = "+";
-    addLinkButton.onclick = function() {
-        const newLink = prompt("Enter a new preferred URL:");
-        if (newLink) {
-            addPreferredUrl(newLink)
-                .then(data => {
-                    if (data.status === 'success') {
-                        const preferredLinksContent = document.getElementById('preferred_links_content');
-                        const newLinkItem = document.createElement('div');
-                        newLinkItem.className = 'preferred-link-item';
-                        newLinkItem.innerText = newLink;
-                        preferredLinksContent.insertBefore(newLinkItem, addLinkButton);
-                    } else {
-                        alert('Failed to add the new URL.');
-                    }
-                })
-                .catch(error => console.error('Error adding preferred link:', error));
-        }
-    };
-    return addLinkButton;
-}
+// Removed old preferred links functions - now handled by link_manager.js component
 
 // Function to make an element draggable and resizable
 function makeDraggableAndResizable(element, sourceWindowOffsetX = 10, isFixedMode = false) {
@@ -221,5 +237,5 @@ function makeDraggableAndResizable(element, sourceWindowOffsetX = 10, isFixedMod
     }
 }
 
-export { appendChatElement, clear, get_chat_response, get_adv_chat_response, get_sources, 
-    loadPreferredLinks, createAddLinkButton, makeDraggableAndResizable };
+export { appendChatElement, clear, get_chat_response, get_adv_chat_response, get_sources,
+    makeDraggableAndResizable };

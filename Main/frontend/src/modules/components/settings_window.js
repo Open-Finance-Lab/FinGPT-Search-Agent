@@ -1,5 +1,5 @@
 // settings_window.js
-import { availableModels, selectedModel, setSelectedModel, fetchAvailableModels, getAvailableModels, getModelDetails } from '../config.js';
+import { availableModels, selectedModel, getSelectedModel, setSelectedModel, fetchAvailableModels, getAvailableModels, getModelDetails } from '../config.js';
 //import { loadPreferredLinks, createAddLinkButton } from '../helpers.js';
 import { createLinkManager } from './link_manager.js';
 
@@ -27,7 +27,7 @@ function createSettingsWindow(isFixedModeRef, settingsIcon, positionModeIcon) {
 
     const modelHeader = document.createElement('div');
     modelHeader.id = "model_selection_header";
-    modelHeader.innerText = `Model: ${selectedModel}`;
+    modelHeader.innerText = `Model: ${getSelectedModel()}`;
 
     const modelToggleIcon = document.createElement('span');
     modelToggleIcon.innerText = "⯆";
@@ -51,18 +51,23 @@ function createSettingsWindow(isFixedModeRef, settingsIcon, positionModeIcon) {
     async function populateModelList() {
         // Clear existing items
         modelContent.innerHTML = '';
-        
+
         try {
             // Fetch models from backend
             await fetchAvailableModels();
             const models = getAvailableModels();
-            
+
             const modelDetails = getModelDetails();
-            
+
+            // Update the header to show the current selected model after fetching
+            const currentSelectedModel = getSelectedModel();
+            modelHeader.innerText = `Model: ${currentSelectedModel}`;
+            modelHeader.appendChild(modelToggleIcon);
+
             models.forEach(model => {
                 const item = document.createElement('div');
                 item.className = 'model-selection-item';
-                
+
                 // Use description if available, otherwise just the model ID
                 const details = modelDetails[model];
                 if (details && details.description) {
@@ -70,8 +75,8 @@ function createSettingsWindow(isFixedModeRef, settingsIcon, positionModeIcon) {
                 } else {
                     item.innerText = model;
                 }
-                
-                if (model === selectedModel) item.classList.add('selected-model');
+
+                if (model === currentSelectedModel) item.classList.add('selected-model');
                 item.onclick = () => handleModelSelection(item, model);
                 modelContent.appendChild(item);
             });
