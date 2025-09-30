@@ -8,6 +8,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse
 from datascraper import datascraper as ds
 from datascraper import create_embeddings as ce
+from datascraper.preferred_links_manager import get_manager
 
 from django.views import View
 from mcp_client.agent import create_fin_agent
@@ -17,7 +18,6 @@ from datascraper.models_config import MODELS_CONFIG
 
 # Constants
 QUESTION_LOG_PATH = os.path.join(os.path.dirname(__file__), 'questionLog.csv')
-PREFERRED_URLS_FILE = 'preferred_urls.txt'
 
 # Initial message list (kept for backward compatibility)
 # This is a global message list
@@ -370,11 +370,21 @@ def adv_response(request):
     use_rag = request.GET.get('use_rag', 'false').lower() == 'true'
     current_url = request.GET.get('current_url', '')
     use_r2c = request.GET.get('use_r2c', 'true').lower() == 'true'  # Default to using R2C
-    
+    preferred_links_json = request.GET.get('preferred_links', '')
+
+    # Parse preferred links from frontend
+    preferred_links = []
+    if preferred_links_json:
+        try:
+            preferred_links = json.loads(preferred_links_json)
+            logging.info(f"Received {len(preferred_links)} preferred links from frontend")
+        except json.JSONDecodeError:
+            logging.error(f"Failed to parse preferred links JSON: {preferred_links_json}")
+
     # Validate and parse models
     if not selected_models:
         return JsonResponse({'error': 'No models specified'}, status=400)
-    
+
     models = [model.strip() for model in selected_models.split(',') if model.strip()]
     if not models:
         return JsonResponse({'error': 'No valid models specified'}, status=400)
@@ -388,13 +398,13 @@ def adv_response(request):
         try:
             if use_rag:
                 # Use the RAG pipeline for advanced response
-                response = ds.create_rag_advanced_response(question, legacy_messages, model)
+                response = ds.create_rag_advanced_response(question, legacy_messages, model, preferred_links)
             else:
-                # Use regular advanced response
-                response = ds.create_advanced_response(question, legacy_messages, model)
-                
+                # Use regular advanced response with preferred links
+                response = ds.create_advanced_response(question, legacy_messages, model, preferred_links)
+
             responses[model] = response
-            
+
             # Add assistant response to R2C manager
             _add_response_to_context(session_id, response, use_r2c)
                 
@@ -404,9 +414,15 @@ def adv_response(request):
 
     first_model_response = next(iter(responses.values())) if responses else "No response"
     _log_interaction("advanced", current_url, question, first_model_response)
-    
-    # Return response with optional R2C stats
-    return _prepare_response_with_stats(responses, session_id, use_r2c)
+
+    # Get the used URLs from datascraper
+    used_urls_list = list(ds.used_urls)
+
+    # Return response with optional R2C stats and used URLs
+    response_data = _prepare_response_with_stats(responses, session_id, use_r2c)
+    response_json = json.loads(response_data.content)
+    response_json['used_urls'] = used_urls_list
+    return JsonResponse(response_json)
 
 @csrf_exempt
 def clear(request):
@@ -476,37 +492,54 @@ def log_question(request):
     return JsonResponse({'status': 'success'})
 
 def get_preferred_urls(request):
-    """Retrieve preferred URLs from file"""
-    if os.path.exists(PREFERRED_URLS_FILE):
-        with open(PREFERRED_URLS_FILE, 'r') as file:
-            urls = [line.strip() for line in file.readlines()]
-    else:
-        urls = []
-    
+    """Retrieve preferred URLs from storage"""
+    manager = get_manager()
+    urls = manager.get_links()
     return JsonResponse({'urls': urls})
 
 @csrf_exempt
 def add_preferred_url(request):
-    """Add new preferred URL to file"""
+    """Add new preferred URL to storage"""
     if request.method == 'POST':
-        new_url = request.POST.get('url')
-        if new_url:
-            # Check if URL already exists
-            if os.path.exists(PREFERRED_URLS_FILE):
-                with open(PREFERRED_URLS_FILE, 'r') as file:
-                    urls = [line.strip() for line in file.readlines()]
-                if new_url in urls:
+        try:
+            # Try to get URL from POST data or JSON body
+            new_url = request.POST.get('url')
+            if not new_url and request.body:
+                data = json.loads(request.body)
+                new_url = data.get('url')
+
+            if new_url:
+                manager = get_manager()
+                success = manager.add_link(new_url)
+
+                if success:
+                    # Log the action
+                    _log_interaction("add_url", new_url, f"Added preferred URL: {new_url}")
+                    return JsonResponse({'status': 'success'})
+                else:
                     return JsonResponse({'status': 'exists'})
-            
-            # Add new URL
-            with open(PREFERRED_URLS_FILE, 'a') as file:
-                file.write(new_url + '\n')
-            
-            # Log the action
-            _log_interaction("add_url", new_url, f"Added preferred URL: {new_url}")
-            
-            return JsonResponse({'status': 'success'})
-    
+        except Exception as e:
+            logging.error(f"Error adding preferred URL: {e}")
+            return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+    return JsonResponse({'status': 'failed'}, status=400)
+
+@csrf_exempt
+def sync_preferred_urls(request):
+    """Sync preferred URLs from frontend to backend storage"""
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            urls = data.get('urls', [])
+
+            manager = get_manager()
+            manager.set_links(urls)
+
+            return JsonResponse({'status': 'success', 'synced': len(urls)})
+        except Exception as e:
+            logging.error(f"Error syncing preferred URLs: {e}")
+            return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
     return JsonResponse({'status': 'failed'}, status=400)
 
 def get_r2c_stats(request):

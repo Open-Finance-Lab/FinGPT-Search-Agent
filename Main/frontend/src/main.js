@@ -2,6 +2,7 @@
 import { postWebTextToServer, setSessionId } from './modules/api.js';
 import { createUI } from './modules/ui.js';
 import { fetchAvailableModels } from './modules/config.js';
+import { initializeWithCurrentPage } from './modules/sourcesCache.js';
 
 // Generate a unique session ID for this page load
 const sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -10,6 +11,9 @@ console.log("FinGPT Session ID: ", sessionId);
 
 const currentUrl = window.location.href.toString();
 console.log("Current page: ", currentUrl);
+
+// Initialize sources cache with current page URL
+initializeWithCurrentPage(currentUrl);
 
 const textContent = document.body.innerText || "";
 const encodedContent = encodeURIComponent(textContent);
