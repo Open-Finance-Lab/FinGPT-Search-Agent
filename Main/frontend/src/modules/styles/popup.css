@@ -1,0 +1,147 @@
+/* Popup Container */
+#draggableElement {
+    text-align: center;
+    position: absolute;
+    width: 450px;
+    height: 650px;
+    background-color: #333;
+    border-radius: 15px;
+    box-shadow: 5px 0px 10px black;
+    overflow-y: auto;
+    z-index: 10000;
+    color: white;
+    display: flex;
+    flex-direction: column;
+    padding: 20px;
+    resize: both;
+    min-width: 250px;
+    min-height: 80px;
+    user-select: text;
+}
+
+/* Custom Scrollbar */
+#draggableElement::-webkit-scrollbar {
+    width: 12px;
+}
+
+#draggableElement::-webkit-scrollbar-track {
+    background: none;
+}
+
+#draggableElement::-webkit-scrollbar-thumb {
+    background-color: #888;
+    border-radius: 10px;
+    border: 3px solid transparent;
+    background-clip: padding-box;
+}
+
+#draggableElement::-webkit-scrollbar-thumb:hover {
+    background-color: #555;
+}
+
+/* Intro Area */
+#intro {
+    text-align: center;
+}
+
+#intro h2 {
+    color: #dddddd;
+    font-size: 1.5em;
+    font-weight: bold;
+    margin-bottom: 10px;
+}
+
+#intro p {
+    font-size: 1em;
+}
+
+/* Content Area */
+#content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+/* Minimized State */
+.minimized {
+    height: 60px;
+    overflow: hidden;
+}
+
+.minimized #content,
+.minimized #inputContainer,
+.minimized #buttonContainer,
+.minimized .clear-button,
+.minimized .sources-button {
+    display: none;
+}
+
+/* Additional Popup Container */
+#additionalPopup {
+    text-align: center;
+    position: absolute;
+    width: 450px;
+    height: 650px;
+    background-color: #333;
+    border-radius: 15px;
+    box-shadow: 5px 0px 10px black;
+    overflow-y: auto;
+    z-index: 10000;
+    color: white;
+    display: flex;
+    flex-direction: column;
+    padding: 20px;
+    resize: both;
+    min-width: 250px;
+    min-height: 80px;
+    user-select: text;
+}
+
+/* Custom Scrollbar for Additional Popup */
+#additionalPopup::-webkit-scrollbar {
+    width: 12px;
+}
+
+#additionalPopup::-webkit-scrollbar-track {
+    background: none;
+}
+
+#additionalPopup::-webkit-scrollbar-thumb {
+    background-color: #888;
+    border-radius: 10px;
+    border: 3px solid transparent;
+    background-clip: padding-box;
+}
+
+#additionalPopup::-webkit-scrollbar-thumb:hover {
+    background-color: #555;
+}
+
+/* Additional Content Area */
+#additionalContent {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+/* Responses in Additional Popup */
+#additionalPopup #respons {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+}
+
+#additionalPopup #respons .your_question,
+#additionalPopup #respons .agent_response {
+    align-self: flex-start;
+    text-align: left;
+    background-color: #444;
+    border-radius: 10px;
+    padding: 8px 15px;
+    color: #fff;
+    word-wrap: break-word;
+    max-width: 80%;
+    margin-top: 10px;
+}

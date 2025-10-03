@@ -1,0 +1,61 @@
+[tool.poetry]
+name = "fingpt-backend"
+version = "0.6.0"
+description = "FinGPT Backend - Financial GPT Assistant"
+authors = ["FinGPT Team"]
+package-mode = false
+
+[tool.poetry.dependencies]
+python = "^3.10"
+beautifulsoup4 = "4.12.3"
+django-request = "1.6.3"
+google = "3.0.0"
+markdown = "3.7"
+numpy = "*"
+openai = "*"
+openai-agents = "*"
+anthropic = "*"
+tiktoken = "*"
+requests = "2.32.3"
+python-dotenv = "^1.0.1"
+bs4 = "^0.0.2"
+faiss-cpu = "*"
+django-cors-headers = "*"
+pytest = "*"
+flask = "*"
+mcp = {extras = ["cli"], version = "*"}
+fastmcp = "*"
+django-mcp = "*"
+
+# Platform-specific Django versions
+Django = [
+    {version = "5.2.6", markers = "sys_platform == 'win32'"},
+    {version = "5.2.6", markers = "sys_platform == 'darwin'"},
+    {version = "5.2.6", markers = "sys_platform == 'linux'"},
+    {version = "5.2.6", markers = "sys_platform != 'win32' and sys_platform != 'darwin' and sys_platform != 'linux'"}
+]
+
+# Mac-specific dependency
+mammoth = {version = "*", markers = "sys_platform == 'darwin'"}
+
+[tool.poetry.group.docs.dependencies]
+sphinx = "*"
+sphinx-rtd-theme = "3.0.2"
+nbsphinx = "0.9.6"
+nbsphinx-link = "1.3.1"
+sphinx-autobuild = "2024.10.3"
+sphinx-design = "0.6.1"
+sphinxcontrib-applehelp = "2.0.0"
+sphinxcontrib-devhelp = "2.0.0"
+sphinxcontrib-htmlhelp = "2.1.0"
+sphinxcontrib-jquery = "4.1"
+sphinxcontrib-jsmath = "1.0.1"
+sphinxcontrib-qthelp = "2.0.0"
+sphinxcontrib-serializinghtml = "2.0.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry.scripts]
+export-requirements = "scripts.export_requirements:main"
