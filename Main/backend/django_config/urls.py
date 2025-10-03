@@ -20,6 +20,7 @@ from api import views
 urlpatterns = [
     # Admin disabled (requires database)
     # path('admin/', admin.site.urls),
+    path('health/', views.health, name='health'),
     path('input_webtext/', views.add_webtext, name='input_webtext'),
     path('get_chat_response/', views.chat_response, name='get_chat_response'),
     path('get_adv_response/', views.adv_response, name='get_adv_response'),
