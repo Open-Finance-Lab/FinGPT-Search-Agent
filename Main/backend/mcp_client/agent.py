@@ -27,11 +27,14 @@ async def create_fin_agent(model: str = "gpt-4o", system_prompt: Optional[str] =
     Uses async context manager for MCP server connection.
     """
     instructions = system_prompt or DEFAULT_PROMPT
-    
+
+    # Get MCP server URL from environment variable
+    mcp_url = os.getenv("MCP_SERVER_URL", "http://127.0.0.1:9000/sse")
+
     async with MCPServerSse(
         name="FinGPT MCP Server",
         params={
-            "url": "http://127.0.0.1:9000/sse",
+            "url": mcp_url,
         },
     ) as server:
         
