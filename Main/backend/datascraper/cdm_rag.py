@@ -10,7 +10,8 @@ import ast  # For Python code parsing
 import markdown  # For Markdown parsing
 import logging
 
-os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
+# Note: KMP_DUPLICATE_LIB_OK environment variable should be set in deployment environment if needed
+# to resolve Intel MKL library conflicts. Do not set it here in code.
 
 # Load .env from the backend root directory
 from pathlib import Path

@@ -21,6 +21,7 @@ python-dotenv = "^1.0.1"
 bs4 = "^0.0.2"
 faiss-cpu = "^1.11.0"
 django-cors-headers = "^4.7.0"
+django-ratelimit = "^4.1.0"
 pytest = "^8.4.0"
 flask = "^3.1.0"
 mcp = {extras = ["cli"], version = "^1.9.0"}

@@ -161,8 +161,70 @@ else:
     SECURE_SSL_REDIRECT = False
     SECURE_HSTS_SECONDS = 0
 
+# Rate Limiting Configuration
+# Rate limit format: "requests/period" where period can be 's' (second), 'm' (minute), 'h' (hour), 'd' (day)
+# Examples: "100/h" = 100 requests per hour, "10/m" = 10 requests per minute
+API_RATE_LIMIT = os.getenv('API_RATE_LIMIT', '600/h')  # Default: 100 requests per hour
+
 # WhiteNoise configuration for static files
 WHITENOISE_USE_FINDERS = True
 WHITENOISE_AUTOREFRESH = DEBUG  # Auto-refresh in development
 WHITENOISE_MANIFEST_STRICT = False  # Don't fail if manifest missing
+
+# Logging Configuration
+# Structured logging for production debugging and monitoring
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '{levelname} {asctime} {name} {module} {funcName} {message}',
+            'style': '{',
+            'datefmt': '%Y-%m-%d %H:%M:%S',
+        },
+        'simple': {
+            'format': '{levelname} {asctime} {message}',
+            'style': '{',
+            'datefmt': '%Y-%m-%d %H:%M:%S',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'verbose' if not DEBUG else 'simple',
+            'level': 'DEBUG' if DEBUG else 'INFO',
+        },
+    },
+    'root': {
+        'handlers': ['console'],
+        'level': 'INFO',
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['console'],
+            'level': os.getenv('DJANGO_LOG_LEVEL', 'INFO'),
+            'propagate': False,
+        },
+        'django.request': {
+            'handlers': ['console'],
+            'level': 'WARNING',
+            'propagate': False,
+        },
+        'django.server': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'api': {
+            'handlers': ['console'],
+            'level': 'DEBUG' if DEBUG else 'INFO',
+            'propagate': False,
+        },
+        'datascraper': {
+            'handlers': ['console'],
+            'level': 'DEBUG' if DEBUG else 'INFO',
+            'propagate': False,
+        },
+    },
+}
 
