@@ -1,3 +1,21 @@
+"""
+API Views for FinGPT Search Agent
+
+SECURITY NOTE: CSRF Protection
+-------------------------------
+Most endpoints use @csrf_exempt because this backend serves a browser extension frontend.
+Browser extensions cannot easily include CSRF tokens in their requests.
+
+Security is provided through:
+1. CORS_ALLOWED_ORIGINS restricting which origins can make requests
+2. SESSION_COOKIE_SAMESITE='None' with SESSION_COOKIE_SECURE=True (in production)
+3. Session-based authentication via Django sessions
+
+PRODUCTION RECOMMENDATION:
+For production deployments, consider implementing API token authentication
+instead of relying solely on session cookies and CORS.
+"""
+
 import json
 import os
 import csv
