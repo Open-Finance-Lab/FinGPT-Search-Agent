@@ -43,7 +43,8 @@
 
 /* Headers for Settings Window */
 #model_selection_header,
-#preferred_links_header {
+#preferred_links_header,
+#rag-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -53,7 +54,8 @@
 }
 
 #model_selection_header span,
-#preferred_links_header span {
+#preferred_links_header span,
+#rag-header span {
     margin-left: 8px;
     font-size: 1.2em;
 }
