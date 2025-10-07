@@ -264,7 +264,7 @@ def _log_interaction(button_clicked, current_url, question, response=None):
 
 # View to handle appending the text from FRONT-END SCRAPER to the message list
 @csrf_exempt
-@ratelimit(key='ip', rate=lambda r: settings.API_RATE_LIMIT, method='POST')
+@ratelimit(key='ip', rate=lambda g, r: settings.API_RATE_LIMIT, method='POST')
 def add_webtext(request):
     """Handle appending the site's text to the message list"""
     if request.method != 'POST':
@@ -303,7 +303,7 @@ def add_webtext(request):
     except json.JSONDecodeError:
         return JsonResponse({"error": "Invalid JSON"}, status=400)
 
-@ratelimit(key='ip', rate=lambda r: settings.API_RATE_LIMIT, method='POST')
+@ratelimit(key='ip', rate=lambda g, r: settings.API_RATE_LIMIT, method='POST')
 def chat_response(request):
     """Process chat response from selected models"""
     question = request.GET.get('question', '')
@@ -357,7 +357,7 @@ def chat_response(request):
     return _prepare_response_with_stats(responses, session_id, use_r2c)
 
 @csrf_exempt
-@ratelimit(key='ip', rate=lambda r: settings.API_RATE_LIMIT, method='POST')
+@ratelimit(key='ip', rate=lambda g, r: settings.API_RATE_LIMIT, method='POST')
 def mcp_chat_response(request):
     """Process chat response via MCP-enabled Agent"""
     question = request.GET.get('question', '')
@@ -403,7 +403,7 @@ def mcp_chat_response(request):
     return _prepare_response_with_stats(responses, session_id, use_r2c, single_response_mode=True)
 
 @csrf_exempt
-@ratelimit(key='ip', rate=lambda r: settings.API_RATE_LIMIT, method='POST')
+@ratelimit(key='ip', rate=lambda g, r: settings.API_RATE_LIMIT, method='POST')
 def adv_response(request):
     """Process advanced chat response from selected models"""
     question = request.GET.get('question', '')
