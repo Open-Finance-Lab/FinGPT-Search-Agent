@@ -5,17 +5,6 @@ function createChatInterface(searchQuery) {
     const inputContainer = document.createElement('div');
     inputContainer.id = "inputContainer";
 
-    const modeButtonsContainer = document.createElement('div');
-    modeButtonsContainer.id = 'modeButtonsContainer';
-
-    const textModeButton = document.createElement('button');
-    textModeButton.id = 'textModeButton';
-    textModeButton.innerText = 'Text Mode';
-    textModeButton.classList.add('mode-button', 'active-mode');
-
-    modeButtonsContainer.appendChild(textModeButton);
-    inputContainer.appendChild(modeButtonsContainer);
-
     const textbox = document.createElement("input");
     textbox.type = "text";
     textbox.id = "textbox";
