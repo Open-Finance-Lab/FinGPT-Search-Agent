@@ -1,23 +1,87 @@
 # environment variables
+Main/backend/.env
+# older ver has env in here
 chat_interface/backend_modules/.env
 
-# Intellij Idea
+# google cookie
+Main/backend/.google-cookie
+
+# Intellij Idea and VS
 /.idea/
+/.vs/
 FinGPT_Demo.iml
 
 # node modules
-ChatBot-Fin/Extension-ChatBot-Fin/node_modules/
+Main/frontend/node_modules/
+Main/backend/node_modules/
 
-# pycache
-/ChatBot-Fin/chat_server/chat_server/__pycache__
-/ChatBot-Fin/chat_server/chat_server_app/__pycache__
+# npm packages
+Main/frontend/package-lock.json
+Main/backend/package-lock.json
+
+# Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+
+# Python distribution / packaging
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Poetry
+poetry.lock
 
 # venv
 /FinGPTenv
 
 # rag local embeddings
-ChatBot-Fin/chat_server/datascraper/embeddings.pkl
-ChatBot-Fin/chat_server/datascraper/faiss_index.idx
+Main/backend/datascraper/embeddings.pkl
+Main/backend/datascraper/faiss_index.idx
 
 # Sphinx doc build
-/docs/build
+/Docs/build
+
+# webpack build
+/Main/frontend/dist
+
+# question logging
+Main/backend/api/questionLog.csv
+
+# django debug log
+Main/backend/django_debug.log
+
+# user preferred links
+Main/backend/preferred_urls.txt
+
+# mcp
+/mcp-server/.venv
+
+# claude code local settings
+.claude/settings.local.json
+
+# uv
+mcp-server/uv.lock
+
+# additional cache directories
+/Main/backend/datascraper/__pycache__
+/Main/backend/django_config/__pycache__
+/Main/backend/mcp_client/__pycache__
+/Main/backend/api/__pycache__

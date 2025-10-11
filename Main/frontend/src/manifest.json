@@ -1,0 +1,43 @@
+{
+  "manifest_version": 3,
+  "name": "FinGPT",
+  "version": "0.6.0",
+  "description": "A demo to initialize the extension for FinGPT. This is the locally deployed, dual model display version.",
+  "icons": {
+    "16": "assets/16x16_icon.png",
+    "32": "assets/32x32_icon.png"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.bloomberg.com/*",
+        "https://finance.yahoo.com/*",
+        "https://cdm.finos.org/*",
+        "https://www.finos.org/*",
+        "https://mathcup.com/*",
+        "https://www.cnbc.com/*"
+      ],
+      "js": [
+        "vendors.js",
+        "katex.js",
+        "main.js"
+      ],
+      "css": [
+        "styles.css"
+      ]
+    }
+  ],
+  "permissions": [
+    "activeTab",
+    "storage"
+  ],
+  "host_permissions": [
+    "http://127.0.0.1:8000/*"
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [ "fonts/*.woff", "fonts/*.woff2" ],
+      "matches": [ "<all_urls>" ]
+    }
+  ]
+}
