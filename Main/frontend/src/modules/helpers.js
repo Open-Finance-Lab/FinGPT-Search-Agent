@@ -77,155 +77,88 @@ function get_sources(searchQuery) {
     console.log('[Sources Debug] get_sources called with query:', searchQuery);
     sources_window.style.display = 'block';
 
-    // Check if we have cached sources first
-    if (hasCachedSources()) {
-        console.log('[Sources Debug] Found cached sources for instant display');
+    // Hide spinner and show source URLs container
+    loadingSpinner.style.display = 'none';
+    source_urls.style.display = 'block';
 
-        const currentPageUrl = getCurrentPageUrl();
-        const otherSources = getCachedSourcesWithoutCurrentPage();
+    // Get current page and other sources
+    const currentPageUrl = getCurrentPageUrl();
+    const otherSources = getCachedSourcesWithoutCurrentPage();
 
-        console.log('[Sources Debug] Current page URL:', currentPageUrl);
-        console.log('[Sources Debug] Other sources:', otherSources);
+    console.log('[Sources Debug] Current page URL:', currentPageUrl);
+    console.log('[Sources Debug] Other sources:', otherSources);
 
-        // Clear and rebuild the source URLs display
-        source_urls.innerHTML = '';
+    // Clear and rebuild the source URLs display
+    source_urls.innerHTML = '';
 
-        // Create "Current active webpage" section
-        if (currentPageUrl) {
-            const currentPageSection = document.createElement('div');
-            currentPageSection.className = 'source-section';
+    // ALWAYS create "Current active webpage" section
+    const currentPageSection = document.createElement('div');
+    currentPageSection.className = 'source-section';
 
-            const currentPageHeader = document.createElement('h3');
-            currentPageHeader.innerText = 'Current active webpage';
-            currentPageHeader.style.marginBottom = '10px';
-            currentPageHeader.style.fontSize = '14px';
-            currentPageHeader.style.fontWeight = 'bold';
-            currentPageHeader.style.color = '#333';
+    const currentPageHeader = document.createElement('div');
+    currentPageHeader.className = 'source-section-header';
+    currentPageHeader.innerText = 'Current active webpage';
+    currentPageSection.appendChild(currentPageHeader);
 
-            currentPageSection.appendChild(currentPageHeader);
+    const currentPageContent = document.createElement('ul');
+    currentPageContent.className = 'source-section-content';
 
-            const currentPageList = document.createElement('ul');
-            currentPageList.style.marginBottom = '20px';
-            currentPageList.style.paddingLeft = '0';
+    if (currentPageUrl) {
+        const link = document.createElement('a');
+        link.href = currentPageUrl;
+        link.innerText = currentPageUrl;
+        link.target = "_blank";
+
+        const listItem = document.createElement('li');
+        listItem.appendChild(link);
+        currentPageContent.appendChild(listItem);
+    } else {
+        const emptyMsg = document.createElement('div');
+        emptyMsg.className = 'empty-sources';
+        emptyMsg.innerText = 'No current webpage detected';
+        currentPageContent.appendChild(emptyMsg);
+    }
+
+    currentPageSection.appendChild(currentPageContent);
+    source_urls.appendChild(currentPageSection);
+
+    // ALWAYS create "Sources used" section
+    const sourcesSection = document.createElement('div');
+    sourcesSection.className = 'source-section';
+
+    const sourcesHeader = document.createElement('div');
+    sourcesHeader.className = 'source-section-header';
+    sourcesHeader.innerText = 'Sources used';
+    sourcesSection.appendChild(sourcesHeader);
+
+    const sourcesContent = document.createElement('ul');
+    sourcesContent.className = 'source-section-content';
+
+    if (otherSources.length > 0) {
+        otherSources.forEach((url, idx) => {
+            console.log(`[Sources Debug] Displaying source URL ${idx + 1}: ${url}`);
+            if (url.includes('duckduckgo')) {
+                console.warn(`[Sources Debug] WARNING: DuckDuckGo URL being displayed at index ${idx}: ${url}`);
+            }
 
             const link = document.createElement('a');
-            link.href = currentPageUrl;
-            link.innerText = currentPageUrl;
+            link.href = url;
+            link.innerText = url;
             link.target = "_blank";
 
             const listItem = document.createElement('li');
             listItem.appendChild(link);
-            listItem.classList.add('source-item');
-
-            currentPageList.appendChild(listItem);
-            currentPageSection.appendChild(currentPageList);
-            source_urls.appendChild(currentPageSection);
-        }
-
-        // Create "Sources used" section if there are other sources
-        if (otherSources.length > 0) {
-            const sourcesSection = document.createElement('div');
-            sourcesSection.className = 'source-section';
-
-            const sourcesHeader = document.createElement('h3');
-            sourcesHeader.innerText = 'Sources used';
-            sourcesHeader.style.marginBottom = '10px';
-            sourcesHeader.style.fontSize = '14px';
-            sourcesHeader.style.fontWeight = 'bold';
-            sourcesHeader.style.color = '#333';
-
-            sourcesSection.appendChild(sourcesHeader);
-
-            const sourcesList = document.createElement('ul');
-            sourcesList.style.paddingLeft = '0';
-
-            otherSources.forEach((url, idx) => {
-                console.log(`[Sources Debug] Displaying source URL ${idx + 1}: ${url}`);
-                if (url.includes('duckduckgo')) {
-                    console.warn(`[Sources Debug] WARNING: DuckDuckGo URL being displayed at index ${idx}: ${url}`);
-                }
-
-                const link = document.createElement('a');
-                link.href = url;
-                link.innerText = url;
-                link.target = "_blank";
-
-                const listItem = document.createElement('li');
-                listItem.appendChild(link);
-                listItem.classList.add('source-item');
-
-                sourcesList.appendChild(listItem);
-            });
-
-            sourcesSection.appendChild(sourcesList);
-            source_urls.appendChild(sourcesSection);
-        }
-
-        // Show sources immediately without spinner
-        loadingSpinner.style.display = 'none';
-        source_urls.style.display = 'block';
-
-        // Optionally, still fetch from backend to get icons (but don't show spinner)
-        getSourceUrls(searchQuery)
-            .then(data => {
-                // If backend returns sources with icons, update the display
-                if (data["resp"] && data["resp"].length > 0) {
-                    console.log('Updating sources with icons from backend');
-                    source_urls.innerHTML = '';
-                    data["resp"].forEach(source => {
-                        const url = source[0];
-                        const icon = source[1]; // Icon URL if available
-
-                        const link = document.createElement('a');
-                        link.href = url;
-                        link.innerText = url;
-                        link.target = "_blank";
-
-                        const listItem = document.createElement('li');
-                        listItem.appendChild(link);
-                        listItem.classList.add('source-item');
-
-                        source_urls.appendChild(listItem);
-                    });
-                }
-            })
-            .catch(error => {
-                console.error('Error fetching source icons:', error);
-                // Cached sources are still displayed, so no problem
-            });
+            sourcesContent.appendChild(listItem);
+        });
     } else {
-        // No cached sources, fetch from backend with loading spinner
-        loadingSpinner.style.display = 'block';
-        source_urls.style.display = 'none';
-
-        getSourceUrls(searchQuery)
-            .then(data => {
-                console.log(data["resp"]);
-                const sources = data["resp"];
-                source_urls.innerHTML = '';
-
-                sources.forEach(source => {
-                    const url = source[0];
-                    const link = document.createElement('a');
-                    link.href = url;
-                    link.innerText = url;
-                    link.target = "_blank";
-
-                    const listItem = document.createElement('li');
-                    listItem.appendChild(link);
-                    listItem.classList.add('source-item');
-
-                    source_urls.appendChild(listItem);
-                });
-
-                loadingSpinner.style.display = 'none'; // Hide spinner
-                source_urls.style.display = 'block'; // Show source list
-            })
-            .catch(error => {
-                console.error('There was a problem getting sources:', error);
-                loadingSpinner.style.display = 'none'; // Hide spinner in case of error
-            });
+        const emptyMsg = document.createElement('div');
+        emptyMsg.className = 'empty-sources';
+        emptyMsg.innerText = 'Sources used for agent responses when using Advanced Ask is displayed here.';
+        sourcesContent.appendChild(emptyMsg);
     }
+
+    sourcesSection.appendChild(sourcesContent);
+    source_urls.appendChild(sourcesSection);
 }
 
 // Removed old preferred links functions - now handled by link_manager.js component
