@@ -69,7 +69,7 @@ Main/backend/api/questionLog.csv
 Main/backend/django_debug.log
 
 # user preferred links
-Main/backend/preferred_urls.txt
+Main/backend/data/preferred_links.json
 
 # mcp
 /mcp-server/.venv
@@ -88,4 +88,3 @@ mcp-server/uv.lock
 /Main/backend/django_config/__pycache__
 /Main/backend/mcp_client/__pycache__
 /Main/backend/api/__pycache__
-

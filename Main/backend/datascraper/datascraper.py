@@ -79,10 +79,10 @@ def remove_duplicate_sentences(text):
             unique_sentences.append(sentence)
     return ' '.join(unique_sentences)
 
-def fallback_search(query, num_results=10):
+def duckduckgo_search(query, num_results=10):
     """
-    Fallback search using DuckDuckGo HTML scraping when googlesearch fails.
-    Returns a list of URLs.
+    Primary search using DuckDuckGo HTML scraping.
+    Returns a list of clean URLs from search results.
     """
     try:
         import urllib.parse
@@ -93,6 +93,7 @@ def fallback_search(query, num_results=10):
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
         }
 
+        logging.info(f"Searching DuckDuckGo for: '{query}'")
         response = requests.get(ddg_url, headers=headers, timeout=10)
         if response.status_code != 200:
             logging.error(f"DuckDuckGo search failed with status code: {response.status_code}")
@@ -101,15 +102,19 @@ def fallback_search(query, num_results=10):
         soup = BeautifulSoup(response.text, 'html.parser')
         results = []
 
+        # Extract search result URLs, ensuring they're clean external links
         for result in soup.find_all('a', class_='result__a', limit=num_results):
             url = result.get('href')
             if url and url.startswith('http'):
-                results.append(url)
+                # Filter out any DuckDuckGo internal URLs
+                if 'duckduckgo.com' not in url:
+                    results.append(url)
+                    logging.debug(f"Found result URL: {url}")
 
-        logging.info(f"DuckDuckGo fallback returned {len(results)} URLs")
+        logging.info(f"DuckDuckGo search returned {len(results)} URLs")
         return results
     except Exception as e:
-        logging.error(f"Fallback search failed: {e}")
+        logging.error(f"DuckDuckGo search failed: {e}")
         return []
 
 def data_scrape(url, timeout=10, rate_limit=1):
@@ -216,7 +221,7 @@ def search_preferred_urls(preferred_urls, max_urls=None):
 
 def extract_search_keywords(user_query: str, model: str = "o4-mini") -> str:
     """
-    Uses an LLM to extract optimal Google search keywords from a user query.
+    Uses an LLM to extract optimal search keywords from a user query.
 
     Args:
         user_query: The user's question or prompt
@@ -241,7 +246,7 @@ def extract_search_keywords(user_query: str, model: str = "o4-mini") -> str:
 
         extraction_prompt = (
             "You are a search keyword extraction assistant. "
-            "Given a user's question or request, extract the most relevant keywords for a Google search. "
+            "Given a user's question or request, extract the most relevant keywords for a web search. "
             "Return ONLY the keywords, nothing else. Keep it concise (6 words maximum). "
             "Focus on the core topic, entities, and key terms.\n\n"
             f"User query: {user_query}\n\n"
@@ -348,13 +353,13 @@ def create_advanced_response(
         preferred_links: list[str] = None
 ) -> str:
     """
-    Creates an advanced response by searching at least 5 URLs total:
-    1. If 5+ preferred URLs: search all of them
-    2. If exactly 5 preferred URLs: search all of them
-    3. If <5 preferred URLs: search them + additional Google results to reach 5 total
-    4. If no preferred URLs: extract keywords via LLM, then Google search top 5
+    Creates an advanced response by searching and scraping web content using DuckDuckGo.
 
-    Appends metadata and content from scraped results, and returns the final assistant reply.
+    Search Strategy:
+    1. Search preferred URLs first (if any provided)
+    2. Use DuckDuckGo to find additional relevant URLs
+    3. Scrape and process at least 5 URLs total for context
+    4. Generate response using the gathered web content
     """
     logging.info("Starting advanced response creation...")
 
@@ -382,7 +387,7 @@ def create_advanced_response(
     num_preferred = len(preferred_urls)
     logging.info(f"Found {num_preferred} preferred URLs")
 
-    # Search preferred URLs first (all of them, no keyword filtering)
+    # Search preferred URLs first (if any)
     if num_preferred > 0:
         logging.info(f"Scraping {num_preferred} preferred URLs...")
         preferred_info_list = search_preferred_urls(preferred_urls)
@@ -412,36 +417,31 @@ def create_advanced_response(
     links_found = len(context_messages)
     additional_needed = max(0, TARGET_LINKS - links_found)
 
-    # If we need more links, search via Google
+    # Search for additional links using DuckDuckGo
     if additional_needed > 0:
         logging.info(f"Need {additional_needed} more links. Searching via DuckDuckGo...")
 
-        # Determine search query - extract keywords if auto-searching with fewer than TARGET_LINKS preferred URLs
-        if num_preferred < TARGET_LINKS:
-            logging.info(f"Less than {TARGET_LINKS} preferred URLs. Extracting search keywords via LLM...")
-            search_query = extract_search_keywords(user_input, model)
-            logging.info(f"Using LLM-extracted keywords: '{search_query}'")
-        else:
-            # Otherwise use the user input directly
-            search_query = user_input
-            logging.info(f"Using user input as search query: '{search_query}'")
+        # Extract optimized search keywords using LLM
+        logging.info("Extracting search keywords via LLM...")
+        search_query = extract_search_keywords(user_input, model)
+        logging.info(f"Using keywords: '{search_query}'")
 
         # Perform DuckDuckGo search
         try:
             links_scraped = 0
             url_index = 0
 
-            # Use DuckDuckGo as the main search
+            # Search DuckDuckGo - request extra results to ensure we get enough valid ones
             logging.info(f"Searching DuckDuckGo with query: '{search_query}'")
-            logging.info(f"Requesting {additional_needed + 5} results...")
+            logging.info(f"Requesting {additional_needed + 5} results to ensure sufficient valid URLs...")
 
-            search_urls = fallback_search(search_query, num_results=additional_needed + 5)
+            search_urls = duckduckgo_search(search_query, num_results=additional_needed + 5)
 
-            logging.info(f"DuckDuckGo search returned {len(search_urls)} URLs")
+            logging.info(f"DuckDuckGo returned {len(search_urls)} URLs")
             for idx, url in enumerate(search_urls, 1):
                 logging.info(f"  [{idx}] {url}")
 
-            # Now scrape each URL
+            # Scrape each URL from search results
             for url in search_urls:
                 url_index += 1
 
@@ -489,7 +489,7 @@ def create_advanced_response(
                     continue
 
         except Exception as e:
-            logging.error(f"Google search failed: {e}")
+            logging.error(f"DuckDuckGo search failed: {e}")
             if not context_messages:
                 # If no context at all, raise error
                 raise RuntimeError(f"Failed to gather any search results: {e}")
@@ -611,9 +611,14 @@ def get_sources(query):
     Returns the URLs that were used in the most recent 'create_advanced_response' call,
     along with their icons or placeholders for front-end display.
     """
+    logging.info(f"get_sources called with query: '{query}'")
+    logging.info(f"Current used_urls contains {len(used_urls)} URLs:")
+    for idx, url in enumerate(used_urls, 1):
+        logging.info(f"  [{idx}] {url}")
+
     sources = [(url, get_website_icon(url)) for url in used_urls]
-    print("DEBUG: Sources List:", sources)  # DEBUG
-    return [(url, get_website_icon(url)) for url in used_urls]
+    logging.info(f"Returning {len(sources)} source URLs with icons")
+    return sources
 
 
 def get_website_icon(url):

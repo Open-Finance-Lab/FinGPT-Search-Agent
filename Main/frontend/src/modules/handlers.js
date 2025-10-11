@@ -112,8 +112,20 @@ function handleChatResponse(question, promptMode = false) {
 
             // If this is an Advanced Ask response and contains used_urls, cache them
             if (promptMode && data.used_urls && data.used_urls.length > 0) {
+                console.log('[Sources Debug] Advanced Ask response received');
+                console.log('[Sources Debug] used_urls:', data.used_urls);
+                console.log('[Sources Debug] Number of URLs:', data.used_urls.length);
+
+                // Check each URL
+                data.used_urls.forEach((url, idx) => {
+                    console.log(`[Sources Debug] URL ${idx + 1}: ${url}`);
+                    if (url.includes('duckduckgo')) {
+                        console.warn(`[Sources Debug] WARNING: DuckDuckGo URL found at index ${idx}: ${url}`);
+                    }
+                });
+
                 setCachedSources(data.used_urls, question);
-                console.log('Cached', data.used_urls.length, 'source URLs from Advanced Ask');
+                console.log('[Sources Debug] Cached', data.used_urls.length, 'source URLs from Advanced Ask');
             }
 
             // Clear the user textbox

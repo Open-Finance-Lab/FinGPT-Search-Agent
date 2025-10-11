@@ -1,7 +1,7 @@
 // helpers.js
 import { clearMessages, getSourceUrls, logQuestion } from './api.js';
 import { handleChatResponse, handleImageResponse } from './handlers.js';
-import { getCachedSources, hasCachedSources, clearCachedSources } from './sourcesCache.js';
+import { getCachedSources, hasCachedSources, clearCachedSources, getCurrentPageUrl, getCachedSourcesWithoutCurrentPage } from './sourcesCache.js';
 
 // Function to append chat elements
 function appendChatElement(parent, className, text) {
@@ -74,27 +74,92 @@ function get_sources(searchQuery) {
     const loadingSpinner = document.getElementById('loading_spinner');
     const source_urls = document.getElementById('source_urls');
 
+    console.log('[Sources Debug] get_sources called with query:', searchQuery);
     sources_window.style.display = 'block';
 
     // Check if we have cached sources first
     if (hasCachedSources()) {
-        console.log('Using cached sources for instant display');
-        const cachedUrls = getCachedSources();
+        console.log('[Sources Debug] Found cached sources for instant display');
 
-        // Display cached sources immediately without loading
+        const currentPageUrl = getCurrentPageUrl();
+        const otherSources = getCachedSourcesWithoutCurrentPage();
+
+        console.log('[Sources Debug] Current page URL:', currentPageUrl);
+        console.log('[Sources Debug] Other sources:', otherSources);
+
+        // Clear and rebuild the source URLs display
         source_urls.innerHTML = '';
-        cachedUrls.forEach(url => {
+
+        // Create "Current active webpage" section
+        if (currentPageUrl) {
+            const currentPageSection = document.createElement('div');
+            currentPageSection.className = 'source-section';
+
+            const currentPageHeader = document.createElement('h3');
+            currentPageHeader.innerText = 'Current active webpage';
+            currentPageHeader.style.marginBottom = '10px';
+            currentPageHeader.style.fontSize = '14px';
+            currentPageHeader.style.fontWeight = 'bold';
+            currentPageHeader.style.color = '#333';
+
+            currentPageSection.appendChild(currentPageHeader);
+
+            const currentPageList = document.createElement('ul');
+            currentPageList.style.marginBottom = '20px';
+            currentPageList.style.paddingLeft = '0';
+
             const link = document.createElement('a');
-            link.href = url;
-            link.innerText = url;
+            link.href = currentPageUrl;
+            link.innerText = currentPageUrl;
             link.target = "_blank";
 
             const listItem = document.createElement('li');
             listItem.appendChild(link);
             listItem.classList.add('source-item');
 
-            source_urls.appendChild(listItem);
-        });
+            currentPageList.appendChild(listItem);
+            currentPageSection.appendChild(currentPageList);
+            source_urls.appendChild(currentPageSection);
+        }
+
+        // Create "Sources used" section if there are other sources
+        if (otherSources.length > 0) {
+            const sourcesSection = document.createElement('div');
+            sourcesSection.className = 'source-section';
+
+            const sourcesHeader = document.createElement('h3');
+            sourcesHeader.innerText = 'Sources used';
+            sourcesHeader.style.marginBottom = '10px';
+            sourcesHeader.style.fontSize = '14px';
+            sourcesHeader.style.fontWeight = 'bold';
+            sourcesHeader.style.color = '#333';
+
+            sourcesSection.appendChild(sourcesHeader);
+
+            const sourcesList = document.createElement('ul');
+            sourcesList.style.paddingLeft = '0';
+
+            otherSources.forEach((url, idx) => {
+                console.log(`[Sources Debug] Displaying source URL ${idx + 1}: ${url}`);
+                if (url.includes('duckduckgo')) {
+                    console.warn(`[Sources Debug] WARNING: DuckDuckGo URL being displayed at index ${idx}: ${url}`);
+                }
+
+                const link = document.createElement('a');
+                link.href = url;
+                link.innerText = url;
+                link.target = "_blank";
+
+                const listItem = document.createElement('li');
+                listItem.appendChild(link);
+                listItem.classList.add('source-item');
+
+                sourcesList.appendChild(listItem);
+            });
+
+            sourcesSection.appendChild(sourcesList);
+            source_urls.appendChild(sourcesSection);
+        }
 
         // Show sources immediately without spinner
         loadingSpinner.style.display = 'none';
