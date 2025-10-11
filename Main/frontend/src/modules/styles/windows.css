@@ -151,6 +151,42 @@
     margin: 0;
 }
 
+/* Source sections */
+.source-section {
+    margin-bottom: 20px;
+}
+
+.source-section:last-child {
+    margin-bottom: 0;
+}
+
+.source-section-header {
+    font-size: 14px;
+    font-weight: bold;
+    color: #1abc9c;
+    margin-bottom: 10px;
+    padding-bottom: 5px;
+    border-bottom: 1px solid #555;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.source-section-content {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.empty-sources {
+    color: #888;
+    font-style: italic;
+    font-size: 13px;
+    padding: 8px;
+    background-color: #3a3a3a;
+    border-radius: 6px;
+    text-align: center;
+}
+
 #source_urls li {
     background-color: #444;
     border-radius: 6px;

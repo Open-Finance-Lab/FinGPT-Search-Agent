@@ -146,3 +146,14 @@
 .light-mode #source_urls li a:hover {
     text-decoration: underline;
 }
+
+/* Source sections in light mode */
+.light-mode .source-section-header {
+    color: #1a1a1a;
+    border-bottom-color: #ccc;
+}
+
+.light-mode .empty-sources {
+    background-color: #e8e8e8;
+    color: #666;
+}

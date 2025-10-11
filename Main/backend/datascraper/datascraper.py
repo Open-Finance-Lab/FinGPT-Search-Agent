@@ -89,14 +89,40 @@ def duckduckgo_search(query, num_results=10):
         encoded_query = urllib.parse.quote_plus(query)
         ddg_url = f"https://html.duckduckgo.com/html/?q={encoded_query}"
 
+        # More comprehensive headers to avoid bot detection
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'DNT': '1',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1',
+            'Sec-Fetch-Dest': 'document',
+            'Sec-Fetch-Mode': 'navigate',
+            'Sec-Fetch-Site': 'none',
+            'Cache-Control': 'max-age=0'
         }
 
+        # Add a small delay to avoid rate limiting
+        time.sleep(0.5)
+
         logging.info(f"Searching DuckDuckGo for: '{query}'")
-        response = requests.get(ddg_url, headers=headers, timeout=10)
+        logging.info(f"URL: {ddg_url}")
+
+        response = requests.get(ddg_url, headers=headers, timeout=15, allow_redirects=True)
+
+        logging.info(f"Response status code: {response.status_code}")
+
+        if response.status_code == 202:
+            logging.warning(f"DuckDuckGo returned 202 (rate limited or bot detection). Waiting 2 seconds and retrying...")
+            time.sleep(2)
+            response = requests.get(ddg_url, headers=headers, timeout=15, allow_redirects=True)
+            logging.info(f"Retry response status code: {response.status_code}")
+
         if response.status_code != 200:
             logging.error(f"DuckDuckGo search failed with status code: {response.status_code}")
+            logging.error(f"Response content preview: {response.text[:500]}")
             return []
 
         soup = BeautifulSoup(response.text, 'html.parser')
@@ -112,6 +138,11 @@ def duckduckgo_search(query, num_results=10):
                     logging.debug(f"Found result URL: {url}")
 
         logging.info(f"DuckDuckGo search returned {len(results)} URLs")
+
+        if len(results) == 0:
+            logging.warning("No results found. Response HTML preview:")
+            logging.warning(response.text[:1000])
+
         return results
     except Exception as e:
         logging.error(f"DuckDuckGo search failed: {e}")
