@@ -129,6 +129,7 @@
 #sources_window {
     position: fixed;
     width: 300px;
+    max-height: 80vh;
     background-color: #333;
     border-radius: 15px;
     box-shadow: 5px 0px 10px black;
@@ -137,6 +138,27 @@
     color: white;
     display: flex;
     flex-direction: column;
+    overflow-y: auto;
+}
+
+/* Custom Scrollbar for Sources Window */
+#sources_window::-webkit-scrollbar {
+    width: 12px;
+}
+
+#sources_window::-webkit-scrollbar-track {
+    background: none;
+}
+
+#sources_window::-webkit-scrollbar-thumb {
+    background-color: #888;
+    border-radius: 10px;
+    border: 3px solid transparent;
+    background-clip: padding-box;
+}
+
+#sources_window::-webkit-scrollbar-thumb:hover {
+    background-color: #555;
 }
 
 #loading_spinner {
@@ -149,6 +171,42 @@
     list-style: none;
     padding: 0;
     margin: 0;
+}
+
+/* Source sections */
+.source-section {
+    margin-bottom: 20px;
+}
+
+.source-section:last-child {
+    margin-bottom: 0;
+}
+
+.source-section-header {
+    font-size: 14px;
+    font-weight: bold;
+    color: #1abc9c;
+    margin-bottom: 10px;
+    padding-bottom: 5px;
+    border-bottom: 1px solid #555;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.source-section-content {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.empty-sources {
+    color: #888;
+    font-style: italic;
+    font-size: 13px;
+    padding: 8px;
+    background-color: #3a3a3a;
+    border-radius: 6px;
+    text-align: center;
 }
 
 #source_urls li {
