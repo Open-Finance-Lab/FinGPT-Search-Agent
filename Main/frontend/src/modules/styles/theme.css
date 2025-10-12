@@ -65,13 +65,10 @@
 }
 
 .light-mode #respons .your_question,
-.light-mode #additionalPopup #respons .your_question {
-    background-color: #eee;
-    color: black;
-}
-
 .light-mode #respons .agent_response,
+.light-mode #additionalPopup #respons .your_question,
 .light-mode #additionalPopup #respons .agent_response {
+    background-color: #eee;
     color: black;
 }
 
