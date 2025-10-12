@@ -30,10 +30,91 @@
     transition: background-color 0.2s ease-in-out;
 }
 
+/* MCP Mode and Local RAG checkbox */
+.settings-checkbox-label {
+  vertical-align: middle;
+  font-size: 1em;
+  margin-bottom: 10px;
+}
+
+.settings-checkbox-label input[type="checkbox"] {
+  width: 1em;
+  height: 1em;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
 #settings_window button:hover,
 #settings_window .settings-button:hover {
     background-color: #555;
 }
+
+/* RAG Container */
+#rag-section-container {
+    margin-top: 14px;
+    background: none;
+}
+
+/* RAG Section Content */
+.rag-content {
+    padding-left: 10px;
+    padding-bottom: 10px;
+    margin-bottom: 5px;
+    border-left: 2px solid #444;
+    display: none;
+}
+
+/* Directory path display */
+.rag-path-container {
+    display: flex;
+    align-items: center;
+    background: #222;
+    border-radius: 8px;
+    padding: 4px 10px;
+    margin: 8px 0 10px 0;
+    min-height: 28px;
+    font-size: 1em;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+
+.rag-path-display {
+    flex: 1;
+    color: #fff;
+    user-select: text;
+    overflow-x: auto;
+    white-space: nowrap;
+    font-size: 1em;
+    padding: 2px 0;
+}
+
+/* Hiding the delete button unless hovering */
+.rag-path-container .delete-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 30px;
+    width: 30px;
+    font-size: 18px;
+    background: #444;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    margin-left:5px;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.3s ease, background-color 0.3s ease;
+    flex: 0;
+    padding: 0;
+    line-height:1;
+    box-sizing: border-box;
+    text-align: center;
+}
+
+.rag-path-container:hover .delete-btn {
+    opacity: 1;
+}
+
 
 /* Rag Path Form */
 #ragPath {
@@ -261,16 +342,20 @@
   justify-content: center;
   height: 30px;
   width: 30px;
-  font-size: 20px;
+  font-size: 18px;
   background-color: red;
   color: white;
   border: none;
-  border-radius: 6px;
+  border-radius: 5px;
   margin-left:5px;
   cursor: pointer;
   opacity: 0;
   transition: opacity 0.3s ease, background-color 0.3s ease;
-  flex:0;
+  flex: 0;
+  padding: 0;
+  line-height:1;
+  box-sizing: border-box;
+  text-align: center;
 }
 
 .link-preview:hover .delete-btn {
@@ -300,6 +385,7 @@
   padding: 20px;
   border-radius: 8px;
   width: 300px;
+  font-size: 16px;
   text-align: center;
   border: none;
 }
