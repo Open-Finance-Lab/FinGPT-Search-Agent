@@ -25,7 +25,7 @@ import re
 from datetime import datetime
 from pathlib import Path
 from django.views.decorators.csrf import csrf_exempt
-from django.http import JsonResponse
+from django.http import JsonResponse, StreamingHttpResponse
 from django_ratelimit.decorators import ratelimit
 from django.conf import settings
 from datascraper import datascraper as ds
@@ -59,7 +59,7 @@ def _get_version():
 # This is a global message list
 message_list = [
     {"role": "user",
-     "content": "You are a helpful financial assistant. Always answer questions to the best of your ability."}
+     "content": "[SYSTEM MESSAGE]: You are a helpful financial assistant. Always answer questions to the best of your ability."}
 ]
 
 # R2C
@@ -157,10 +157,10 @@ def _prepare_context_messages(request, question, use_r2c=True):
         # Just use the context messages directly
         legacy_messages = context_messages
     else:
-        # Use legacy message_list - append the question with a header
-        message_list.append({"role": "user", "content": f"[USER QUESTION]: {question}"})
+        # Use legacy message_list - append the question with header
+        message_list.append({"role": "user", "content": f"[USER MESSAGE]: {question}"})
         legacy_messages = message_list.copy()
-    
+
     return legacy_messages, session_id
 
 def _add_response_to_context(session_id, response, use_r2c=True):
@@ -168,8 +168,8 @@ def _add_response_to_context(session_id, response, use_r2c=True):
     if use_r2c and session_id:
         r2c_manager.add_message(session_id, "assistant", response)
     else:
-        # Add to legacy message_list with clear header
-        message_list.append({"role": "user", "content": f"[ASSISTANT RESPONSE]: {response}"})
+        # Add to legacy message_list with header
+        message_list.append({"role": "user", "content": f"[ASSISTANT MESSAGE]: {response}"})
 
 def _prepare_response_with_stats(responses, session_id, use_r2c=True, single_response_mode=False):
     """
@@ -355,6 +355,78 @@ def chat_response(request):
     _log_interaction("chat", current_url, question, first_model_response)
 
     return _prepare_response_with_stats(responses, session_id, use_r2c)
+
+@ratelimit(key='ip', rate=lambda g, r: settings.API_RATE_LIMIT, method='GET')
+def chat_response_stream(request):
+    """Process streaming chat response from selected models using SSE"""
+    question = request.GET.get('question', '')
+    selected_models = request.GET.get('models', '')
+    use_rag = request.GET.get('use_rag', 'false').lower() == 'true'
+    current_url = request.GET.get('current_url', '')
+    use_r2c = request.GET.get('use_r2c', 'true').lower() == 'true'
+
+    # Validate and parse models
+    if not selected_models:
+        return JsonResponse({'error': 'No models specified'}, status=400)
+
+    models = [model.strip() for model in selected_models.split(',') if model.strip()]
+    if not models:
+        return JsonResponse({'error': 'No valid models specified'}, status=400)
+
+    model = models[0]
+
+    # Prepare context messages using R2C
+    legacy_messages, session_id = _prepare_context_messages(request, question, use_r2c)
+
+    def event_stream():
+        """Generator function for SSE streaming"""
+        try:
+            # Send initial connection event (as bytes for WSGI compatibility)
+            yield b'event: connected\ndata: {"status": "connected"}\n\n'
+
+            if use_rag:
+                # RAG doesn't support streaming yet, return full response
+                response = ds.create_rag_response(question, legacy_messages, model)
+                sse_data = f'data: {json.dumps({"content": response, "done": True})}\n\n'
+                yield sse_data.encode('utf-8')
+            else:
+                # Stream response from model
+                full_response = ""
+                for chunk in ds.create_response(question, legacy_messages, model, stream=True):
+                    full_response += chunk
+                    # Send each chunk as SSE event (encoded as bytes)
+                    sse_data = f'data: {json.dumps({"content": chunk, "done": False})}\n\n'
+                    yield sse_data.encode('utf-8')
+
+                # Send completion event
+                sse_data = f'data: {json.dumps({"content": "", "done": True})}\n\n'
+                yield sse_data.encode('utf-8')
+
+                # Add complete response to context after streaming
+                _add_response_to_context(session_id, full_response, use_r2c)
+
+                # Log interaction
+                _log_interaction("chat_stream", current_url, question, full_response)
+
+                # Send R2C stats if enabled
+                if use_r2c and session_id:
+                    stats = r2c_manager.get_session_stats(session_id)
+                    sse_data = f'data: {json.dumps({"r2c_stats": stats})}\n\n'
+                    yield sse_data.encode('utf-8')
+
+        except Exception as e:
+            logging.error(f"Error in streaming response: {e}")
+            sse_data = f'data: {json.dumps({"error": str(e), "done": True})}\n\n'
+            yield sse_data.encode('utf-8')
+
+    # Return streaming response with proper SSE headers
+    response = StreamingHttpResponse(
+        event_stream(),
+        content_type='text/event-stream'
+    )
+    response['Cache-Control'] = 'no-cache'
+    response['X-Accel-Buffering'] = 'no'  # Disable Nginx buffering
+    return response
 
 @csrf_exempt
 @ratelimit(key='ip', rate=lambda g, r: settings.API_RATE_LIMIT, method='POST')

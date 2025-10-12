@@ -23,6 +23,7 @@ urlpatterns = [
     path('health/', views.health, name='health'),
     path('input_webtext/', views.add_webtext, name='input_webtext'),
     path('get_chat_response/', views.chat_response, name='get_chat_response'),
+    path('get_chat_response_stream/', views.chat_response_stream, name='get_chat_response_stream'),
     path('get_adv_response/', views.adv_response, name='get_adv_response'),
     path('get_source_urls/', views.get_sources, name = 'get_source_urls'),
     path('clear_messages/', views.clear, name = 'clear_messages'),

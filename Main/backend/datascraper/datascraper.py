@@ -67,64 +67,124 @@ def create_rag_response(user_input, message_list, model):
     """
     try:
         response = cdm_rag.get_rag_response(user_input, model)
-        message_list.append({"role": "user", "content": response})
+        # Don't append to message_list here - let the caller handle it properly
         return response
     except FileNotFoundError as e:
         # Handle the error and return the error message
         error_message = str(e)
-        message_list.append({"role": "user", "content": error_message})
+        # Don't append to message_list here - let the caller handle it properly
         return error_message
 
 
 def create_response(
         user_input: str,
         message_list: list[dict],
-        model: str = "o4-mini"
+        model: str = "o4-mini",
+        stream: bool = False
 ) -> str:
     """
     Creates a chat completion using the appropriate provider based on model configuration.
+    Supports both streaming and non-streaming modes.
     """
     # Get model configuration
     model_config = get_model_config(model)
     if not model_config:
         raise ValueError(f"Unsupported model: {model}")
-    
+
     provider = model_config["provider"]
     model_name = model_config["model_name"]
-    
+
     # Get the appropriate client
     client = clients.get(provider)
     if not client:
         raise ValueError(f"No client available for provider: {provider}. Please check API key configuration.")
-    
-    # Prepare messages
-    msgs = [msg for msg in message_list if msg.get("role") != "system"]
-    msgs.insert(0, {"role": "system", "content": INSTRUCTION})
+
+    # Parse message list with headers and convert to proper format for APIs
+    msgs = []
+    system_message = None
+
+    for msg in message_list:
+        content = msg.get("content", "")
+
+        # Parse headers to determine actual role
+        if content.startswith("[SYSTEM MESSAGE]: "):
+            actual_content = content.replace("[SYSTEM MESSAGE]: ", "")
+            if not system_message:
+                system_message = actual_content
+            else:
+                system_message = f"{system_message} {actual_content}"
+        elif content.startswith("[USER MESSAGE]: "):
+            actual_content = content.replace("[USER MESSAGE]: ", "")
+            msgs.append({"role": "user", "content": actual_content})
+        elif content.startswith("[ASSISTANT MESSAGE]: "):
+            actual_content = content.replace("[ASSISTANT MESSAGE]: ", "")
+            msgs.append({"role": "assistant", "content": actual_content})
+        else:
+            # Legacy format or web content - treat as user message
+            msgs.append({"role": "user", "content": content})
+
+    # Add system message at the beginning
+    if system_message:
+        msgs.insert(0, {"role": "system", "content": f"{system_message} {INSTRUCTION}"})
+    else:
+        msgs.insert(0, {"role": "system", "content": INSTRUCTION})
+
+    # Add current user input
     msgs.append({"role": "user", "content": user_input})
-    
+
     # Provider-specific handling
     if provider == "anthropic":
         # Anthropic uses a different API structure
-        response = client.messages.create(
-            model=model_name,
-            messages=msgs[1:],  # Anthropic doesn't use system messages the same way
-            system=INSTRUCTION,  # System message as separate parameter
-            max_tokens=1024
-        )
-        return response.content[0].text
+        # Extract system message content for Anthropic
+        system_content = msgs[0]["content"] if msgs and msgs[0].get("role") == "system" else INSTRUCTION
+        # Get non-system messages
+        anthropic_msgs = [msg for msg in msgs if msg.get("role") != "system"]
+
+        if stream:
+            # Streaming mode for Anthropic using context manager
+            with client.messages.stream(
+                model=model_name,
+                messages=anthropic_msgs,
+                system=system_content,
+                max_tokens=1024
+            ) as stream_response:
+                for text in stream_response.text_stream:
+                    yield text
+        else:
+            # Non-streaming mode
+            response = client.messages.create(
+                model=model_name,
+                messages=anthropic_msgs,
+                system=system_content,
+                max_tokens=1024
+            )
+            return response.content[0].text
     else:
         # OpenAI and DeepSeek use the same API structure
         # Handle DeepSeek temperature recommendations
         kwargs = {}
         if provider == "deepseek" and "recommended_temperature" in model_config:
             kwargs["temperature"] = model_config["recommended_temperature"]
-        
-        response = client.chat.completions.create(
-            model=model_name,
-            messages=msgs,
-            **kwargs
-        )
-        return response.choices[0].message.content
+
+        if stream:
+            # Streaming mode for OpenAI/DeepSeek
+            stream_response = client.chat.completions.create(
+                model=model_name,
+                messages=msgs,
+                stream=True,
+                **kwargs
+            )
+            for chunk in stream_response:
+                if chunk.choices and chunk.choices[0].delta.content is not None:
+                    yield chunk.choices[0].delta.content
+        else:
+            # Non-streaming mode
+            response = client.chat.completions.create(
+                model=model_name,
+                messages=msgs,
+                **kwargs
+            )
+            return response.choices[0].message.content
 
 
 def create_advanced_response(
@@ -257,13 +317,24 @@ async def _create_mcp_response_async(user_input: str, message_list: list[dict], 
     from mcp_client.agent import create_fin_agent
     from agents import Runner
     
-    # Convert message list to context
+    # Convert message list to context, parsing headers
     context = ""
     for msg in message_list:
-        if msg.get("role") == "user":
-            context += f"User: {msg.get('content', '')}\n"
-        elif msg.get("role") == "assistant":
-            context += f"Assistant: {msg.get('content', '')}\n"
+        content = msg.get("content", "")
+
+        # Parse headers to determine actual role
+        if content.startswith("[SYSTEM MESSAGE]: "):
+            actual_content = content.replace("[SYSTEM MESSAGE]: ", "")
+            context += f"System: {actual_content}\n"
+        elif content.startswith("[USER MESSAGE]: "):
+            actual_content = content.replace("[USER MESSAGE]: ", "")
+            context += f"User: {actual_content}\n"
+        elif content.startswith("[ASSISTANT MESSAGE]: "):
+            actual_content = content.replace("[ASSISTANT MESSAGE]: ", "")
+            context += f"Assistant: {actual_content}\n"
+        else:
+            # Legacy format or web content - treat as user message
+            context += f"User: {content}\n"
     
     # Combine context with current input
     full_prompt = f"{context}User: {user_input}"
