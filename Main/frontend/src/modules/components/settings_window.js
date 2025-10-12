@@ -13,11 +13,9 @@ function createSettingsWindow(isFixedModeRef, settingsIcon, positionModeIcon) {
     settings_window.id = "settings_window";
 
     const label = document.createElement('label');
-    label.className = 'settings-checkbox-label';
     label.innerText = "Light Mode";
     const lightSwitch = document.createElement('input');
     lightSwitch.type = "checkbox";
-    lightSwitch.style.transform = 'translate(4px, -2px)';
     lightSwitch.onchange = () => document.body.classList.toggle('light-mode');
     label.appendChild(lightSwitch);
     settings_window.appendChild(label);
@@ -165,35 +163,19 @@ function createSettingsWindow(isFixedModeRef, settingsIcon, positionModeIcon) {
 
     // —– MCP Mode Toggle —–
     const mcpLabel = document.createElement('label');
-    mcpLabel.className = 'settings-checkbox-label';
     mcpLabel.innerText = "MCP Mode";
     const mcpSwitch = document.createElement('input');
     mcpSwitch.type = "checkbox";
     mcpSwitch.id = "mcpModeSwitch";
-    mcpSwitch.style.transform = 'translate(4px, -2px)';
     mcpLabel.appendChild(mcpSwitch);
 
-    // RAG Section
-    const ragSectionContainer = document.createElement('div');
-    ragSectionContainer.id = 'rag-section-container';
 
-    const ragSectionHeader = document.createElement('div');
-    ragSectionHeader.id = 'rag-header';
-    ragSectionHeader.innerText = "RAG Settings";
 
-    const ragToggleIcon = document.createElement('span');
-    ragToggleIcon.innerText = "⯆";
-    ragSectionHeader.appendChild(ragToggleIcon);
-    ragSectionContainer.appendChild(ragSectionHeader);
 
-    const ragContent = document.createElement('div');
-    ragContent.className = 'rag-content';
-    ragContent.style.display = "none";
     // Local RAG Upload
     let RAGPath = '';
 
     const ragLabel = document.createElement('label');
-    ragLabel.className = 'settings-checkbox-label';
     ragLabel.innerText = "Local RAG";
     ragLabel.setAttribute('for', 'ragSwitch');
 
@@ -201,10 +183,8 @@ function createSettingsWindow(isFixedModeRef, settingsIcon, positionModeIcon) {
     ragSwitch.type = "checkbox";
     ragSwitch.name = "ragSwitch";
     ragSwitch.id = "ragSwitch";
-    ragSwitch.style.transform = 'translate(5px, -2px)';
+    ragSwitch.style.transform = 'translate(5px, 2px)';
     ragSwitch.disabled = true;
-    ragLabel.appendChild(ragSwitch);
-    ragContent.appendChild(ragLabel);
     ragSwitch.onchange = async function() {
         // Any immediate actions when the checkbox changes can be handled here
         console.log ("switch value:", ragSwitch.checked);
@@ -269,53 +249,15 @@ function createSettingsWindow(isFixedModeRef, settingsIcon, positionModeIcon) {
 
     const ragForm = document.createElement('form');
 
-    
-
     const pathLabel = document.createElement('label');
     pathLabel.innerText = "Write the path of local directory you wish to use (ex. C:\\Users\\user\\test):";
-    ragForm.appendChild(pathLabel);
-    //pathLabel.setAttribute('for', 'ragPath');
+    pathLabel.setAttribute('for', 'ragPath');
 
-    //const ragPath = document.createElement('input');
-    //ragPath.type = "text";
-    //ragPath.name = "ragPath";
-    //ragPath.id = "ragPath";
-    //ragPath.style.width = "100%";
-
-    const ragPathContainer = document.createElement('div');
-    ragPathContainer.className = 'rag-path-container';
-
-    //making the link display not interactable
-    const ragPathDisplay = document.createElement('span');
-    ragPathDisplay.className = 'rag-path-display';
-    ragPathDisplay.innerText = ''
-
-    const clearRagButton = document.createElement('button');
-    clearRagButton.className = 'delete-btn';
-    clearRagButton.innerText = 'x';
-    clearRagButton.title = 'Clear Directory';
-    clearRagButton.style.opacity = '0';
-    clearRagButton.tabIndex = -1;
-
-    ragPathContainer.appendChild(ragPathDisplay);
-    ragPathContainer.appendChild(clearRagButton);
-    ragForm.appendChild(ragPathContainer);
-
-    // handling how the clear button acts when the mouse hovers over the path directory display
-    ragPathContainer.onmouseenter = () => { 
-        //making sure that it only appears when there is text to clear
-        if (ragPathDisplay.innerText.trim() !== '') {
-            clearRagButton.style.opacity = '1';
-            clearRagButton.style.pointerEvents = 'auto';
-        } else {
-            clearRagButton.style.opacity = '0';
-            clearRagButton.style.pointerEvents = 'none';
-        }
-    };
-    ragPathContainer.onmouseleave = () => { 
-        clearRagButton.style.opacity = '0';
-        clearRagButton.style.pointerEvents = 'none'; 
-    };
+    const ragPath = document.createElement('input');
+    ragPath.type = "text";
+    ragPath.name = "ragPath";
+    ragPath.id = "ragPath";
+    ragPath.style.width = "100%";
 
     // Create a button for directory selection
     const directoryButton = document.createElement('button');
@@ -330,8 +272,7 @@ function createSettingsWindow(isFixedModeRef, settingsIcon, positionModeIcon) {
                 const dirHandle = await window.showDirectoryPicker();
                 // Get directory path or name
                 RAGPath = dirHandle;
-                //ragPath.value = RAGPath.name;
-                ragPathDisplay.innerText = RAGPath.name;
+                ragPath.value = RAGPath.name;
                 ragSwitch.disabled = false;
                 console.log("Selected directory:", RAGPath);
             } else {
@@ -357,56 +298,40 @@ function createSettingsWindow(isFixedModeRef, settingsIcon, positionModeIcon) {
     ragForm.onsubmit = function(e) {
         e.preventDefault(); // Prevent default form submission
         if(ragPath.value !== '') {
-            //RAGPath = ragPath.value;
+            RAGPath = ragPath.value;
             ragSwitch.disabled = false;
         }
         return false;
     };
 
-    /*
     const clearRagButton = document.createElement('input');
     clearRagButton.type = "button";
     clearRagButton.value = "Clear";
     clearRagButton.className = "rag-button";
     clearRagButton.id = "clearRagPath";
-    */
-    // new clear button logic
     clearRagButton.onclick = function() {
         RAGPath = '';
-        //ragPath.value = '';
-        ragPathDisplay.innerText = '';
+        ragPath.value = '';
         ragSwitch.disabled = true;
-        clearRagButton.style.opacity = '0';
-        clearRagButton.style.pointerEvents = 'none';
     };
 
-    
+    ragForm.appendChild(pathLabel);
+    ragForm.appendChild(ragPath);
     ragForm.appendChild(directoryButton);
     ragForm.appendChild(document.createElement('br')); // Line break
     ragForm.appendChild(ragFormSubmit);
+    ragForm.appendChild(clearRagButton);
 
     //preferredLinksContent.appendChild(createAddLinkButton());
     //preferredLinksContainer.appendChild(preferredLinksContent);
     //settings_window.appendChild(preferredLinksContainer);
 
-    ragSectionHeader.onclick = function () {
-        const isHidden = ragContent.style.display === "none";
-        ragContent.style.display = isHidden ? "block" : "none";
-        ragToggleIcon.innerText = isHidden ? "⯅" : "⯆";
-    };
-
     // mcp mode
     settings_window.appendChild(mcpLabel);
 
-    //appending rag section
-    ragContent.appendChild(ragLabel);
-    ragContent.appendChild(ragForm);
-    ragSectionContainer.appendChild(ragContent);
-    settings_window.appendChild(ragSectionContainer);
-
-    //settings_window.appendChild(ragLabel);
-    //settings_window.appendChild(ragSwitch);
-    //settings_window.appendChild(ragForm);
+    settings_window.appendChild(ragLabel);
+    settings_window.appendChild(ragSwitch);
+    settings_window.appendChild(ragForm);
     
     settingsIcon.onclick = function (event) {
         event.stopPropagation();
