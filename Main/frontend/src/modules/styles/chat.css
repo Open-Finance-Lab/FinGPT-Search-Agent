@@ -183,3 +183,65 @@
     justify-content: space-between;
     margin-top: 10px;
 }
+
+/* Action Buttons (Copy & Retry) */
+.action-buttons {
+    display: flex;
+    gap: 2px;
+    margin-bottom: 4px;
+    margin-left: 8px;
+    align-items: center;
+    align-self: flex-start;
+}
+
+.action-button {
+    background-color: transparent;
+    border: none;
+    border-radius: 6px;
+    padding: 6px;
+    cursor: pointer;
+    transition: background-color 0.2s ease, transform 0.1s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+}
+
+.action-button:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.action-button:active,
+.action-button-clicked {
+    transform: scale(0.95);
+}
+
+.action-icon {
+    width: 18px;
+    height: 18px;
+    opacity: 0.7;
+    transition: opacity 0.2s ease;
+}
+
+.action-button:hover .action-icon {
+    opacity: 1;
+}
+
+/* Tooltip for action buttons */
+.action-button[title]:hover::after {
+    content: attr(title);
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: rgba(0, 0, 0, 0.8);
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    white-space: nowrap;
+    margin-bottom: 4px;
+    pointer-events: none;
+    z-index: 1000;
+}

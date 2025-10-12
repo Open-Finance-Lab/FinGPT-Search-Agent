@@ -459,6 +459,11 @@ def adv_response(request):
     # Get the used URLs from datascraper
     used_urls_list = list(ds.used_urls)
 
+    # Log the URLs being sent to frontend
+    logging.info(f"Advanced response sending {len(used_urls_list)} URLs to frontend:")
+    for idx, url in enumerate(used_urls_list, 1):
+        logging.info(f"  [{idx}] {url}")
+
     # Return response with optional R2C stats and used URLs
     response_data = _prepare_response_with_stats(responses, session_id, use_r2c)
     response_json = json.loads(response_data.content)
