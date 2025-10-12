@@ -17,7 +17,7 @@ function handleChatResponse(question, promptMode = false) {
     const loadingElement = appendChatElement(
         responseContainer,
         'agent_response',
-        `FinGPT: Loading...`
+        `Search Agent: Loading...`
     );
 
     // Read the RAG checkbox state
@@ -39,11 +39,11 @@ function handleChatResponse(question, promptMode = false) {
 
             if (!modelResponse) {
                 // Safeguard in case backend does not return something
-                loadingElement.innerText = `FinGPT: (No response from server)`;
+                loadingElement.innerText = `Search Agent: (No response from server)`;
             } else if (modelResponse.startsWith("The following file(s) are missing")) {
-                loadingElement.innerText = `FinGPT: Error - ${modelResponse}`;
+                loadingElement.innerText = `Search Agent: Error - ${modelResponse}`;
             } else {
-                loadingElement.innerText = `FinGPT: ${modelResponse}`;
+                loadingElement.innerText = `Search Agent: ${modelResponse}`;
             }
 
             // If this is an Advanced Ask response and contains used_urls, cache them
@@ -58,7 +58,7 @@ function handleChatResponse(question, promptMode = false) {
         })
         .catch(error => {
             console.error('There was a problem with your fetch operation:', error);
-            loadingElement.innerText = `FinGPT: Failed to load response.`;
+            loadingElement.innerText = `Search Agent: Failed to load response.`;
         });
 }
 

@@ -5,7 +5,7 @@ function createHeader(popup, settings_window, settingsIcon, positionModeIcon, is
     header.className = "draggable";
 
     const title = document.createElement('span');
-    title.innerText = "FinGPT";
+    title.innerText = "Search Agent";
 
     const iconContainer = document.createElement('div');
     iconContainer.id = "icon-container";

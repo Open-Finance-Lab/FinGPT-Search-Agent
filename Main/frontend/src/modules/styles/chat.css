@@ -151,12 +151,10 @@
 #respons .agent_response {
     align-self: flex-start;
     text-align: left;
-    background-color: #555;
-    border-radius: 10px;
     padding: 8px 15px;
     color: #fff;
     word-wrap: break-word;
-    max-width: 80%;
+    max-width: 95%;
     margin-right: auto;
     margin-top: 10px;
 }
