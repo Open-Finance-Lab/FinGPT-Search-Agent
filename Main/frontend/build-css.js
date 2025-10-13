@@ -5,7 +5,7 @@ const fs = require('fs');
 const stylesDir = path.join(__dirname, 'src/modules/styles');
 const cssFiles = ['popup.css', 'header.css', 'chat.css', 'windows.css', 'theme.css'];
 
-let combinedCSS = '/* Combined CSS for FinGPT Extension */\n\n';
+let combinedCSS = '/* Combined CSS for Agentic FinSearch Extension */\n\n';
 
 cssFiles.forEach(file => {
     const filePath = path.join(stylesDir, file);

@@ -21,8 +21,8 @@ function createActionButtons(responseText, userQuestion, promptMode, useRAG, use
     copyButton.appendChild(copyIcon);
 
     copyButton.onclick = () => {
-        // Remove "Search Agent: " prefix before copying
-        const textToCopy = responseText.replace(/^Search Agent:\s*/, '');
+        // Remove "Agentic FinSearch: " prefix before copying
+        const textToCopy = responseText.replace(/^Agentic FinSearch:\s*/, '');
         navigator.clipboard.writeText(textToCopy).then(() => {
             // Visual feedback
             copyButton.classList.add('action-button-clicked');
@@ -74,7 +74,7 @@ function handleChatResponse(question, promptMode = false, useStreaming = true) {
     const loadingElement = appendChatElement(
         responseContainer,
         'agent_response',
-        `Search Agent: Loading...`
+        `Agentic FinSearch: Loading...`
     );
 
     // Read the RAG checkbox state
@@ -101,10 +101,10 @@ function handleChatResponse(question, promptMode = false, useStreaming = true) {
             // onChunk callback - called for each chunk of text
             (chunk, fullResponse) => {
                 if (isFirstChunk) {
-                    loadingElement.innerText = `Search Agent: ${fullResponse}`;
+                    loadingElement.innerText = `Agentic FinSearch: ${fullResponse}`;
                     isFirstChunk = false;
                 } else {
-                    loadingElement.innerText = `Search Agent: ${fullResponse}`;
+                    loadingElement.innerText = `Agentic FinSearch: ${fullResponse}`;
                 }
                 responseContainer.scrollTop = responseContainer.scrollHeight;
             },
@@ -114,7 +114,7 @@ function handleChatResponse(question, promptMode = false, useStreaming = true) {
                 const responseTime = endTime - startTime;
                 console.log(`Time taken for streaming response: ${responseTime} ms`);
 
-                const responseText = `Search Agent: ${fullResponse}`;
+                const responseText = `Agentic FinSearch: ${fullResponse}`;
                 loadingElement.innerText = responseText;
 
                 // Add action buttons after the response
@@ -128,7 +128,7 @@ function handleChatResponse(question, promptMode = false, useStreaming = true) {
             // onError callback
             (error) => {
                 console.error('Streaming error:', error);
-                loadingElement.innerText = `Search Agent: Failed to load response (streaming error).`;
+                loadingElement.innerText = `Agentic FinSearch: Failed to load response (streaming error).`;
             }
         );
     } else {
@@ -145,11 +145,11 @@ function handleChatResponse(question, promptMode = false, useStreaming = true) {
                 let responseText = '';
                 if (!modelResponse) {
                     // Safeguard in case backend does not return something
-                    responseText = `Search Agent: (No response from server)`;
+                    responseText = `Agentic FinSearch: (No response from server)`;
                 } else if (modelResponse.startsWith("The following file(s) are missing")) {
-                    responseText = `Search Agent: Error - ${modelResponse}`;
+                    responseText = `Agentic FinSearch: Error - ${modelResponse}`;
                 } else {
-                    responseText = `Search Agent: ${modelResponse}`;
+                    responseText = `Agentic FinSearch: ${modelResponse}`;
                 }
 
                 loadingElement.innerText = responseText;
@@ -182,7 +182,7 @@ function handleChatResponse(question, promptMode = false, useStreaming = true) {
             })
             .catch(error => {
                 console.error('There was a problem with your fetch operation:', error);
-                loadingElement.innerText = `Search Agent: Failed to load response.`;
+                loadingElement.innerText = `Agentic FinSearch: Failed to load response.`;
             });
     }
 }
