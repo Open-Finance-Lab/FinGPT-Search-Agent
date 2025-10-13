@@ -21,8 +21,8 @@ function createActionButtons(responseText, userQuestion, promptMode, useRAG, use
     copyButton.appendChild(copyIcon);
 
     copyButton.onclick = () => {
-        // Remove "Agentic FinSearch: " prefix before copying
-        const textToCopy = responseText.replace(/^Agentic FinSearch:\s*/, '');
+        // Remove "FinGPT: " prefix before copying
+        const textToCopy = responseText.replace(/^FinGPT:\s*/, '');
         navigator.clipboard.writeText(textToCopy).then(() => {
             // Visual feedback
             copyButton.classList.add('action-button-clicked');
@@ -62,6 +62,69 @@ function createActionButtons(responseText, userQuestion, promptMode, useRAG, use
     return buttonContainer;
 }
 
+// Function to create rating element
+function createRatingElement() {
+    const ratingContainer = document.createElement('div');
+    ratingContainer.className = 'rating-container';
+
+    const ratingText = document.createElement('span');
+    ratingText.className = 'rating-text';
+    ratingText.innerText = 'How was this response?';
+
+    const ratingStars = document.createElement('div');
+    ratingStars.className = 'rating-stars';
+
+    // Create 5 stars using UTF-8 characters
+    const stars = [];
+    for (let i = 0; i < 5; i++) {
+        const star = document.createElement('span');
+        star.className = 'rating-star';
+        star.innerText = '★';
+        star.dataset.rating = i + 1;
+        stars.push(star);
+        ratingStars.appendChild(star);
+    }
+
+    // Hover effect - fill stars up to the hovered star
+    stars.forEach((star, index) => {
+        star.addEventListener('mouseenter', () => {
+            // Fill stars from 0 to current index
+            for (let i = 0; i <= index; i++) {
+                stars[i].classList.add('filled');
+            }
+            // Empty stars after current index
+            for (let i = index + 1; i < stars.length; i++) {
+                stars[i].classList.remove('filled');
+            }
+        });
+
+        // Click handler - switch to thanks message
+        star.addEventListener('click', () => {
+            const rating = parseInt(star.dataset.rating);
+            console.log(`User rated response: ${rating} stars`);
+
+            // Clear container and show thanks message
+            ratingContainer.innerHTML = '';
+            const thanksText = document.createElement('span');
+            thanksText.className = 'rating-thanks';
+            thanksText.innerText = 'Thanks for the feedback!';
+            ratingContainer.appendChild(thanksText);
+        });
+    });
+
+    // Reset stars to empty when mouse leaves the stars container
+    ratingStars.addEventListener('mouseleave', () => {
+        stars.forEach(star => {
+            star.classList.remove('filled');
+        });
+    });
+
+    ratingContainer.appendChild(ratingText);
+    ratingContainer.appendChild(ratingStars);
+
+    return ratingContainer;
+}
+
 // Function to handle chat responses (single model)
 function handleChatResponse(question, promptMode = false, useStreaming = true) {
     const startTime = performance.now();
@@ -74,7 +137,7 @@ function handleChatResponse(question, promptMode = false, useStreaming = true) {
     const loadingElement = appendChatElement(
         responseContainer,
         'agent_response',
-        `Agentic FinSearch: Loading...`
+        `FinGPT: Loading...`
     );
 
     // Read the RAG checkbox state
@@ -101,10 +164,10 @@ function handleChatResponse(question, promptMode = false, useStreaming = true) {
             // onChunk callback - called for each chunk of text
             (chunk, fullResponse) => {
                 if (isFirstChunk) {
-                    loadingElement.innerText = `Agentic FinSearch: ${fullResponse}`;
+                    loadingElement.innerText = `FinGPT: ${fullResponse}`;
                     isFirstChunk = false;
                 } else {
-                    loadingElement.innerText = `Agentic FinSearch: ${fullResponse}`;
+                    loadingElement.innerText = `FinGPT: ${fullResponse}`;
                 }
                 responseContainer.scrollTop = responseContainer.scrollHeight;
             },
@@ -114,12 +177,19 @@ function handleChatResponse(question, promptMode = false, useStreaming = true) {
                 const responseTime = endTime - startTime;
                 console.log(`Time taken for streaming response: ${responseTime} ms`);
 
-                const responseText = `Agentic FinSearch: ${fullResponse}`;
+                const responseText = `FinGPT: ${fullResponse}`;
                 loadingElement.innerText = responseText;
 
-                // Add action buttons after the response
+                // Create action row containing both action buttons and rating
+                const actionRow = document.createElement('div');
+                actionRow.className = 'response-action-row';
+
                 const actionButtons = createActionButtons(responseText, question, promptMode, useRAG, useMCP, selectedModel);
-                responseContainer.appendChild(actionButtons);
+                const ratingElement = createRatingElement();
+
+                actionRow.appendChild(actionButtons);
+                actionRow.appendChild(ratingElement);
+                responseContainer.appendChild(actionRow);
 
                 // Clear the user textbox
                 document.getElementById('textbox').value = '';
@@ -128,7 +198,7 @@ function handleChatResponse(question, promptMode = false, useStreaming = true) {
             // onError callback
             (error) => {
                 console.error('Streaming error:', error);
-                loadingElement.innerText = `Agentic FinSearch: Failed to load response (streaming error).`;
+                loadingElement.innerText = `FinGPT: Failed to load response (streaming error).`;
             }
         );
     } else {
@@ -145,18 +215,25 @@ function handleChatResponse(question, promptMode = false, useStreaming = true) {
                 let responseText = '';
                 if (!modelResponse) {
                     // Safeguard in case backend does not return something
-                    responseText = `Agentic FinSearch: (No response from server)`;
+                    responseText = `FinGPT: (No response from server)`;
                 } else if (modelResponse.startsWith("The following file(s) are missing")) {
-                    responseText = `Agentic FinSearch: Error - ${modelResponse}`;
+                    responseText = `FinGPT: Error - ${modelResponse}`;
                 } else {
-                    responseText = `Agentic FinSearch: ${modelResponse}`;
+                    responseText = `FinGPT: ${modelResponse}`;
                 }
 
                 loadingElement.innerText = responseText;
 
-                // Add action buttons after the response
+                // Create action row containing both action buttons and rating
+                const actionRow = document.createElement('div');
+                actionRow.className = 'response-action-row';
+
                 const actionButtons = createActionButtons(responseText, question, promptMode, useRAG, useMCP, selectedModel);
-                responseContainer.appendChild(actionButtons);
+                const ratingElement = createRatingElement();
+
+                actionRow.appendChild(actionButtons);
+                actionRow.appendChild(ratingElement);
+                responseContainer.appendChild(actionRow);
 
                 // If this is an Advanced Ask response and contains used_urls, cache them
                 if (promptMode && data.used_urls && data.used_urls.length > 0) {
@@ -182,7 +259,7 @@ function handleChatResponse(question, promptMode = false, useStreaming = true) {
             })
             .catch(error => {
                 console.error('There was a problem with your fetch operation:', error);
-                loadingElement.innerText = `Agentic FinSearch: Failed to load response.`;
+                loadingElement.innerText = `FinGPT: Failed to load response.`;
             });
     }
 }
