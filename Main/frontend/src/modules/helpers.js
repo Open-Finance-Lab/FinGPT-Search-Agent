@@ -29,7 +29,7 @@ function clear() {
     clearMessages()
         .then(data => {
             console.log(data);
-            const clearMsg = appendChatElement(response, 'system_message', 'Agentic FinSearch: Conversation cleared. Web content context preserved.');
+            const clearMsg = appendChatElement(response, 'system_message', 'FinGPT: Conversation cleared. Web content context preserved.');
             response.scrollTop = response.scrollHeight;
         })
         .catch(error => {
