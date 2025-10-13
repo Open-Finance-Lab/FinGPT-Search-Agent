@@ -39,17 +39,6 @@
     background-color: #ddd;
 }
 
-.light-mode .mode-button {
-    background-color: #eee;
-    color: black;
-}
-
-.light-mode .active-mode {
-    background-color: #1abc9c;
-    color: white;
-}
-
-.light-mode #buttonContainer button,
 .light-mode .clear-button,
 .light-mode .sources-button,
 .light-mode .rag-button {
@@ -57,7 +46,6 @@
     color: black;
 }
 
-.light-mode #buttonContainer button:hover,
 .light-mode .clear-button:hover,
 .light-mode .sources-button:hover,
 .light-mode .rag-button:hover {
