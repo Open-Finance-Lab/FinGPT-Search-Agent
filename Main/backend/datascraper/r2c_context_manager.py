@@ -68,8 +68,8 @@ class R2CContextManager:
                       "invest", "trade", "capital", "asset", "debt", "equity"],
             "low": ["report", "analysis", "forecast", "trend", "data", "information"]
         }
-        
-        logging.info("R2C Context Manager initialized")
+
+        # logging.info("R2C Context Manager initialized")
     
     def count_tokens(self, text: str) -> int:
         """Count tokens in text using the model's tokenizer."""
@@ -84,7 +84,7 @@ class R2CContextManager:
             role: Message role (user/assistant/system)
             content: Message content
         """
-        logging.info(f"[R2C DEBUG] Adding message to session {session_id}, role: {role}, content_length: {len(content)}")
+        # logging.info(f"[R2C DEBUG] Adding message to session {session_id}, role: {role}, content_length: {len(content)}")
         session = self.sessions[session_id]
         
         # Format content with headers to distinguish roles
@@ -107,7 +107,7 @@ class R2CContextManager:
         
         # Check if compression is needed
         if session["token_count"] > self.max_tokens:
-            logging.info(f"[R2C DEBUG] Token count {session['token_count']} exceeds max {self.max_tokens}, compressing...")
+            # logging.info(f"[R2C DEBUG] Token count {session['token_count']} exceeds max {self.max_tokens}, compressing...")
             self._compress_context(session_id)
     
     def get_context(self, session_id: str, include_compressed: bool = True) -> List[Dict]:
@@ -171,8 +171,8 @@ class R2CContextManager:
         session["token_count"] = preserved_token_count
         session["compressed_context"] = None
         session["compression_history"] = []
-        
-        logging.info(f"[R2C DEBUG] Cleared conversation for session {session_id}, preserved {len(preserved_messages)} web content messages")
+
+        # logging.info(f"[R2C DEBUG] Cleared conversation for session {session_id}, preserved {len(preserved_messages)} web content messages")
     
     def _sentence_tokenize(self, text: str) -> List[str]:
         """
@@ -298,10 +298,10 @@ class R2CContextManager:
             "compressed_tokens": compressed_tokens,
             "chunks_compressed": len(chunks)
         })
-        
-        logging.info(f"Compressed context for session {session_id}: "
-                    f"{len(messages)} messages -> {len(chunks)} chunks -> "
-                    f"{session['token_count']} tokens")
+
+        # logging.info(f"Compressed context for session {session_id}: "
+        #             f"{len(messages)} messages -> {len(chunks)} chunks -> "
+        #             f"{session['token_count']} tokens")
     
     def _r2c_compress(self, chunks: List[Dict]) -> str:
         """

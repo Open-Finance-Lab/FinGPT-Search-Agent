@@ -1,6 +1,9 @@
 from django.apps import AppConfig
 import os
 import sys
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class ApiConfig(AppConfig):
@@ -51,16 +54,15 @@ You can get API keys from:
 
 ========================================
 """
-            print(error_msg)
+            logger.error(error_msg)
             # Use Django's ImproperlyConfigured to stop the server
             raise ImproperlyConfigured("No valid API keys found in .env file")
-        
+
         # Show which API keys are configured
-        print("\nConfigured API keys:")
+        logger.info("Configured API keys:")
         if has_openai:
-            print("  ✓ OpenAI API key found")
+            logger.info("  ✓ OpenAI API key found")
         if has_anthropic:
-            print("  ✓ Anthropic API key found")
+            logger.info("  ✓ Anthropic API key found")
         if has_deepseek:
-            print("  ✓ DeepSeek API key found")
-        print()
+            logger.info("  ✓ DeepSeek API key found")

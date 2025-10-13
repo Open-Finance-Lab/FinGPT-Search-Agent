@@ -1,7 +1,7 @@
 /* Popup Container */
 #draggableElement {
     text-align: center;
-    position: absolute;
+    position: fixed;
     width: 450px;
     height: 650px;
     background-color: #333;
@@ -80,7 +80,7 @@
 /* Additional Popup Container */
 #additionalPopup {
     text-align: center;
-    position: absolute;
+    position: fixed;
     width: 450px;
     height: 650px;
     background-color: #333;
@@ -133,8 +133,7 @@
     align-items: flex-start;
 }
 
-#additionalPopup #respons .your_question,
-#additionalPopup #respons .agent_response {
+#additionalPopup #respons .your_question {
     align-self: flex-start;
     text-align: left;
     background-color: #444;
@@ -143,5 +142,15 @@
     color: #fff;
     word-wrap: break-word;
     max-width: 80%;
+    margin-top: 10px;
+}
+
+#additionalPopup #respons .agent_response {
+    align-self: flex-start;
+    text-align: left;
+    padding: 8px 15px;
+    color: #fff;
+    word-wrap: break-word;
+    max-width: 95%;
     margin-top: 10px;
 }

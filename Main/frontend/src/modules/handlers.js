@@ -1,12 +1,69 @@
 // handlers.js
 import { appendChatElement } from './helpers.js';
-import { getChatResponse } from './api.js';
+import { getChatResponse, getChatResponseStream } from './api.js';
 import { getSelectedModel, selectedModel } from './config.js';
 import { setCachedSources } from './sourcesCache.js';
 
+// Function to create action buttons (copy and retry)
+function createActionButtons(responseText, userQuestion, promptMode, useRAG, useMCP, selectedModel) {
+    const buttonContainer = document.createElement('div');
+    buttonContainer.className = 'action-buttons';
+
+    // Copy button
+    const copyButton = document.createElement('button');
+    copyButton.className = 'action-button copy-button';
+    copyButton.title = 'Copy response';
+
+    const copyIcon = document.createElement('img');
+    copyIcon.src = chrome.runtime.getURL('assets/copy.png');
+    copyIcon.alt = 'Copy';
+    copyIcon.className = 'action-icon';
+    copyButton.appendChild(copyIcon);
+
+    copyButton.onclick = () => {
+        // Remove "Search Agent: " prefix before copying
+        const textToCopy = responseText.replace(/^Search Agent:\s*/, '');
+        navigator.clipboard.writeText(textToCopy).then(() => {
+            // Visual feedback
+            copyButton.classList.add('action-button-clicked');
+            setTimeout(() => {
+                copyButton.classList.remove('action-button-clicked');
+            }, 200);
+        }).catch(err => {
+            console.error('Failed to copy text:', err);
+        });
+    };
+
+    // Retry button
+    const retryButton = document.createElement('button');
+    retryButton.className = 'action-button retry-button';
+    retryButton.title = 'Retry';
+
+    const retryIcon = document.createElement('img');
+    retryIcon.src = chrome.runtime.getURL('assets/retry-1.png');
+    retryIcon.alt = 'Retry';
+    retryIcon.className = 'action-icon';
+    retryButton.appendChild(retryIcon);
+
+    retryButton.onclick = () => {
+        // Visual feedback
+        retryButton.classList.add('action-button-clicked');
+        setTimeout(() => {
+            retryButton.classList.remove('action-button-clicked');
+        }, 200);
+
+        // Resend the question
+        handleChatResponse(userQuestion, promptMode);
+    };
+
+    buttonContainer.appendChild(copyButton);
+    buttonContainer.appendChild(retryButton);
+
+    return buttonContainer;
+}
 
 // Function to handle chat responses (single model)
-function handleChatResponse(question, promptMode = false) {
+function handleChatResponse(question, promptMode = false, useStreaming = true) {
     const startTime = performance.now();
     const responseContainer = document.getElementById('respons');
 
@@ -17,7 +74,7 @@ function handleChatResponse(question, promptMode = false) {
     const loadingElement = appendChatElement(
         responseContainer,
         'agent_response',
-        `FinGPT: Loading...`
+        `Search Agent: Loading...`
     );
 
     // Read the RAG checkbox state
@@ -28,38 +85,106 @@ function handleChatResponse(question, promptMode = false) {
 
     const selectedModel = getSelectedModel();
 
-    getChatResponse(question, selectedModel, promptMode, useRAG, useMCP)
-        .then(data => {
-            const endTime = performance.now();
-            const responseTime = endTime - startTime;
-            console.log(`Time taken for response: ${responseTime} ms`);
+    // Check if streaming is available (not for MCP, Advanced, or RAG modes)
+    const canStream = useStreaming && !useMCP && !promptMode && !useRAG;
 
-            // Extract the reply: MCP gives `data.reply`, normal gives `data.resp[...]`
-            const modelResponse = useMCP ? data.reply : data.resp[selectedModel];
+    if (canStream) {
+        // Use streaming response
+        let isFirstChunk = true;
 
-            if (!modelResponse) {
-                // Safeguard in case backend does not return something
-                loadingElement.innerText = `FinGPT: (No response from server)`;
-            } else if (modelResponse.startsWith("The following file(s) are missing")) {
-                loadingElement.innerText = `FinGPT: Error - ${modelResponse}`;
-            } else {
-                loadingElement.innerText = `FinGPT: ${modelResponse}`;
+        getChatResponseStream(
+            question,
+            selectedModel,
+            promptMode,
+            useRAG,
+            useMCP,
+            // onChunk callback - called for each chunk of text
+            (chunk, fullResponse) => {
+                if (isFirstChunk) {
+                    loadingElement.innerText = `Search Agent: ${fullResponse}`;
+                    isFirstChunk = false;
+                } else {
+                    loadingElement.innerText = `Search Agent: ${fullResponse}`;
+                }
+                responseContainer.scrollTop = responseContainer.scrollHeight;
+            },
+            // onComplete callback - called when streaming is done
+            (fullResponse, data) => {
+                const endTime = performance.now();
+                const responseTime = endTime - startTime;
+                console.log(`Time taken for streaming response: ${responseTime} ms`);
+
+                const responseText = `Search Agent: ${fullResponse}`;
+                loadingElement.innerText = responseText;
+
+                // Add action buttons after the response
+                const actionButtons = createActionButtons(responseText, question, promptMode, useRAG, useMCP, selectedModel);
+                responseContainer.appendChild(actionButtons);
+
+                // Clear the user textbox
+                document.getElementById('textbox').value = '';
+                responseContainer.scrollTop = responseContainer.scrollHeight;
+            },
+            // onError callback
+            (error) => {
+                console.error('Streaming error:', error);
+                loadingElement.innerText = `Search Agent: Failed to load response (streaming error).`;
             }
+        );
+    } else {
+        // Use regular non-streaming response
+        getChatResponse(question, selectedModel, promptMode, useRAG, useMCP)
+            .then(data => {
+                const endTime = performance.now();
+                const responseTime = endTime - startTime;
+                console.log(`Time taken for response: ${responseTime} ms`);
 
-            // If this is an Advanced Ask response and contains used_urls, cache them
-            if (promptMode && data.used_urls && data.used_urls.length > 0) {
-                setCachedSources(data.used_urls, question);
-                console.log('Cached', data.used_urls.length, 'source URLs from Advanced Ask');
-            }
+                // Extract the reply: MCP gives `data.reply`, normal gives `data.resp[...]`
+                const modelResponse = useMCP ? data.reply : data.resp[selectedModel];
 
-            // Clear the user textbox
-            document.getElementById('textbox').value = '';
-            responseContainer.scrollTop = responseContainer.scrollHeight;
-        })
-        .catch(error => {
-            console.error('There was a problem with your fetch operation:', error);
-            loadingElement.innerText = `FinGPT: Failed to load response.`;
-        });
+                let responseText = '';
+                if (!modelResponse) {
+                    // Safeguard in case backend does not return something
+                    responseText = `Search Agent: (No response from server)`;
+                } else if (modelResponse.startsWith("The following file(s) are missing")) {
+                    responseText = `Search Agent: Error - ${modelResponse}`;
+                } else {
+                    responseText = `Search Agent: ${modelResponse}`;
+                }
+
+                loadingElement.innerText = responseText;
+
+                // Add action buttons after the response
+                const actionButtons = createActionButtons(responseText, question, promptMode, useRAG, useMCP, selectedModel);
+                responseContainer.appendChild(actionButtons);
+
+                // If this is an Advanced Ask response and contains used_urls, cache them
+                if (promptMode && data.used_urls && data.used_urls.length > 0) {
+                    console.log('[Sources Debug] Advanced Ask response received');
+                    console.log('[Sources Debug] used_urls:', data.used_urls);
+                    console.log('[Sources Debug] Number of URLs:', data.used_urls.length);
+
+                    // Check each URL
+                    data.used_urls.forEach((url, idx) => {
+                        console.log(`[Sources Debug] URL ${idx + 1}: ${url}`);
+                        if (url.includes('duckduckgo')) {
+                            console.warn(`[Sources Debug] WARNING: DuckDuckGo URL found at index ${idx}: ${url}`);
+                        }
+                    });
+
+                    setCachedSources(data.used_urls, question);
+                    console.log('[Sources Debug] Cached', data.used_urls.length, 'source URLs from Advanced Ask');
+                }
+
+                // Clear the user textbox
+                document.getElementById('textbox').value = '';
+                responseContainer.scrollTop = responseContainer.scrollHeight;
+            })
+            .catch(error => {
+                console.error('There was a problem with your fetch operation:', error);
+                loadingElement.innerText = `Search Agent: Failed to load response.`;
+            });
+    }
 }
 
 // Function to handle image response

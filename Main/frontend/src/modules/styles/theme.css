@@ -39,17 +39,6 @@
     background-color: #ddd;
 }
 
-.light-mode .mode-button {
-    background-color: #eee;
-    color: black;
-}
-
-.light-mode .active-mode {
-    background-color: #1abc9c;
-    color: white;
-}
-
-.light-mode #buttonContainer button,
 .light-mode .clear-button,
 .light-mode .sources-button,
 .light-mode .rag-button {
@@ -57,7 +46,6 @@
     color: black;
 }
 
-.light-mode #buttonContainer button:hover,
 .light-mode .clear-button:hover,
 .light-mode .sources-button:hover,
 .light-mode .rag-button:hover {
@@ -65,10 +53,13 @@
 }
 
 .light-mode #respons .your_question,
-.light-mode #respons .agent_response,
-.light-mode #additionalPopup #respons .your_question,
-.light-mode #additionalPopup #respons .agent_response {
+.light-mode #additionalPopup #respons .your_question {
     background-color: #eee;
+    color: black;
+}
+
+.light-mode #respons .agent_response,
+.light-mode #additionalPopup #respons .agent_response {
     color: black;
 }
 
@@ -142,4 +133,20 @@
 
 .light-mode #source_urls li a:hover {
     text-decoration: underline;
+}
+
+/* Source sections in light mode */
+.light-mode .source-section-header {
+    color: #1a1a1a;
+    border-bottom-color: #ccc;
+}
+
+.light-mode .empty-sources {
+    background-color: #e8e8e8;
+    color: #666;
+}
+
+/* Mode selector in light mode */
+.light-mode .mode-label {
+    color: black;
 }
