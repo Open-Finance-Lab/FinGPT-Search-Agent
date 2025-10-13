@@ -1,6 +1,6 @@
 // handlers.js
 import { appendChatElement } from './helpers.js';
-import { getChatResponse } from './api.js';
+import { getChatResponse, getChatResponseStream } from './api.js';
 import { getSelectedModel, selectedModel } from './config.js';
 import { setCachedSources } from './sourcesCache.js';
 
@@ -63,7 +63,7 @@ function createActionButtons(responseText, userQuestion, promptMode, useRAG, use
 }
 
 // Function to handle chat responses (single model)
-function handleChatResponse(question, promptMode = false) {
+function handleChatResponse(question, promptMode = false, useStreaming = true) {
     const startTime = performance.now();
     const responseContainer = document.getElementById('respons');
 
@@ -85,57 +85,106 @@ function handleChatResponse(question, promptMode = false) {
 
     const selectedModel = getSelectedModel();
 
-    getChatResponse(question, selectedModel, promptMode, useRAG, useMCP)
-        .then(data => {
-            const endTime = performance.now();
-            const responseTime = endTime - startTime;
-            console.log(`Time taken for response: ${responseTime} ms`);
+    // Check if streaming is available (not for MCP, Advanced, or RAG modes)
+    const canStream = useStreaming && !useMCP && !promptMode && !useRAG;
 
-            // Extract the reply: MCP gives `data.reply`, normal gives `data.resp[...]`
-            const modelResponse = useMCP ? data.reply : data.resp[selectedModel];
+    if (canStream) {
+        // Use streaming response
+        let isFirstChunk = true;
 
-            let responseText = '';
-            if (!modelResponse) {
-                // Safeguard in case backend does not return something
-                responseText = `Search Agent: (No response from server)`;
-            } else if (modelResponse.startsWith("The following file(s) are missing")) {
-                responseText = `Search Agent: Error - ${modelResponse}`;
-            } else {
-                responseText = `Search Agent: ${modelResponse}`;
+        getChatResponseStream(
+            question,
+            selectedModel,
+            promptMode,
+            useRAG,
+            useMCP,
+            // onChunk callback - called for each chunk of text
+            (chunk, fullResponse) => {
+                if (isFirstChunk) {
+                    loadingElement.innerText = `Search Agent: ${fullResponse}`;
+                    isFirstChunk = false;
+                } else {
+                    loadingElement.innerText = `Search Agent: ${fullResponse}`;
+                }
+                responseContainer.scrollTop = responseContainer.scrollHeight;
+            },
+            // onComplete callback - called when streaming is done
+            (fullResponse, data) => {
+                const endTime = performance.now();
+                const responseTime = endTime - startTime;
+                console.log(`Time taken for streaming response: ${responseTime} ms`);
+
+                const responseText = `Search Agent: ${fullResponse}`;
+                loadingElement.innerText = responseText;
+
+                // Add action buttons after the response
+                const actionButtons = createActionButtons(responseText, question, promptMode, useRAG, useMCP, selectedModel);
+                responseContainer.appendChild(actionButtons);
+
+                // Clear the user textbox
+                document.getElementById('textbox').value = '';
+                responseContainer.scrollTop = responseContainer.scrollHeight;
+            },
+            // onError callback
+            (error) => {
+                console.error('Streaming error:', error);
+                loadingElement.innerText = `Search Agent: Failed to load response (streaming error).`;
             }
+        );
+    } else {
+        // Use regular non-streaming response
+        getChatResponse(question, selectedModel, promptMode, useRAG, useMCP)
+            .then(data => {
+                const endTime = performance.now();
+                const responseTime = endTime - startTime;
+                console.log(`Time taken for response: ${responseTime} ms`);
 
-            loadingElement.innerText = responseText;
+                // Extract the reply: MCP gives `data.reply`, normal gives `data.resp[...]`
+                const modelResponse = useMCP ? data.reply : data.resp[selectedModel];
 
-            // Add action buttons after the response
-            const actionButtons = createActionButtons(responseText, question, promptMode, useRAG, useMCP, selectedModel);
-            responseContainer.appendChild(actionButtons);
+                let responseText = '';
+                if (!modelResponse) {
+                    // Safeguard in case backend does not return something
+                    responseText = `Search Agent: (No response from server)`;
+                } else if (modelResponse.startsWith("The following file(s) are missing")) {
+                    responseText = `Search Agent: Error - ${modelResponse}`;
+                } else {
+                    responseText = `Search Agent: ${modelResponse}`;
+                }
 
-            // If this is an Advanced Ask response and contains used_urls, cache them
-            if (promptMode && data.used_urls && data.used_urls.length > 0) {
-                console.log('[Sources Debug] Advanced Ask response received');
-                console.log('[Sources Debug] used_urls:', data.used_urls);
-                console.log('[Sources Debug] Number of URLs:', data.used_urls.length);
+                loadingElement.innerText = responseText;
 
-                // Check each URL
-                data.used_urls.forEach((url, idx) => {
-                    console.log(`[Sources Debug] URL ${idx + 1}: ${url}`);
-                    if (url.includes('duckduckgo')) {
-                        console.warn(`[Sources Debug] WARNING: DuckDuckGo URL found at index ${idx}: ${url}`);
-                    }
-                });
+                // Add action buttons after the response
+                const actionButtons = createActionButtons(responseText, question, promptMode, useRAG, useMCP, selectedModel);
+                responseContainer.appendChild(actionButtons);
 
-                setCachedSources(data.used_urls, question);
-                console.log('[Sources Debug] Cached', data.used_urls.length, 'source URLs from Advanced Ask');
-            }
+                // If this is an Advanced Ask response and contains used_urls, cache them
+                if (promptMode && data.used_urls && data.used_urls.length > 0) {
+                    console.log('[Sources Debug] Advanced Ask response received');
+                    console.log('[Sources Debug] used_urls:', data.used_urls);
+                    console.log('[Sources Debug] Number of URLs:', data.used_urls.length);
 
-            // Clear the user textbox
-            document.getElementById('textbox').value = '';
-            responseContainer.scrollTop = responseContainer.scrollHeight;
-        })
-        .catch(error => {
-            console.error('There was a problem with your fetch operation:', error);
-            loadingElement.innerText = `Search Agent: Failed to load response.`;
-        });
+                    // Check each URL
+                    data.used_urls.forEach((url, idx) => {
+                        console.log(`[Sources Debug] URL ${idx + 1}: ${url}`);
+                        if (url.includes('duckduckgo')) {
+                            console.warn(`[Sources Debug] WARNING: DuckDuckGo URL found at index ${idx}: ${url}`);
+                        }
+                    });
+
+                    setCachedSources(data.used_urls, question);
+                    console.log('[Sources Debug] Cached', data.used_urls.length, 'source URLs from Advanced Ask');
+                }
+
+                // Clear the user textbox
+                document.getElementById('textbox').value = '';
+                responseContainer.scrollTop = responseContainer.scrollHeight;
+            })
+            .catch(error => {
+                console.error('There was a problem with your fetch operation:', error);
+                loadingElement.innerText = `Search Agent: Failed to load response.`;
+            });
+    }
 }
 
 // Function to handle image response

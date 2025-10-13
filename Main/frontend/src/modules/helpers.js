@@ -68,6 +68,30 @@ function get_adv_chat_response() {
     document.getElementById('textbox').value = '';
 }
 
+// Unified submit function for the new mode selector
+function submit_question(mode) {
+    const question = document.getElementById('textbox').value.trim();
+
+    if (question === '') {
+        alert("Please enter a message.");
+        return;
+    }
+
+    if (mode === 'Normal') {
+        // Normal mode - equivalent to old "Ask" button
+        handleChatResponse(question, false);
+        logQuestion(question, 'Normal');
+    } else if (mode === 'Extensive') {
+        // Extensive mode - equivalent to old "Advanced Ask" button
+        // Clear previous cached sources before making new advanced request
+        clearCachedSources();
+        handleChatResponse(question, true);
+        logQuestion(question, 'Extensive');
+    }
+
+    document.getElementById('textbox').value = '';
+}
+
 // Function to get sources
 function get_sources(searchQuery) {
     const sources_window = document.getElementById('sources_window');
@@ -235,5 +259,5 @@ function makeDraggableAndResizable(element, sourceWindowOffsetX = 10, isFixedMod
     }
 }
 
-export { appendChatElement, clear, get_chat_response, get_adv_chat_response, get_sources,
+export { appendChatElement, clear, get_chat_response, get_adv_chat_response, submit_question, get_sources,
     makeDraggableAndResizable };
