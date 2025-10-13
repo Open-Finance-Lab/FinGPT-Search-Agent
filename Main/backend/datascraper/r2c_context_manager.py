@@ -28,7 +28,7 @@ class R2CContextManager:
     ):
         """
         Initialize R2C Context Manager.
-        
+
         Args:
             max_tokens: Maximum token budget before compression triggers
             compression_ratio: Target compression ratio (0.5 = compress to 50%)
@@ -40,24 +40,25 @@ class R2CContextManager:
         self.compression_ratio = compression_ratio
         self.rho = rho
         self.gamma = gamma
-        
+
         # Initialize tokenizer based on model
         try:
             self.tokenizer = tiktoken.encoding_for_model(model)
         except:
             self.tokenizer = tiktoken.get_encoding("cl100k_base")
-        
+
         # Session storage
         self.sessions = defaultdict(lambda: {
             "messages": [],
             "message_tokens": [],  # Track tokens separately
             "compressed_context": None,
             "token_count": 0,
-            "compression_history": []
+            "compression_history": [],
+            "current_webpage": None  # Store current webpage info
         })
-        
-        # Initial system message for financial assistant
-        self.system_prompt = "You are a helpful financial assistant. Always answer questions to the best of your ability."
+
+        # Base system message for financial assistant
+        self.base_system_prompt = "You are a helpful financial assistant. Always answer questions to the best of your ability. You are situated inside an agent. The user may asks questions directly related to an active webpage (which you will have context for), or the user may asks questions that requires extensive research."
         
         # Financial keywords for importance scoring
         self.financial_keywords = {
@@ -74,11 +75,23 @@ class R2CContextManager:
     def count_tokens(self, text: str) -> int:
         """Count tokens in text using the model's tokenizer."""
         return len(self.tokenizer.encode(text))
+
+    def update_current_webpage(self, session_id: str, url: str) -> None:
+        """
+        Update the current webpage URL for a session.
+
+        Args:
+            session_id: Session identifier
+            url: Current webpage URL
+        """
+        session = self.sessions[session_id]
+        session["current_webpage"] = url
+        # logging.info(f"[R2C DEBUG] Updated current webpage for session {session_id}: {url}")
     
     def add_message(self, session_id: str, role: str, content: str) -> None:
         """
         Add a message to session history.
-        
+
         Args:
             session_id: Unique session identifier
             role: Message role (user/assistant/system)
@@ -86,7 +99,16 @@ class R2CContextManager:
         """
         # logging.info(f"[R2C DEBUG] Adding message to session {session_id}, role: {role}, content_length: {len(content)}")
         session = self.sessions[session_id]
-        
+
+        # Check if this is web content and extract URL
+        if role == "user" and "[Web Content from" in content:
+            # Extract URL from the web content message
+            import re
+            url_match = re.search(r'\[Web Content from ([^\]]+)\]:', content)
+            if url_match:
+                current_url = url_match.group(1)
+                self.update_current_webpage(session_id, current_url)
+
         # Format content with headers to distinguish roles
         if role == "assistant":
             formatted_content = f"[ASSISTANT RESPONSE]: {content}"
@@ -94,17 +116,17 @@ class R2CContextManager:
             formatted_content = f"[USER QUESTION]: {content}"
         else:  # system or other
             formatted_content = content
-        
+
         message = {
             "role": "user",  # Always use user role for compatibility
             "content": formatted_content
         }
-        
+
         tokens = self.count_tokens(formatted_content)
         session["messages"].append(message)
         session["message_tokens"].append(tokens)
         session["token_count"] += tokens
-        
+
         # Check if compression is needed
         if session["token_count"] > self.max_tokens:
             # logging.info(f"[R2C DEBUG] Token count {session['token_count']} exceeds max {self.max_tokens}, compressing...")
@@ -113,22 +135,27 @@ class R2CContextManager:
     def get_context(self, session_id: str, include_compressed: bool = True) -> List[Dict]:
         """
         Get conversation context for a session.
-        
+
         Args:
             session_id: Session identifier
             include_compressed: Whether to include compressed context
-            
+
         Returns:
             List of messages for the session
         """
         session = self.sessions[session_id]
-        
+
+        # Build system prompt with current webpage info
+        system_prompt = self.base_system_prompt
+        if session.get("current_webpage"):
+            system_prompt += f"\n\n[CURRENT CONTEXT]: You are currently viewing the webpage: {session['current_webpage']}. When users ask 'which page am I on' or similar questions about the current page, always confidently tell them they are on: {session['current_webpage']}"
+
         # Always include system prompt as first message with user role
         context = [{
             "role": "user",
-            "content": self.system_prompt
+            "content": system_prompt
         }]
-        
+
         if include_compressed and session["compressed_context"]:
             # Add compressed context with user role
             context.append({
@@ -140,7 +167,7 @@ class R2CContextManager:
         else:
             # Add all messages
             context.extend(session["messages"])
-        
+
         return context
     
     def clear_session(self, session_id: str) -> None:
