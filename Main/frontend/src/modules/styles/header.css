@@ -26,21 +26,6 @@
     align-items: center;
 }
 
-/* Additional Header */
-#additionalHeader {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 20px;
-    padding: 10px;
-    cursor: move;
-}
-
-#additionalHeader span {
-    font-size: 1.2em;
-    font-weight: bold;
-}
-
 /* Headers for Settings Window */
 #model_selection_header,
 #preferred_links_header {
