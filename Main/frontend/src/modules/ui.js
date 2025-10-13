@@ -8,7 +8,7 @@ import { createLinkManager } from './components/link_manager.js';
 
 // Function to create UI elements
 function createUI() {
-    let isFixedMode = false;
+    let isFixedMode = true;
     let searchQuery = '';
 
     const isFixedModeRef = { value: isFixedMode }; // Pass-by-reference workaround
@@ -22,7 +22,7 @@ function createUI() {
     settingsIcon.className = "icon";
 
     const positionModeIcon = document.createElement('span');
-    positionModeIcon.innerText = "📌";
+    positionModeIcon.innerText = "⛓️‍💥";
     positionModeIcon.id = "position-mode-icon";
     positionModeIcon.className = "icon";
 
@@ -129,7 +129,7 @@ function createUI() {
     document.body.appendChild(popup);
 
     // Position + interaction
-    popup.style.position = "absolute";
+    popup.style.position = "fixed";
     popup.style.top = "10%";
     popup.style.left = "10%";
     popup.style.width = '450px';

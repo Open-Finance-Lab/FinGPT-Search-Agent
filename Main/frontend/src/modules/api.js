@@ -77,6 +77,106 @@ function getChatResponse(question, selectedModel, promptMode, useRAG, useMCP) {
         });
 }
 
+// Function to get streaming chat response using EventSource
+function getChatResponseStream(question, selectedModel, promptMode, useRAG, useMCP, onChunk, onComplete, onError) {
+    const encodedQuestion = encodeURIComponent(question);
+
+    // For now, streaming is only supported for non-MCP, non-advanced mode
+    if (useMCP || promptMode) {
+        // Fallback to regular response for unsupported modes
+        return getChatResponse(question, selectedModel, promptMode, useRAG, useMCP)
+            .then(data => {
+                const modelResponse = useMCP ? data.reply : data.resp[selectedModel];
+                onComplete(modelResponse, data);
+            })
+            .catch(onError);
+    }
+
+    // Build SSE URL
+    const url = `http://127.0.0.1:8000/get_chat_response_stream/?question=${encodedQuestion}` +
+        `&models=${selectedModel}` +
+        `&use_rag=${useRAG}` +
+        `&use_r2c=true` +
+        `&session_id=${currentSessionId}`;
+
+    // Create EventSource for SSE with credentials support
+    const eventSource = new EventSource(url, { withCredentials: true });
+    let fullResponse = '';
+    let connectionAttempts = 0;
+    const maxReconnectAttempts = 3;
+
+    // Handle connection event
+    eventSource.addEventListener('connected', (event) => {
+        console.log('SSE connection established');
+        connectionAttempts = 0; // Reset on successful connection
+    });
+
+    // Handle open event (connection established)
+    eventSource.onopen = (event) => {
+        console.log('EventSource connected successfully');
+    };
+
+    // Handle message events
+    eventSource.onmessage = (event) => {
+        try {
+            const data = JSON.parse(event.data);
+
+            if (data.error) {
+                onError(new Error(data.error));
+                eventSource.close();
+                return;
+            }
+
+            if (data.content) {
+                fullResponse += data.content;
+                onChunk(data.content, fullResponse);
+            }
+
+            if (data.done) {
+                eventSource.close();
+                onComplete(fullResponse, data);
+            }
+
+            // Handle R2C stats if present
+            if (data.r2c_stats) {
+                console.log('R2C stats:', data.r2c_stats);
+            }
+        } catch (e) {
+            console.error('Error parsing SSE data:', e);
+        }
+    };
+
+    // Handle errors with reconnection logic
+    eventSource.onerror = (error) => {
+        // Check readyState to determine the type of error
+        if (eventSource.readyState === EventSource.CONNECTING) {
+            connectionAttempts++;
+            console.log(`SSE reconnecting... Attempt ${connectionAttempts}`);
+
+            if (connectionAttempts > maxReconnectAttempts) {
+                console.error('SSE max reconnection attempts reached');
+                eventSource.close();
+                onError(new Error('Connection failed after multiple attempts'));
+            }
+        } else if (eventSource.readyState === EventSource.CLOSED) {
+            console.error('SSE connection closed');
+            onError(new Error('Connection closed unexpectedly'));
+        } else {
+            console.error('SSE error:', error);
+            eventSource.close();
+            onError(error);
+        }
+    };
+
+    // Return a cleanup function
+    return () => {
+        if (eventSource.readyState !== EventSource.CLOSED) {
+            eventSource.close();
+            console.log('EventSource connection closed by client');
+        }
+    };
+}
+
 // Function to clear messages
 function clearMessages() {
     return fetch(`http://127.0.0.1:8000/clear_messages/?use_r2c=true&session_id=${currentSessionId}`, { method: "POST", credentials: "include" })
@@ -150,6 +250,7 @@ function syncPreferredLinks() {
 export {
     postWebTextToServer,
     getChatResponse,
+    getChatResponseStream,
     clearMessages,
     getSourceUrls,
     logQuestion,
