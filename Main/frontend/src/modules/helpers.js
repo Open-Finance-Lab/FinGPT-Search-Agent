@@ -17,18 +17,19 @@ function clear() {
     const response = document.getElementById('respons');
     const sourceurls = document.getElementById('source_urls');
 
+    // Clear all messages and button rows from the response container
     response.innerHTML = "";
-    if (sourceurls) {
-        sourceurls.innerHTML = "";
-    }
 
-    // Clear cached sources when clearing conversation
-    clearCachedSources();
+    // Note: We do NOT clear the sources window content because we want to preserve it
+    // The sourceurls div will be rebuilt when the user clicks Sources button again
+
+    // Don't clear cached sources - we want to preserve web context
+    // clearCachedSources(); // Removed to preserve web context
 
     clearMessages()
         .then(data => {
             console.log(data);
-            const clearMsg = appendChatElement(response, 'system_message', 'Agentic FinSearch: Conversation cleared. Web content context preserved.');
+            const clearMsg = appendChatElement(response, 'system_message', 'FinGPT: Conversation cleared. Web content context preserved.');
             response.scrollTop = response.scrollHeight;
         })
         .catch(error => {

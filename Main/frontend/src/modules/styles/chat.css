@@ -258,14 +258,23 @@
     margin-top: 10px;
 }
 
+/* Response Action Row (contains action buttons and rating) */
+.response-action-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 4px;
+    margin-left: 8px;
+    align-self: flex-start;
+    width: 95%;
+    max-width: 95%;
+}
+
 /* Action Buttons (Copy & Retry) */
 .action-buttons {
     display: flex;
     gap: 2px;
-    margin-bottom: 4px;
-    margin-left: 8px;
     align-items: center;
-    align-self: flex-start;
 }
 
 .action-button {
@@ -318,4 +327,56 @@
     margin-bottom: 4px;
     pointer-events: none;
     z-index: 1000;
+}
+
+/* Rating Component */
+.rating-container {
+    background-color: #444;
+    border-radius: 6px;
+    padding: 10px 15px;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    transition: background-color 0.2s ease;
+}
+
+.rating-text {
+    color: white;
+    font-size: 14px;
+    white-space: nowrap;
+}
+
+.rating-stars {
+    display: flex;
+    gap: 2px;
+    align-items: center;
+}
+
+.rating-star {
+    font-size: 18px;
+    cursor: pointer;
+    transition: color 0.15s ease, transform 0.1s ease;
+    color: #888;
+    line-height: 1;
+    user-select: none;
+}
+
+.rating-star.filled {
+    color: #FDB241;
+}
+
+.rating-star:hover {
+    transform: scale(1.15);
+}
+
+.rating-star:active {
+    transform: scale(0.95);
+}
+
+/* Thanks state */
+.rating-thanks {
+    color: white;
+    font-size: 14px;
+    text-align: center;
+    width: 100%;
 }
