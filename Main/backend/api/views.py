@@ -134,25 +134,30 @@ def _get_session_id(request):
         # logging.info(f"[R2C DEBUG] Using existing Django session: {request.session.session_key}")
     return request.session.session_key
 
-def _prepare_context_messages(request, question, use_r2c=True):
+def _prepare_context_messages(request, question, use_r2c=True, current_url=None):
     """
     Prepare context messages using R2C or legacy system.
-    
+
     Args:
         request: Django request object
         question: User's question to add
         use_r2c: Whether to use R2C context management
-        
+        current_url: Current webpage URL (optional)
+
     Returns:
         tuple: (legacy_messages, session_id)
     """
     session_id = _get_session_id(request) if use_r2c else None
-    
+
     if use_r2c and session_id:
+        # Update current webpage if URL provided
+        if current_url:
+            r2c_manager.update_current_webpage(session_id, current_url)
+
         r2c_manager.add_message(session_id, "user", question)
 
         context_messages = r2c_manager.get_context(session_id)
-        
+
         # R2C already includes system prompt and handles compression
         # Just use the context messages directly
         legacy_messages = context_messages
@@ -325,7 +330,7 @@ def chat_response(request):
     responses = {}
 
     # Prepare context messages using R2C or legacy system
-    legacy_messages, session_id = _prepare_context_messages(request, question, use_r2c)
+    legacy_messages, session_id = _prepare_context_messages(request, question, use_r2c, current_url)
     # logging.info(f"[R2C DEBUG] Prepared {len(legacy_messages)} messages for session {session_id}")
 
     # Log message contents for debugging
@@ -376,7 +381,7 @@ def chat_response_stream(request):
     model = models[0]
 
     # Prepare context messages using R2C
-    legacy_messages, session_id = _prepare_context_messages(request, question, use_r2c)
+    legacy_messages, session_id = _prepare_context_messages(request, question, use_r2c, current_url)
 
     def event_stream():
         """Generator function for SSE streaming"""
@@ -448,7 +453,7 @@ def mcp_chat_response(request):
     responses = {}
     
     # Prepare context messages using R2C or legacy system
-    legacy_messages, session_id = _prepare_context_messages(request, question, use_r2c)
+    legacy_messages, session_id = _prepare_context_messages(request, question, use_r2c, current_url)
 
     for model in models:
         try:
@@ -505,7 +510,7 @@ def adv_response(request):
     responses = {}
     
     # Prepare context messages using R2C or legacy system
-    legacy_messages, session_id = _prepare_context_messages(request, question, use_r2c)
+    legacy_messages, session_id = _prepare_context_messages(request, question, use_r2c, current_url)
     
     for model in models:
         try:
