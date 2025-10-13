@@ -36,7 +36,7 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": [ "fonts/*.woff", "fonts/*.woff2" ],
+      "resources": [ "fonts/*.woff", "fonts/*.woff2", "assets/*.png" ],
       "matches": [ "<all_urls>" ]
     }
   ]

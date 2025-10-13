@@ -1,7 +1,7 @@
 // helpers.js
 import { clearMessages, getSourceUrls, logQuestion } from './api.js';
 import { handleChatResponse, handleImageResponse } from './handlers.js';
-import { getCachedSources, hasCachedSources, clearCachedSources } from './sourcesCache.js';
+import { getCachedSources, hasCachedSources, clearCachedSources, getCurrentPageUrl, getCachedSourcesWithoutCurrentPage } from './sourcesCache.js';
 
 // Function to append chat elements
 function appendChatElement(parent, className, text) {
@@ -28,7 +28,7 @@ function clear() {
     clearMessages()
         .then(data => {
             console.log(data);
-            const clearMsg = appendChatElement(response, 'system_message', 'FinGPT: Conversation cleared. Web content context preserved.');
+            const clearMsg = appendChatElement(response, 'system_message', 'Search Agent: Conversation cleared. Web content context preserved.');
             response.scrollTop = response.scrollHeight;
         })
         .catch(error => {
@@ -68,22 +68,103 @@ function get_adv_chat_response() {
     document.getElementById('textbox').value = '';
 }
 
+// Unified submit function for the new mode selector
+function submit_question(mode) {
+    const question = document.getElementById('textbox').value.trim();
+
+    if (question === '') {
+        alert("Please enter a message.");
+        return;
+    }
+
+    if (mode === 'Normal') {
+        // Normal mode - equivalent to old "Ask" button
+        handleChatResponse(question, false);
+        logQuestion(question, 'Normal');
+    } else if (mode === 'Extensive') {
+        // Extensive mode - equivalent to old "Advanced Ask" button
+        // Clear previous cached sources before making new advanced request
+        clearCachedSources();
+        handleChatResponse(question, true);
+        logQuestion(question, 'Extensive');
+    }
+
+    document.getElementById('textbox').value = '';
+}
+
 // Function to get sources
 function get_sources(searchQuery) {
     const sources_window = document.getElementById('sources_window');
     const loadingSpinner = document.getElementById('loading_spinner');
     const source_urls = document.getElementById('source_urls');
 
+    console.log('[Sources Debug] get_sources called with query:', searchQuery);
     sources_window.style.display = 'block';
 
-    // Check if we have cached sources first
-    if (hasCachedSources()) {
-        console.log('Using cached sources for instant display');
-        const cachedUrls = getCachedSources();
+    // Hide spinner and show source URLs container
+    loadingSpinner.style.display = 'none';
+    source_urls.style.display = 'block';
 
-        // Display cached sources immediately without loading
-        source_urls.innerHTML = '';
-        cachedUrls.forEach(url => {
+    // Get current page and other sources
+    const currentPageUrl = getCurrentPageUrl();
+    const otherSources = getCachedSourcesWithoutCurrentPage();
+
+    console.log('[Sources Debug] Current page URL:', currentPageUrl);
+    console.log('[Sources Debug] Other sources:', otherSources);
+
+    // Clear and rebuild the source URLs display
+    source_urls.innerHTML = '';
+
+    // ALWAYS create "Current active webpage" section
+    const currentPageSection = document.createElement('div');
+    currentPageSection.className = 'source-section';
+
+    const currentPageHeader = document.createElement('div');
+    currentPageHeader.className = 'source-section-header';
+    currentPageHeader.innerText = 'Current active webpage';
+    currentPageSection.appendChild(currentPageHeader);
+
+    const currentPageContent = document.createElement('ul');
+    currentPageContent.className = 'source-section-content';
+
+    if (currentPageUrl) {
+        const link = document.createElement('a');
+        link.href = currentPageUrl;
+        link.innerText = currentPageUrl;
+        link.target = "_blank";
+
+        const listItem = document.createElement('li');
+        listItem.appendChild(link);
+        currentPageContent.appendChild(listItem);
+    } else {
+        const emptyMsg = document.createElement('div');
+        emptyMsg.className = 'empty-sources';
+        emptyMsg.innerText = 'No current webpage detected';
+        currentPageContent.appendChild(emptyMsg);
+    }
+
+    currentPageSection.appendChild(currentPageContent);
+    source_urls.appendChild(currentPageSection);
+
+    // ALWAYS create "Sources used" section
+    const sourcesSection = document.createElement('div');
+    sourcesSection.className = 'source-section';
+
+    const sourcesHeader = document.createElement('div');
+    sourcesHeader.className = 'source-section-header';
+    sourcesHeader.innerText = 'Sources used';
+    sourcesSection.appendChild(sourcesHeader);
+
+    const sourcesContent = document.createElement('ul');
+    sourcesContent.className = 'source-section-content';
+
+    if (otherSources.length > 0) {
+        otherSources.forEach((url, idx) => {
+            console.log(`[Sources Debug] Displaying source URL ${idx + 1}: ${url}`);
+            if (url.includes('duckduckgo')) {
+                console.warn(`[Sources Debug] WARNING: DuckDuckGo URL being displayed at index ${idx}: ${url}`);
+            }
+
             const link = document.createElement('a');
             link.href = url;
             link.innerText = url;
@@ -91,76 +172,17 @@ function get_sources(searchQuery) {
 
             const listItem = document.createElement('li');
             listItem.appendChild(link);
-            listItem.classList.add('source-item');
-
-            source_urls.appendChild(listItem);
+            sourcesContent.appendChild(listItem);
         });
-
-        // Show sources immediately without spinner
-        loadingSpinner.style.display = 'none';
-        source_urls.style.display = 'block';
-
-        // Optionally, still fetch from backend to get icons (but don't show spinner)
-        getSourceUrls(searchQuery)
-            .then(data => {
-                // If backend returns sources with icons, update the display
-                if (data["resp"] && data["resp"].length > 0) {
-                    console.log('Updating sources with icons from backend');
-                    source_urls.innerHTML = '';
-                    data["resp"].forEach(source => {
-                        const url = source[0];
-                        const icon = source[1]; // Icon URL if available
-
-                        const link = document.createElement('a');
-                        link.href = url;
-                        link.innerText = url;
-                        link.target = "_blank";
-
-                        const listItem = document.createElement('li');
-                        listItem.appendChild(link);
-                        listItem.classList.add('source-item');
-
-                        source_urls.appendChild(listItem);
-                    });
-                }
-            })
-            .catch(error => {
-                console.error('Error fetching source icons:', error);
-                // Cached sources are still displayed, so no problem
-            });
     } else {
-        // No cached sources, fetch from backend with loading spinner
-        loadingSpinner.style.display = 'block';
-        source_urls.style.display = 'none';
-
-        getSourceUrls(searchQuery)
-            .then(data => {
-                console.log(data["resp"]);
-                const sources = data["resp"];
-                source_urls.innerHTML = '';
-
-                sources.forEach(source => {
-                    const url = source[0];
-                    const link = document.createElement('a');
-                    link.href = url;
-                    link.innerText = url;
-                    link.target = "_blank";
-
-                    const listItem = document.createElement('li');
-                    listItem.appendChild(link);
-                    listItem.classList.add('source-item');
-
-                    source_urls.appendChild(listItem);
-                });
-
-                loadingSpinner.style.display = 'none'; // Hide spinner
-                source_urls.style.display = 'block'; // Show source list
-            })
-            .catch(error => {
-                console.error('There was a problem getting sources:', error);
-                loadingSpinner.style.display = 'none'; // Hide spinner in case of error
-            });
+        const emptyMsg = document.createElement('div');
+        emptyMsg.className = 'empty-sources';
+        emptyMsg.innerText = 'Sources used for agent responses when using Advanced Ask is displayed here.';
+        sourcesContent.appendChild(emptyMsg);
     }
+
+    sourcesSection.appendChild(sourcesContent);
+    source_urls.appendChild(sourcesSection);
 }
 
 // Removed old preferred links functions - now handled by link_manager.js component
@@ -237,5 +259,5 @@ function makeDraggableAndResizable(element, sourceWindowOffsetX = 10, isFixedMod
     }
 }
 
-export { appendChatElement, clear, get_chat_response, get_adv_chat_response, get_sources,
+export { appendChatElement, clear, get_chat_response, get_adv_chat_response, submit_question, get_sources,
     makeDraggableAndResizable };

@@ -1,20 +1,11 @@
-import time
-import requests
 import os
-import re
 import logging
 import asyncio
-# import torch
 
 from dotenv import load_dotenv
-from bs4 import BeautifulSoup
 
 from openai import OpenAI
 from anthropic import Anthropic
-
-from urllib.parse import urljoin
-# from transformers import AutoTokenizer, AutoModelForCausalLM
-# from accelerate import init_empty_weights, load_checkpoint_and_dispatch
 
 from . import cdm_rag
 from mcp_client.agent import create_fin_agent, USER_ONLY_MODELS, DEFAULT_PROMPT
@@ -26,6 +17,11 @@ from .models_config import (
     validate_model_support
 )
 from .preferred_links_manager import get_manager
+from .openai_search import (
+    create_responses_api_search,
+    format_sources_for_frontend,
+    is_responses_api_available
+)
 
 # Load .env from the backend root directory
 from pathlib import Path
@@ -36,12 +32,6 @@ DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
-req_headers = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                  "AppleWebKit/537.36 (KHTML, like Gecko) "
-                  "Chrome/115.0.0.0 Safari/537.36"
-}
 
 # Initialize clients
 clients = {}
@@ -69,210 +59,6 @@ INSTRUCTION = (
 # A module-level set to keep track of used URLs
 used_urls: set[str] = set()
 
-# Helper
-def remove_duplicate_sentences(text):
-    """Remove duplicate consecutive sentences that often appear in scraped content."""
-    sentences = re.split(r'(?<=[.!?])\s+', text)
-    unique_sentences = []
-    for sentence in sentences:
-        if not unique_sentences or sentence != unique_sentences[-1]:
-            unique_sentences.append(sentence)
-    return ' '.join(unique_sentences)
-
-def fallback_search(query, num_results=10):
-    """
-    Fallback search using DuckDuckGo HTML scraping when googlesearch fails.
-    Returns a list of URLs.
-    """
-    try:
-        import urllib.parse
-        encoded_query = urllib.parse.quote_plus(query)
-        ddg_url = f"https://html.duckduckgo.com/html/?q={encoded_query}"
-
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-        }
-
-        response = requests.get(ddg_url, headers=headers, timeout=10)
-        if response.status_code != 200:
-            logging.error(f"DuckDuckGo search failed with status code: {response.status_code}")
-            return []
-
-        soup = BeautifulSoup(response.text, 'html.parser')
-        results = []
-
-        for result in soup.find_all('a', class_='result__a', limit=num_results):
-            url = result.get('href')
-            if url and url.startswith('http'):
-                results.append(url)
-
-        logging.info(f"DuckDuckGo fallback returned {len(results)} URLs")
-        return results
-    except Exception as e:
-        logging.error(f"Fallback search failed: {e}")
-        return []
-
-def data_scrape(url, timeout=10, rate_limit=1):
-    """
-    Scrapes data from the given URL and returns a structured dictionary.
-    Includes metadata extraction, duplicate removal, and rate limiting.
-    """
-    try:
-        # Rate limiting to prevent rapid-fire requests
-        time.sleep(rate_limit)
-        start_time = time.time()
-        response = requests.get(url, timeout=timeout, headers=req_headers)
-        elapsed_time = time.time() - start_time
-
-        if response.status_code != 200:
-            logging.error(f"Failed to retrieve page ({response.status_code}): {url}")
-            return {'url': url, 'status': 'error', 'error': f"Status code {response.status_code}"}
-
-        logging.info(f"Successful response: {url} (Elapsed time: {elapsed_time:.2f}s)")
-        soup = BeautifulSoup(response.text, 'html.parser')
-
-        # Extract metadata: title and meta description
-        metadata = {}
-        if soup.title and soup.title.string:
-            metadata['title'] = soup.title.string.strip()
-        meta_desc = soup.find('meta', attrs={'name': 'description'})
-        if meta_desc and meta_desc.get('content'):
-            metadata['description'] = meta_desc.get('content').strip()
-
-        # Remove non-content elements
-        for element in soup.find_all(['script', 'style', 'nav', 'footer', 'aside']):
-            element.decompose()
-
-        main_content = ""
-        # Try to find main content containers
-        content_elements = soup.find_all(['article', 'main', 'div', 'section'],
-                                         class_=lambda x: x and any(term in str(x).lower()
-                                                                    for term in ['content', 'article', 'main', 'post', 'entry']))
-        if content_elements:
-            for element in content_elements:
-                for tag in element.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p']):
-                    text = tag.get_text(strip=True)
-                    if text:
-                        main_content += (text + "\n") if tag.name.startswith('h') else (text + " ")
-
-        # Fallback: If no content found via containers, scrape all headings and paragraphs
-        if not main_content:
-            for tag in soup.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p']):
-                text = tag.get_text(strip=True)
-                if text and (tag.name.startswith('h') or len(text) > 50):
-                    main_content += (text + "\n") if tag.name.startswith('h') else (text + " ")
-
-        # Final fallback: extract all text if little content is gathered
-        if not main_content or len(main_content) < 50:
-            all_text = soup.get_text(separator=' ', strip=True)
-            main_content = ' '.join(all_text.split())
-
-        # Clean duplicate consecutive sentences
-        cleaned_content = remove_duplicate_sentences(main_content)
-
-        return {
-            'url': url,
-            'status': 'success',
-            'metadata': metadata,
-            'content': cleaned_content
-        }
-
-    except requests.exceptions.Timeout:
-        logging.error(f"Request timed out after {timeout} seconds for URL: {url}")
-        return {'url': url, 'status': 'error', 'error': f"Timeout after {timeout} seconds"}
-    except Exception as e:
-        logging.error(f"An error occurred for URL {url}: {str(e)}")
-        return {'url': url, 'status': 'error', 'error': str(e)}
-
-
-def search_preferred_urls(preferred_urls, max_urls=None):
-    """
-    Scrapes provided preferred URLs without keyword filtering.
-
-    Args:
-        preferred_urls: List of URLs to scrape
-        max_urls: Maximum number of URLs to scrape (None = all)
-
-    Returns:
-        List of scraped information dictionaries
-    """
-    if not preferred_urls:
-        logging.info("No preferred URLs to search")
-        return []
-
-    if max_urls:
-        preferred_urls = preferred_urls[:max_urls]
-
-    info_list = []
-    for url in preferred_urls:
-        info = data_scrape(url)
-        logging.info(f"Scraped preferred URL {url}: status={info.get('status')}")
-        if info.get('status') == 'success':
-            info_list.append(info)
-        else:
-            logging.warning(f"Failed to scrape URL: {url}, error: {info.get('error')}")
-    return info_list
-
-
-def extract_search_keywords(user_query: str, model: str = "o4-mini") -> str:
-    """
-    Uses an LLM to extract optimal Google search keywords from a user query.
-
-    Args:
-        user_query: The user's question or prompt
-        model: Model to use for keyword extraction
-
-    Returns:
-        Optimized search keywords as a string
-    """
-    try:
-        model_config = get_model_config(model)
-        if not model_config:
-            logging.warning(f"Model {model} not found, using query as-is")
-            return user_query
-
-        provider = model_config["provider"]
-        model_name = model_config["model_name"]
-        client = clients.get(provider)
-
-        if not client:
-            logging.warning(f"No client for {provider}, using query as-is")
-            return user_query
-
-        extraction_prompt = (
-            "You are a search keyword extraction assistant. "
-            "Given a user's question or request, extract the most relevant keywords for a Google search. "
-            "Return ONLY the keywords, nothing else. Keep it concise (6 words maximum). "
-            "Focus on the core topic, entities, and key terms.\n\n"
-            f"User query: {user_query}\n\n"
-            "Search keywords:"
-        )
-
-        if provider == "anthropic":
-            response = client.messages.create(
-                model=model_name,
-                messages=[{"role": "user", "content": extraction_prompt}],
-                max_tokens=50
-            )
-            keywords = response.content[0].text.strip()
-        else:
-            kwargs = {}
-            if provider == "deepseek" and "recommended_temperature" in model_config:
-                kwargs["temperature"] = model_config["recommended_temperature"]
-
-            response = client.chat.completions.create(
-                model=model_name,
-                messages=[{"role": "user", "content": extraction_prompt}],
-                **kwargs
-            )
-            keywords = response.choices[0].message.content.strip()
-
-        logging.info(f"Extracted keywords from '{user_query}': '{keywords}'")
-        return keywords
-
-    except Exception as e:
-        logging.error(f"Error extracting keywords: {e}, using query as-is")
-        return user_query
 
 
 def create_rag_response(user_input, message_list, model):
@@ -281,64 +67,124 @@ def create_rag_response(user_input, message_list, model):
     """
     try:
         response = cdm_rag.get_rag_response(user_input, model)
-        message_list.append({"role": "user", "content": response})
+        # Don't append to message_list here - let the caller handle it properly
         return response
     except FileNotFoundError as e:
         # Handle the error and return the error message
         error_message = str(e)
-        message_list.append({"role": "user", "content": error_message})
+        # Don't append to message_list here - let the caller handle it properly
         return error_message
 
 
 def create_response(
         user_input: str,
         message_list: list[dict],
-        model: str = "o4-mini"
+        model: str = "o4-mini",
+        stream: bool = False
 ) -> str:
     """
     Creates a chat completion using the appropriate provider based on model configuration.
+    Supports both streaming and non-streaming modes.
     """
     # Get model configuration
     model_config = get_model_config(model)
     if not model_config:
         raise ValueError(f"Unsupported model: {model}")
-    
+
     provider = model_config["provider"]
     model_name = model_config["model_name"]
-    
+
     # Get the appropriate client
     client = clients.get(provider)
     if not client:
         raise ValueError(f"No client available for provider: {provider}. Please check API key configuration.")
-    
-    # Prepare messages
-    msgs = [msg for msg in message_list if msg.get("role") != "system"]
-    msgs.insert(0, {"role": "system", "content": INSTRUCTION})
+
+    # Parse message list with headers and convert to proper format for APIs
+    msgs = []
+    system_message = None
+
+    for msg in message_list:
+        content = msg.get("content", "")
+
+        # Parse headers to determine actual role
+        if content.startswith("[SYSTEM MESSAGE]: "):
+            actual_content = content.replace("[SYSTEM MESSAGE]: ", "")
+            if not system_message:
+                system_message = actual_content
+            else:
+                system_message = f"{system_message} {actual_content}"
+        elif content.startswith("[USER MESSAGE]: "):
+            actual_content = content.replace("[USER MESSAGE]: ", "")
+            msgs.append({"role": "user", "content": actual_content})
+        elif content.startswith("[ASSISTANT MESSAGE]: "):
+            actual_content = content.replace("[ASSISTANT MESSAGE]: ", "")
+            msgs.append({"role": "assistant", "content": actual_content})
+        else:
+            # Legacy format or web content - treat as user message
+            msgs.append({"role": "user", "content": content})
+
+    # Add system message at the beginning
+    if system_message:
+        msgs.insert(0, {"role": "system", "content": f"{system_message} {INSTRUCTION}"})
+    else:
+        msgs.insert(0, {"role": "system", "content": INSTRUCTION})
+
+    # Add current user input
     msgs.append({"role": "user", "content": user_input})
-    
+
     # Provider-specific handling
     if provider == "anthropic":
         # Anthropic uses a different API structure
-        response = client.messages.create(
-            model=model_name,
-            messages=msgs[1:],  # Anthropic doesn't use system messages the same way
-            system=INSTRUCTION,  # System message as separate parameter
-            max_tokens=1024
-        )
-        return response.content[0].text
+        # Extract system message content for Anthropic
+        system_content = msgs[0]["content"] if msgs and msgs[0].get("role") == "system" else INSTRUCTION
+        # Get non-system messages
+        anthropic_msgs = [msg for msg in msgs if msg.get("role") != "system"]
+
+        if stream:
+            # Streaming mode for Anthropic using context manager
+            with client.messages.stream(
+                model=model_name,
+                messages=anthropic_msgs,
+                system=system_content,
+                max_tokens=1024
+            ) as stream_response:
+                for text in stream_response.text_stream:
+                    yield text
+        else:
+            # Non-streaming mode
+            response = client.messages.create(
+                model=model_name,
+                messages=anthropic_msgs,
+                system=system_content,
+                max_tokens=1024
+            )
+            return response.content[0].text
     else:
         # OpenAI and DeepSeek use the same API structure
         # Handle DeepSeek temperature recommendations
         kwargs = {}
         if provider == "deepseek" and "recommended_temperature" in model_config:
             kwargs["temperature"] = model_config["recommended_temperature"]
-        
-        response = client.chat.completions.create(
-            model=model_name,
-            messages=msgs,
-            **kwargs
-        )
-        return response.choices[0].message.content
+
+        if stream:
+            # Streaming mode for OpenAI/DeepSeek
+            stream_response = client.chat.completions.create(
+                model=model_name,
+                messages=msgs,
+                stream=True,
+                **kwargs
+            )
+            for chunk in stream_response:
+                if chunk.choices and chunk.choices[0].delta.content is not None:
+                    yield chunk.choices[0].delta.content
+        else:
+            # Non-streaming mode
+            response = client.chat.completions.create(
+                model=model_name,
+                messages=msgs,
+                **kwargs
+            )
+            return response.choices[0].message.content
 
 
 def create_advanced_response(
@@ -348,199 +194,86 @@ def create_advanced_response(
         preferred_links: list[str] = None
 ) -> str:
     """
-    Creates an advanced response by searching at least 5 URLs total:
-    1. If 5+ preferred URLs: search all of them
-    2. If exactly 5 preferred URLs: search all of them
-    3. If <5 preferred URLs: search them + additional Google results to reach 5 total
-    4. If no preferred URLs: extract keywords via LLM, then Google search top 5
+    Creates an advanced response using OpenAI Responses API with web search.
 
-    Appends metadata and content from scraped results, and returns the final assistant reply.
+    This function uses OpenAI's built-in web_search tool to:
+    1. Automatically search for relevant information
+    2. Retrieve and read web pages
+    3. Generate a response with inline citations
+    4. Track source URLs for display
+
+    Args:
+        user_input: The user's question
+        message_list: Previous conversation history
+        model: Model ID from frontend (e.g., "FinGPT-Light")
+        preferred_links: List of preferred URLs/domains to prioritize
+
+    Returns:
+        Generated response with web-sourced information
     """
-    logging.info("Starting advanced response creation...")
+    logging.info(f"Starting advanced response with model ID: {model}")
 
-    # Clear any previous used URLs
+    # Clear previous used URLs
     used_urls.clear()
-    context_messages: list[str] = []
 
-    TARGET_LINKS = 5
+    # Get the actual model configuration
+    model_config = get_model_config(model)
+
+    # Get the actual model name from config
+    if model_config:
+        actual_model = model_config.get("model_name")
+        logging.info(f"Model mapping: {model} -> {actual_model}")
+    else:
+        actual_model = model
+        logging.warning(f"No config found for model {model}, using as-is")
+
+    # Check if the actual model supports Responses API
+    if not is_responses_api_available(actual_model):
+        # Fallback to a model that does support it
+        fallback_model = "gpt-4o-mini"
+        logging.warning(f"Model {actual_model} (from {model}) doesn't support Responses API")
+        logging.info(f"FALLBACK: Using {fallback_model} for web search instead")
+        actual_model = fallback_model
+    else:
+        logging.info(f"Model {actual_model} supports Responses API with web search")
 
     # Get the preferred links manager
     manager = get_manager()
 
     # Sync and get preferred links
     if preferred_links is not None and len(preferred_links) > 0:
-        # Frontend provided links - sync them to storage (which also deduplicates)
+        # Frontend provided links - sync them to storage
         manager.sync_from_frontend(preferred_links)
-        # Get the deduplicated links from the manager
         preferred_urls = manager.get_links()
-        logging.info(f"Synced {len(preferred_links)} links from frontend, using {len(preferred_urls)} deduplicated links")
+        logging.info(f"Using {len(preferred_urls)} preferred URLs")
     else:
         # No frontend links - use stored ones
         preferred_urls = manager.get_links()
-        logging.info(f"Using {len(preferred_urls)} preferred links from storage")
+        logging.info(f"Using {len(preferred_urls)} stored preferred URLs")
 
-    num_preferred = len(preferred_urls)
-    logging.info(f"Found {num_preferred} preferred URLs")
-
-    # Search preferred URLs first (all of them, no keyword filtering)
-    if num_preferred > 0:
-        logging.info(f"Scraping {num_preferred} preferred URLs...")
-        preferred_info_list = search_preferred_urls(preferred_urls)
-
-        for info in preferred_info_list:
-            url = info['url']
-            content = info.get('content', '')
-            content_length = len(content)
-
-            # Check if content has at least 50 characters
-            if content_length < 50:
-                logging.info(f"Skipping preferred URL {url} (content too short: {content_length} chars < 50)")
-                continue
-
-            used_urls.add(url)
-            meta = info.get('metadata', {})
-            combined = (
-                f"URL: {url}\n"
-                f"Title: {meta.get('title', '')}\n"
-                f"Description: {meta.get('description', '')}\n"
-                f"Content: {content}"
-            )
-            context_messages.append(combined)
-            logging.info(f"Added preferred URL to context: {url} (content: {content_length} chars)")
-
-    # Determine how many additional links to search
-    links_found = len(context_messages)
-    additional_needed = max(0, TARGET_LINKS - links_found)
-
-    # If we need more links, search via Google
-    if additional_needed > 0:
-        logging.info(f"Need {additional_needed} more links. Searching via DuckDuckGo...")
-
-        # Determine search query - extract keywords if auto-searching with fewer than TARGET_LINKS preferred URLs
-        if num_preferred < TARGET_LINKS:
-            logging.info(f"Less than {TARGET_LINKS} preferred URLs. Extracting search keywords via LLM...")
-            search_query = extract_search_keywords(user_input, model)
-            logging.info(f"Using LLM-extracted keywords: '{search_query}'")
-        else:
-            # Otherwise use the user input directly
-            search_query = user_input
-            logging.info(f"Using user input as search query: '{search_query}'")
-
-        # Perform DuckDuckGo search
-        try:
-            links_scraped = 0
-            url_index = 0
-
-            # Use DuckDuckGo as the main search
-            logging.info(f"Searching DuckDuckGo with query: '{search_query}'")
-            logging.info(f"Requesting {additional_needed + 5} results...")
-
-            search_urls = fallback_search(search_query, num_results=additional_needed + 5)
-
-            logging.info(f"DuckDuckGo search returned {len(search_urls)} URLs")
-            for idx, url in enumerate(search_urls, 1):
-                logging.info(f"  [{idx}] {url}")
-
-            # Now scrape each URL
-            for url in search_urls:
-                url_index += 1
-
-                # Skip if already scraped from preferred URLs
-                if url in used_urls:
-                    logging.info(f"[{url_index}/{len(search_urls)}] Skipping {url} (already scraped from preferred URLs)")
-                    continue
-
-                logging.info(f"[{url_index}/{len(search_urls)}] Fetching {url}...")
-
-                try:
-                    info = data_scrape(url)
-                    content = info.get('content', '')
-                    content_length = len(content)
-
-                    logging.info(f"  -> Status: {info.get('status')}, Content length: {content_length} chars")
-
-                    if info.get('status') == 'success':
-                        # Check if content has at least 50 characters
-                        if content_length < 50:
-                            logging.info(f"  -> ✗ SKIPPED (content too short: {content_length} chars < 50)")
-                        else:
-                            # Accept successful fetch with sufficient content
-                            used_urls.add(info['url'])
-                            meta = info.get('metadata', {})
-                            combined = (
-                                f"URL: {info['url']}\n"
-                                f"Title: {meta.get('title', '')}\n"
-                                f"Description: {meta.get('description', '')}\n"
-                                f"Content: {content}"
-                            )
-                            context_messages.append(combined)
-                            links_scraped += 1
-                            logging.info(f"  -> ✓ ADDED to context (total sources: {len(context_messages)})")
-
-                            # Stop if we've reached our target
-                            if links_scraped >= additional_needed:
-                                logging.info(f"Reached target of {additional_needed} additional links")
-                                break
-                    else:
-                        logging.info(f"  -> ✗ FAILED ({info.get('error', 'unknown error')})")
-
-                except Exception as e:
-                    logging.error(f"  -> ✗ EXCEPTION: {e}")
-                    continue
-
-        except Exception as e:
-            logging.error(f"Google search failed: {e}")
-            if not context_messages:
-                # If no context at all, raise error
-                raise RuntimeError(f"Failed to gather any search results: {e}")
-
-    logging.info(f"Gathered {len(context_messages)} sources for advanced response")
-
-    # Get model configuration
-    model_config = get_model_config(model)
-    if not model_config:
-        raise ValueError(f"Unsupported model: {model}")
-    
-    provider = model_config["provider"]
-    model_name = model_config["model_name"]
-    
-    # Get the appropriate client
-    client = clients.get(provider)
-    if not client:
-        raise ValueError(f"No client available for provider: {provider}. Please check API key configuration.")
-    
-    # construct messages
-    msgs = [msg for msg in message_list if msg.get('role') != 'system']
-    msgs.insert(0, {"role": "system", "content": INSTRUCTION})
-    for snippet in context_messages:
-        msgs.append({"role": "user", "content": snippet})
-    msgs.append({"role": "user", "content": user_input})
-
-    # Provider-specific handling
-    if provider == "anthropic":
-        # Anthropic uses a different API structure
-        response = client.messages.create(
-            model=model_name,
-            messages=msgs[1:],  # Anthropic doesn't use system messages the same way
-            system=INSTRUCTION,  # System message as separate parameter
-            max_tokens=4096  # Longer for advanced responses
+    try:
+        # Call the new OpenAI Responses API search function with the actual model name
+        response_text, source_urls = create_responses_api_search(
+            user_query=user_input,
+            message_history=message_list,
+            model=actual_model,  # Use the actual model name, not the frontend ID
+            preferred_links=preferred_urls
         )
-        answer = response.content[0].text
-    else:
-        # OpenAI and DeepSeek use the same API structure
-        kwargs = {}
-        if provider == "deepseek" and "recommended_temperature" in model_config:
-            kwargs["temperature"] = model_config["recommended_temperature"]
-        
-        response = client.chat.completions.create(
-            model=model_name,
-            messages=msgs,
-            **kwargs
-        )
-        answer = response.choices[0].message.content
-    
-    logging.info(f"Generated advanced answer: {answer}")
-    return answer
+
+        # Update the global used_urls set for compatibility with get_sources
+        used_urls.clear()
+        used_urls.update(source_urls)
+
+        logging.info(f"Advanced response generated with {len(source_urls)} sources")
+        for idx, url in enumerate(source_urls, 1):
+            logging.info(f"  Source {idx}: {url}")
+
+        return response_text
+
+    except Exception as e:
+        logging.error(f"OpenAI Responses API failed: {e}")
+        # Return a fallback response
+        return f"I encountered an error while searching for information: {str(e)}. Please try again."
 
 
 def create_rag_advanced_response(user_input: str, message_list: list[dict], model: str = "o4-mini", preferred_links: list[str] = None) -> str:
@@ -584,13 +317,24 @@ async def _create_mcp_response_async(user_input: str, message_list: list[dict], 
     from mcp_client.agent import create_fin_agent
     from agents import Runner
     
-    # Convert message list to context
+    # Convert message list to context, parsing headers
     context = ""
     for msg in message_list:
-        if msg.get("role") == "user":
-            context += f"User: {msg.get('content', '')}\n"
-        elif msg.get("role") == "assistant":
-            context += f"Assistant: {msg.get('content', '')}\n"
+        content = msg.get("content", "")
+
+        # Parse headers to determine actual role
+        if content.startswith("[SYSTEM MESSAGE]: "):
+            actual_content = content.replace("[SYSTEM MESSAGE]: ", "")
+            context += f"System: {actual_content}\n"
+        elif content.startswith("[USER MESSAGE]: "):
+            actual_content = content.replace("[USER MESSAGE]: ", "")
+            context += f"User: {actual_content}\n"
+        elif content.startswith("[ASSISTANT MESSAGE]: "):
+            actual_content = content.replace("[ASSISTANT MESSAGE]: ", "")
+            context += f"Assistant: {actual_content}\n"
+        else:
+            # Legacy format or web content - treat as user message
+            context += f"User: {content}\n"
     
     # Combine context with current input
     full_prompt = f"{context}User: {user_input}"
@@ -608,25 +352,25 @@ async def _create_mcp_response_async(user_input: str, message_list: list[dict], 
 
 def get_sources(query):
     """
-    Returns the URLs that were used in the most recent 'create_advanced_response' call,
-    along with their icons or placeholders for front-end display.
+    Returns the URLs that were used in the most recent 'create_advanced_response' call.
+    Now returns URLs with None for icons since we don't scrape pages anymore.
     """
-    sources = [(url, get_website_icon(url)) for url in used_urls]
-    print("DEBUG: Sources List:", sources)  # DEBUG
-    return [(url, get_website_icon(url)) for url in used_urls]
+    logging.info(f"get_sources called with query: '{query}'")
+    logging.info(f"Current used_urls contains {len(used_urls)} URLs:")
+    for idx, url in enumerate(used_urls, 1):
+        logging.info(f"  [{idx}] {url}")
+
+    # Return URLs with None for icons (frontend will handle missing icons)
+    sources = [(url, None) for url in used_urls]
+    logging.info(f"Returning {len(sources)} source URLs")
+    return sources
 
 
 def get_website_icon(url):
     """
-    Retrieves the website icon (favicon) for a given URL.
+    DEPRECATED: No longer scraping websites for icons.
+    Returns None for all URLs.
     """
-    response = requests.get(url, headers=req_headers)
-    soup = BeautifulSoup(response.text, 'html.parser')
-    favicon_tag = soup.find('link', rel='icon') or soup.find('link', rel='shortcut icon')
-    if favicon_tag:
-        favicon_url = favicon_tag.get('href')
-        favicon_url = urljoin(url, favicon_url)
-        return favicon_url
     return None
 
 

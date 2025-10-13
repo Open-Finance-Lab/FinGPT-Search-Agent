@@ -1,11 +1,33 @@
+"""
+API Views for FinGPT Search Agent
+
+SECURITY NOTE: CSRF Protection
+-------------------------------
+Most endpoints use @csrf_exempt because this backend serves a browser extension frontend.
+Browser extensions cannot easily include CSRF tokens in their requests.
+
+Security is provided through:
+1. CORS_ALLOWED_ORIGINS restricting which origins can make requests
+2. SESSION_COOKIE_SAMESITE='None' with SESSION_COOKIE_SECURE=True (in production)
+3. Session-based authentication via Django sessions
+
+PRODUCTION RECOMMENDATION:
+For production deployments, consider implementing API token authentication
+instead of relying solely on session cookies and CORS.
+"""
+
 import json
 import os
 import csv
 import asyncio
 import logging
+import re
 from datetime import datetime
+from pathlib import Path
 from django.views.decorators.csrf import csrf_exempt
-from django.http import JsonResponse
+from django.http import JsonResponse, StreamingHttpResponse
+from django_ratelimit.decorators import ratelimit
+from django.conf import settings
 from datascraper import datascraper as ds
 from datascraper import create_embeddings as ce
 from datascraper.preferred_links_manager import get_manager
@@ -19,11 +41,25 @@ from datascraper.models_config import MODELS_CONFIG
 # Constants
 QUESTION_LOG_PATH = os.path.join(os.path.dirname(__file__), 'questionLog.csv')
 
+# Helper function to get version from pyproject.toml
+def _get_version():
+    """Dynamically fetch version from pyproject.toml"""
+    try:
+        pyproject_path = Path(__file__).resolve().parent.parent / 'pyproject.toml'
+        with open(pyproject_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+            match = re.search(r'^version\s*=\s*["\']([^"\']+)["\']', content, re.MULTILINE)
+            if match:
+                return match.group(1)
+    except Exception:
+        pass
+    return 'unknown'
+
 # Initial message list (kept for backward compatibility)
 # This is a global message list
 message_list = [
     {"role": "user",
-     "content": "You are a helpful financial assistant. Always answer questions to the best of your ability."}
+     "content": "[SYSTEM MESSAGE]: You are a helpful financial assistant. Always answer questions to the best of your ability."}
 ]
 
 # R2C
@@ -86,15 +122,16 @@ def _get_session_id(request):
             pass
     
     if custom_session_id:
-        logging.info(f"[R2C DEBUG] Using custom session ID: {custom_session_id}")
+        # logging.info(f"[R2C DEBUG] Using custom session ID: {custom_session_id}")
         return custom_session_id
-    
+
     # Fall back to Django session
     if not request.session.session_key:
         request.session.create()
-        logging.info(f"[R2C DEBUG] Created new Django session: {request.session.session_key}")
+        # logging.info(f"[R2C DEBUG] Created new Django session: {request.session.session_key}")
     else:
-        logging.info(f"[R2C DEBUG] Using existing Django session: {request.session.session_key}")
+        pass
+        # logging.info(f"[R2C DEBUG] Using existing Django session: {request.session.session_key}")
     return request.session.session_key
 
 def _prepare_context_messages(request, question, use_r2c=True):
@@ -120,10 +157,10 @@ def _prepare_context_messages(request, question, use_r2c=True):
         # Just use the context messages directly
         legacy_messages = context_messages
     else:
-        # Use legacy message_list - append the question with a header
-        message_list.append({"role": "user", "content": f"[USER QUESTION]: {question}"})
+        # Use legacy message_list - append the question with header
+        message_list.append({"role": "user", "content": f"[USER MESSAGE]: {question}"})
         legacy_messages = message_list.copy()
-    
+
     return legacy_messages, session_id
 
 def _add_response_to_context(session_id, response, use_r2c=True):
@@ -131,8 +168,8 @@ def _add_response_to_context(session_id, response, use_r2c=True):
     if use_r2c and session_id:
         r2c_manager.add_message(session_id, "assistant", response)
     else:
-        # Add to legacy message_list with clear header
-        message_list.append({"role": "user", "content": f"[ASSISTANT RESPONSE]: {response}"})
+        # Add to legacy message_list with header
+        message_list.append({"role": "user", "content": f"[ASSISTANT MESSAGE]: {response}"})
 
 def _prepare_response_with_stats(responses, session_id, use_r2c=True, single_response_mode=False):
     """
@@ -227,6 +264,7 @@ def _log_interaction(button_clicked, current_url, question, response=None):
 
 # View to handle appending the text from FRONT-END SCRAPER to the message list
 @csrf_exempt
+@ratelimit(key='ip', rate=lambda g, r: settings.API_RATE_LIMIT, method='POST')
 def add_webtext(request):
     """Handle appending the site's text to the message list"""
     if request.method != 'POST':
@@ -238,11 +276,11 @@ def add_webtext(request):
         current_url = body_data.get('currentUrl', '')
         use_r2c = body_data.get('use_r2c', True)  # Default to using R2C
         session_id_from_body = body_data.get('session_id')
-        
-        logging.info(f"[R2C DEBUG] add_webtext - URL: {current_url}, use_r2c: {use_r2c}, session_id: {session_id_from_body}, content_length: {len(text_content)}")
-        
+
+        # logging.info(f"[R2C DEBUG] add_webtext - URL: {current_url}, use_r2c: {use_r2c}, session_id: {session_id_from_body}, content_length: {len(text_content)}")
+
         if not text_content:
-            logging.warning("[R2C DEBUG] No text content provided")
+            # logging.warning("[R2C DEBUG] No text content provided")
             return JsonResponse({"error": "No textContent provided."}, status=400)
 
         message_list.append({
@@ -253,11 +291,11 @@ def add_webtext(request):
         if use_r2c:
             session_id = _get_session_id(request)
             if session_id:
-                logging.info(f"[R2C DEBUG] Adding web content to session {session_id}, URL: {current_url}, content length: {len(text_content)}")
+                # logging.info(f"[R2C DEBUG] Adding web content to session {session_id}, URL: {current_url}, content length: {len(text_content)}")
                 r2c_manager.add_message(session_id, "user", f"[Web Content from {current_url}]: {text_content}")
                 # Log session stats after adding
                 stats = r2c_manager.get_session_stats(session_id)
-                logging.info(f"[R2C DEBUG] Session {session_id} stats after web content: {stats}")
+                # logging.info(f"[R2C DEBUG] Session {session_id} stats after web content: {stats}")
 
         _log_interaction("add_webtext", current_url, f"Added web content: {text_content[:20]}...")
         
@@ -265,6 +303,7 @@ def add_webtext(request):
     except json.JSONDecodeError:
         return JsonResponse({"error": "Invalid JSON"}, status=400)
 
+@ratelimit(key='ip', rate=lambda g, r: settings.API_RATE_LIMIT, method='POST')
 def chat_response(request):
     """Process chat response from selected models"""
     question = request.GET.get('question', '')
@@ -272,28 +311,28 @@ def chat_response(request):
     use_rag = request.GET.get('use_rag', 'false').lower() == 'true'
     current_url = request.GET.get('current_url', '')
     use_r2c = request.GET.get('use_r2c', 'true').lower() == 'true'  # Default to using R2C
-    
-    logging.info(f"[R2C DEBUG] chat_response - Question: '{question[:50]}...', Models: {selected_models}, use_r2c: {use_r2c}")
-    
+
+    # logging.info(f"[R2C DEBUG] chat_response - Question: '{question[:50]}...', Models: {selected_models}, use_r2c: {use_r2c}")
+
     # Validate and parse models
     if not selected_models:
         return JsonResponse({'error': 'No models specified'}, status=400)
-    
+
     models = [model.strip() for model in selected_models.split(',') if model.strip()]
     if not models:
         return JsonResponse({'error': 'No valid models specified'}, status=400)
-    
+
     responses = {}
-    
+
     # Prepare context messages using R2C or legacy system
     legacy_messages, session_id = _prepare_context_messages(request, question, use_r2c)
-    logging.info(f"[R2C DEBUG] Prepared {len(legacy_messages)} messages for session {session_id}")
-    
+    # logging.info(f"[R2C DEBUG] Prepared {len(legacy_messages)} messages for session {session_id}")
+
     # Log message contents for debugging
-    for i, msg in enumerate(legacy_messages[:3]):  # Log first 3 messages
-        content_preview = msg.get('content', '')[:100]
-        logging.info(f"[R2C DEBUG] Message {i}: role={msg.get('role')}, content_preview='{content_preview}...'")
-    
+    # for i, msg in enumerate(legacy_messages[:3]):  # Log first 3 messages
+    #     content_preview = msg.get('content', '')[:100]
+    #     logging.info(f"[R2C DEBUG] Message {i}: role={msg.get('role')}, content_preview='{content_preview}...'")
+
     for model in models:
         try:
             if use_rag:
@@ -317,7 +356,80 @@ def chat_response(request):
 
     return _prepare_response_with_stats(responses, session_id, use_r2c)
 
+@ratelimit(key='ip', rate=lambda g, r: settings.API_RATE_LIMIT, method='GET')
+def chat_response_stream(request):
+    """Process streaming chat response from selected models using SSE"""
+    question = request.GET.get('question', '')
+    selected_models = request.GET.get('models', '')
+    use_rag = request.GET.get('use_rag', 'false').lower() == 'true'
+    current_url = request.GET.get('current_url', '')
+    use_r2c = request.GET.get('use_r2c', 'true').lower() == 'true'
+
+    # Validate and parse models
+    if not selected_models:
+        return JsonResponse({'error': 'No models specified'}, status=400)
+
+    models = [model.strip() for model in selected_models.split(',') if model.strip()]
+    if not models:
+        return JsonResponse({'error': 'No valid models specified'}, status=400)
+
+    model = models[0]
+
+    # Prepare context messages using R2C
+    legacy_messages, session_id = _prepare_context_messages(request, question, use_r2c)
+
+    def event_stream():
+        """Generator function for SSE streaming"""
+        try:
+            # Send initial connection event (as bytes for WSGI compatibility)
+            yield b'event: connected\ndata: {"status": "connected"}\n\n'
+
+            if use_rag:
+                # RAG doesn't support streaming yet, return full response
+                response = ds.create_rag_response(question, legacy_messages, model)
+                sse_data = f'data: {json.dumps({"content": response, "done": True})}\n\n'
+                yield sse_data.encode('utf-8')
+            else:
+                # Stream response from model
+                full_response = ""
+                for chunk in ds.create_response(question, legacy_messages, model, stream=True):
+                    full_response += chunk
+                    # Send each chunk as SSE event (encoded as bytes)
+                    sse_data = f'data: {json.dumps({"content": chunk, "done": False})}\n\n'
+                    yield sse_data.encode('utf-8')
+
+                # Send completion event
+                sse_data = f'data: {json.dumps({"content": "", "done": True})}\n\n'
+                yield sse_data.encode('utf-8')
+
+                # Add complete response to context after streaming
+                _add_response_to_context(session_id, full_response, use_r2c)
+
+                # Log interaction
+                _log_interaction("chat_stream", current_url, question, full_response)
+
+                # Send R2C stats if enabled
+                if use_r2c and session_id:
+                    stats = r2c_manager.get_session_stats(session_id)
+                    sse_data = f'data: {json.dumps({"r2c_stats": stats})}\n\n'
+                    yield sse_data.encode('utf-8')
+
+        except Exception as e:
+            logging.error(f"Error in streaming response: {e}")
+            sse_data = f'data: {json.dumps({"error": str(e), "done": True})}\n\n'
+            yield sse_data.encode('utf-8')
+
+    # Return streaming response with proper SSE headers
+    response = StreamingHttpResponse(
+        event_stream(),
+        content_type='text/event-stream'
+    )
+    response['Cache-Control'] = 'no-cache'
+    response['X-Accel-Buffering'] = 'no'  # Disable Nginx buffering
+    return response
+
 @csrf_exempt
+@ratelimit(key='ip', rate=lambda g, r: settings.API_RATE_LIMIT, method='POST')
 def mcp_chat_response(request):
     """Process chat response via MCP-enabled Agent"""
     question = request.GET.get('question', '')
@@ -363,6 +475,7 @@ def mcp_chat_response(request):
     return _prepare_response_with_stats(responses, session_id, use_r2c, single_response_mode=True)
 
 @csrf_exempt
+@ratelimit(key='ip', rate=lambda g, r: settings.API_RATE_LIMIT, method='POST')
 def adv_response(request):
     """Process advanced chat response from selected models"""
     question = request.GET.get('question', '')
@@ -417,6 +530,11 @@ def adv_response(request):
 
     # Get the used URLs from datascraper
     used_urls_list = list(ds.used_urls)
+
+    # Log the URLs being sent to frontend
+    logging.info(f"Advanced response sending {len(used_urls_list)} URLs to frontend:")
+    for idx, url in enumerate(used_urls_list, 1):
+        logging.info(f"  [{idx}] {url}")
 
     # Return response with optional R2C stats and used URLs
     response_data = _prepare_response_with_stats(responses, session_id, use_r2c)
@@ -571,23 +689,23 @@ def folder_path(request):
     """
     Upload the folder path for the RAG.
     """
-    print("[DEBUG] arrived in view with request:", request)
+    # print("[DEBUG] arrived in view with request:", request)
     if request.method == 'POST':
         try:
 
             if 'json_data' not in request.FILES :
                 return JsonResponse({'error': 'No JSON file received'}, status=400)
-        
+
             file = request.FILES['json_data']
-        
+
             # Read the JSON data from the file
             json_data = json.loads(file.read())
             # print("[DEBUG] json_data: ", json_data)
 
             # Create embeddings for files
             response_data, status_code = ce.upload_folder(json_data)
-            print("[DEBUG] Flask API response:", response_data)
-            print("[DEBUG] Response status code:", status_code)
+            # print("[DEBUG] Flask API response:", response_data)
+            # print("[DEBUG] Response status code:", status_code)
 
             return JsonResponse(response_data, status=status_code)
 
@@ -595,3 +713,15 @@ def folder_path(request):
             return JsonResponse({'error': str(e)}, status=500)
     else:
         return JsonResponse({'error': 'Only POST requests allowed'}, status=405)
+
+def health(request):
+    """
+    Health check endpoint for load balancers and monitoring.
+    Returns 200 OK if the service is running.
+    """
+    return JsonResponse({
+        'status': 'healthy',
+        'service': 'fingpt-backend',
+        'timestamp': datetime.now().isoformat(),
+        'version': _get_version()
+    })

@@ -14,66 +14,75 @@ MODELS_CONFIG = {
         "max_tokens": 128000,
         "description": "GPT-4o Mini - Fast and efficient"
     },
-    "o1-pro": {
-        "provider": "openai",
-        "model_name": "o1-pro",
-        "supports_rag": True,
-        "supports_mcp": True,
-        "supports_advanced": True,
-        "max_tokens": 128000,
-        "description": "O1 Pro - Advanced model with enhanced deep reasoning"
-    },
-    "gpt-5-chat": {
+    # "o1-pro": {
+    #     "provider": "openai",
+    #     "model_name": "o1-pro",
+    #     "supports_rag": True,
+    #     "supports_mcp": True,
+    #     "supports_advanced": True,
+    #     "max_tokens": 128000,
+    #     "description": "O1 Pro - Advanced model with enhanced deep reasoning"
+    # },
+    # "gpt-5-chat": {
+    #     "provider": "openai",
+    #     "model_name": "gpt-5-chat-latest",
+    #     "supports_rag": True,
+    #     "supports_mcp": True,
+    #     "supports_advanced": True,
+    #     "max_tokens": 128000,
+    #     "description": "GPT-5 Chat Latest - Latest generation model"
+    # },
+    "FinGPT": {
         "provider": "openai",
         "model_name": "gpt-5-chat-latest",
         "supports_rag": True,
         "supports_mcp": True,
         "supports_advanced": True,
         "max_tokens": 128000,
-        "description": "GPT-5 Chat Latest - Latest generation model"
+        "description": "The FinGPT model"
     },
-    "gpt-5-nano": {
+    "FinGPT-Light": {
         "provider": "openai",
         "model_name": "gpt-5-nano",
         "supports_rag": True,
         "supports_mcp": True,
         "supports_advanced": True,
         "max_tokens": 400000,
-        "description": "GPT-5 Nano - Fast and with extended context window"
+        "description": "A much faster smaller FinGPT model"
     },
-    
+
     # DeepSeek Models
-    "deepseek-reasoner": {
-        "provider": "deepseek",
-        "model_name": "deepseek-reasoner",
-        "supports_rag": True,
-        "supports_mcp": True,
-        "supports_advanced": True,
-        "max_tokens": 128000,
-        "description": "DeepSeek R1 - Advanced reasoning model",
-        "temperature_range": [0.5, 0.7],
-        "recommended_temperature": 0.6
-    },
-    
+    # "deepseek-reasoner": {
+    #     "provider": "deepseek",
+    #     "model_name": "deepseek-reasoner",
+    #     "supports_rag": True,
+    #     "supports_mcp": True,
+    #     "supports_advanced": True,
+    #     "max_tokens": 128000,
+    #     "description": "DeepSeek R1 - Advanced reasoning model",
+    #     "temperature_range": [0.5, 0.7],
+    #     "recommended_temperature": 0.6
+    # },
+
     # Anthropic Claude Models
-    "claude-4-sonnet": {
-        "provider": "anthropic",
-        "model_name": "claude-sonnet-4-20250514",
-        "supports_rag": True,
-        "supports_mcp": True,
-        "supports_advanced": True,
-        "max_tokens": 200000,
-        "description": "Claude 4 Sonnet - Latest generation model"
-    },
-    "claude-haiku-3.5": {
-        "provider": "anthropic",
-        "model_name": "claude-3-5-haiku-20241022",
-        "supports_rag": True,
-        "supports_mcp": True,
-        "supports_advanced": True,
-        "max_tokens": 200000,
-        "description": "Claude 3.5 Haiku - Fast and efficient"
-    }
+    # "claude-4-sonnet": {
+    #     "provider": "anthropic",
+    #     "model_name": "claude-sonnet-4-20250514",
+    #     "supports_rag": True,
+    #     "supports_mcp": True,
+    #     "supports_advanced": True,
+    #     "max_tokens": 200000,
+    #     "description": "Claude 4 Sonnet - Latest generation model"
+    # },
+    # "claude-haiku-3.5": {
+    #     "provider": "anthropic",
+    #     "model_name": "claude-3-5-haiku-20241022",
+    #     "supports_rag": True,
+    #     "supports_mcp": True,
+    #     "supports_advanced": True,
+    #     "max_tokens": 200000,
+    #     "description": "Claude 3.5 Haiku - Fast and efficient"
+    # }
 }
 
 # Provider configurations
