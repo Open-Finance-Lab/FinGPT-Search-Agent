@@ -228,9 +228,11 @@ function makeDraggableAndResizable(element, sourceWindowOffsetX = 10, isFixedMod
         element.style.left = `${newX}px`;
         element.style.top = `${newY}px`;
 
-        // Move sources window with main popup
+        // Move sources window with main popup (now on the left side)
         const sourcesWindow = document.getElementById('sources_window');
-        sourcesWindow.style.left = `${newX + element.offsetWidth + sourceWindowOffsetX}px`;
+        // Calculate left position for sources window, ensure it doesn't go off-screen
+        const sourcesLeft = Math.max(0, newX - 310); // 300px width + 10px offset
+        sourcesWindow.style.left = `${sourcesLeft}px`;
         sourcesWindow.style.top = `${newY}px`;
     }
 
@@ -245,9 +247,12 @@ function makeDraggableAndResizable(element, sourceWindowOffsetX = 10, isFixedMod
             element.style.height = `${newHeight}px`;
         }
 
-        // Move sources window with main popup
+        // Keep sources window on the left (no need to move when resizing)
         const sourcesWindow = document.getElementById('sources_window');
-        sourcesWindow.style.left = `${element.offsetLeft + element.offsetWidth + sourceWindowOffsetX}px`;
+        // Sources window stays at same position relative to left edge of main window
+        // Ensure it doesn't go off-screen
+        const sourcesLeft = Math.max(0, element.offsetLeft - 310); // 300px width + 10px offset
+        sourcesWindow.style.left = `${sourcesLeft}px`;
     }
 
     function closeDragOrResizeElement() {
