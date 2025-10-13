@@ -145,3 +145,8 @@
     background-color: #e8e8e8;
     color: #666;
 }
+
+/* Mode selector in light mode */
+.light-mode .mode-label {
+    color: black;
+}
