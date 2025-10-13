@@ -21,7 +21,6 @@
 }
 
 .light-mode #draggableElement,
-.light-mode #additionalPopup,
 .light-mode #sources_window {
     background-color: #ddd;
     color: black;
@@ -34,7 +33,6 @@
 }
 
 .light-mode #header,
-.light-mode #additionalHeader,
 .light-mode #sources_window_header {
     background-color: #ddd;
 }
@@ -52,14 +50,12 @@
     background-color: #ddd;
 }
 
-.light-mode #respons .your_question,
-.light-mode #additionalPopup #respons .your_question {
+.light-mode #respons .your_question {
     background-color: #eee;
     color: black;
 }
 
-.light-mode #respons .agent_response,
-.light-mode #additionalPopup #respons .agent_response {
+.light-mode #respons .agent_response {
     color: black;
 }
 

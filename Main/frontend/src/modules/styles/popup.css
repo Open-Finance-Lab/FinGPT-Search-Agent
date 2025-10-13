@@ -7,7 +7,7 @@
     background-color: #333;
     border-radius: 15px;
     box-shadow: 5px 0px 10px black;
-    overflow-y: auto;
+    overflow: hidden;
     z-index: 10000;
     color: white;
     display: flex;
@@ -60,7 +60,29 @@
     flex: 1;
     display: flex;
     flex-direction: column;
-    justify-content: center;
+    overflow-y: auto;
+    overflow-x: hidden;
+    min-height: 0;
+    margin-bottom: 10px;
+}
+
+#content::-webkit-scrollbar {
+    width: 8px;
+}
+
+#content::-webkit-scrollbar-track {
+    background: none;
+}
+
+#content::-webkit-scrollbar-thumb {
+    background-color: #888;
+    border-radius: 10px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+}
+
+#content::-webkit-scrollbar-thumb:hover {
+    background-color: #555;
 }
 
 /* Minimized State */
@@ -77,80 +99,3 @@
     display: none;
 }
 
-/* Additional Popup Container */
-#additionalPopup {
-    text-align: center;
-    position: fixed;
-    width: 450px;
-    height: 650px;
-    background-color: #333;
-    border-radius: 15px;
-    box-shadow: 5px 0px 10px black;
-    overflow-y: auto;
-    z-index: 10000;
-    color: white;
-    display: flex;
-    flex-direction: column;
-    padding: 20px;
-    resize: both;
-    min-width: 250px;
-    min-height: 80px;
-    user-select: text;
-}
-
-/* Custom Scrollbar for Additional Popup */
-#additionalPopup::-webkit-scrollbar {
-    width: 12px;
-}
-
-#additionalPopup::-webkit-scrollbar-track {
-    background: none;
-}
-
-#additionalPopup::-webkit-scrollbar-thumb {
-    background-color: #888;
-    border-radius: 10px;
-    border: 3px solid transparent;
-    background-clip: padding-box;
-}
-
-#additionalPopup::-webkit-scrollbar-thumb:hover {
-    background-color: #555;
-}
-
-/* Additional Content Area */
-#additionalContent {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-}
-
-/* Responses in Additional Popup */
-#additionalPopup #respons {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-}
-
-#additionalPopup #respons .your_question {
-    align-self: flex-start;
-    text-align: left;
-    background-color: #444;
-    border-radius: 10px;
-    padding: 8px 15px;
-    color: #fff;
-    word-wrap: break-word;
-    max-width: 80%;
-    margin-top: 10px;
-}
-
-#additionalPopup #respons .agent_response {
-    align-self: flex-start;
-    text-align: left;
-    padding: 8px 15px;
-    color: #fff;
-    word-wrap: break-word;
-    max-width: 95%;
-    margin-top: 10px;
-}
