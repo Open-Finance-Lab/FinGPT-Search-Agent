@@ -36,12 +36,21 @@ function createUI() {
             popup.style.position = "absolute";
             popup.style.top = `${rect.top + window.scrollY}px`;
             popup.style.left = `${rect.left + window.scrollX}px`;
+            popup.style.right = "auto"; // Clear right positioning when switching to absolute
             positionModeIcon.innerText = "📌";
 
             const settingsIconRect = settingsIcon.getBoundingClientRect();
             settings_window.style.position = "absolute";
             settings_window.style.top = `${settingsIconRect.bottom + window.scrollY}px`;
             settings_window.style.left = `${settingsIconRect.left + window.scrollX}px`;
+
+            // Update sources window position mode
+            const sources_window = document.getElementById('sources_window');
+            if (sources_window) {
+                sources_window.style.position = "absolute";
+                sources_window.style.top = `${rect.top + window.scrollY}px`;
+                sources_window.style.left = `${rect.left - 310 + window.scrollX}px`; // Keep on left
+            }
         } else {
             popup.style.position = "fixed";
             popup.style.top = `${rect.top}px`;
@@ -52,6 +61,14 @@ function createUI() {
             settings_window.style.position = "fixed";
             settings_window.style.top = `${settingsIconRect.bottom}px`;
             settings_window.style.left = `${settingsIconRect.left}px`;
+
+            // Update sources window position mode
+            const sources_window = document.getElementById('sources_window');
+            if (sources_window) {
+                sources_window.style.position = "fixed";
+                sources_window.style.top = `${rect.top}px`;
+                sources_window.style.left = `${rect.left - 310}px`; // Keep on left
+            }
         }
         isFixedModeRef.value = !isFixedModeRef.value;
     };
@@ -130,8 +147,10 @@ function createUI() {
 
     // Position + interaction
     popup.style.position = "fixed";
-    popup.style.top = "10%";
-    popup.style.left = "10%";
+    popup.style.top = "15%";
+    // Position dynamically from the right edge
+    popup.style.right = "2%";
+    popup.style.left = "auto";
     popup.style.width = '450px';
     popup.style.height = '650px';
 
@@ -139,7 +158,10 @@ function createUI() {
     makeDraggableAndResizable(popup, sourceWindowOffsetX, isFixedModeRef.value);
 
     const popupRect = popup.getBoundingClientRect();
-    sources_window.style.left = `${popupRect.right + sourceWindowOffsetX}px`;
+    // Position sources window to the left of the main popup
+    // Ensure sources window doesn't go off-screen
+    const sourcesLeft = Math.max(0, popupRect.left - 310); // 300px width + 10px offset
+    sources_window.style.left = `${sourcesLeft}px`;
     sources_window.style.top = `${popupRect.top}px`;
 
     console.log("initalized");
