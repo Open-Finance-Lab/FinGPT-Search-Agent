@@ -99,7 +99,7 @@ function getChatResponseStream(question, selectedModel, promptMode, useRAG, useM
     // Build SSE URL based on mode
     let url;
     if (promptMode) {
-        // Extensive mode streaming endpoint
+        // Research mode streaming endpoint
         url = `http://127.0.0.1:8000/get_adv_response_stream/?question=${encodedQuestion}` +
             `&models=${selectedModel}` +
             `&use_rag=${useRAG}` +
@@ -107,7 +107,7 @@ function getChatResponseStream(question, selectedModel, promptMode, useRAG, useM
             `&session_id=${currentSessionId}` +
             `&current_url=${encodedCurrentUrl}`;
 
-        // Add preferred links for extensive mode
+        // Add preferred links for research mode
         try {
             const preferredLinks = JSON.parse(localStorage.getItem('preferredLinks') || '[]');
             if (preferredLinks.length > 0) {
@@ -117,7 +117,7 @@ function getChatResponseStream(question, selectedModel, promptMode, useRAG, useM
             console.error('Error getting preferred links:', e);
         }
     } else {
-        // Normal mode streaming endpoint
+        // Thinking mode streaming endpoint
         url = `http://127.0.0.1:8000/get_chat_response_stream/?question=${encodedQuestion}` +
             `&models=${selectedModel}` +
             `&use_rag=${useRAG}` +
@@ -131,11 +131,11 @@ function getChatResponseStream(question, selectedModel, promptMode, useRAG, useM
     let fullResponse = '';
     let connectionAttempts = 0;
     const maxReconnectAttempts = 3;
-    let usedUrls = [];  // Store source URLs for extensive mode
+    let usedUrls = [];  // Store source URLs for research mode
 
     // Handle connection event
     eventSource.addEventListener('connected', (event) => {
-        console.log(`SSE connection established for ${promptMode ? 'extensive' : 'normal'} mode`);
+        console.log(`SSE connection established for ${promptMode ? 'research' : 'thinking'} mode`);
         connectionAttempts = 0; // Reset on successful connection
     });
 
@@ -162,7 +162,7 @@ function getChatResponseStream(question, selectedModel, promptMode, useRAG, useM
 
             if (data.done) {
                 eventSource.close();
-                // For extensive mode, include used_urls in the completion data
+                // For research mode, include used_urls in the completion data
                 const completionData = {
                     ...data,
                     used_urls: usedUrls
@@ -170,10 +170,10 @@ function getChatResponseStream(question, selectedModel, promptMode, useRAG, useM
                 onComplete(fullResponse, completionData);
             }
 
-            // Handle source URLs for extensive mode
+            // Handle source URLs for research mode
             if (data.used_urls && Array.isArray(data.used_urls)) {
                 usedUrls = data.used_urls;
-                console.log(`[Extensive Mode] Received ${usedUrls.length} source URLs`);
+                console.log(`[Research Mode] Received ${usedUrls.length} source URLs`);
             }
 
             // Handle R2C stats if present
