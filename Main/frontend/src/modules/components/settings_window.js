@@ -51,13 +51,12 @@ function createSettingsWindow(isFixedModeRef, settingsIcon, positionModeIcon) {
         modelContent.innerHTML = '';
 
         try {
-            // Fetch models from backend
-            await fetchAvailableModels();
+            // Use already-fetched models (fetched in main.js)
             const models = getAvailableModels();
 
             const modelDetails = getModelDetails();
 
-            // Update the header to show the current selected model after fetching
+            // Update the header to show the current selected model
             const currentSelectedModel = getSelectedModel();
             modelHeader.innerText = `Model: ${currentSelectedModel}`;
             modelHeader.appendChild(modelToggleIcon);

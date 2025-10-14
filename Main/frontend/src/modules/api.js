@@ -41,6 +41,8 @@ function postWebTextToServer(textContent, currentUrl) {
 // Function to get chat response from server (now supports MCP mode)
 function getChatResponse(question, selectedModel, promptMode, useRAG, useMCP) {
     const encodedQuestion = encodeURIComponent(question);
+    const currentUrl = window.location.href;
+    const encodedCurrentUrl = encodeURIComponent(currentUrl);
 
     let endpoint;
     if (useMCP) {
@@ -55,7 +57,8 @@ function getChatResponse(question, selectedModel, promptMode, useRAG, useMCP) {
         `&is_advanced=${promptMode}` +
         `&use_rag=${useRAG}` +
         `&use_r2c=true` +
-        `&session_id=${currentSessionId}`;
+        `&session_id=${currentSessionId}` +
+        `&current_url=${encodedCurrentUrl}`;
 
     // Add preferred links if in advanced mode
     if (promptMode) {
@@ -80,34 +83,59 @@ function getChatResponse(question, selectedModel, promptMode, useRAG, useMCP) {
 // Function to get streaming chat response using EventSource
 function getChatResponseStream(question, selectedModel, promptMode, useRAG, useMCP, onChunk, onComplete, onError) {
     const encodedQuestion = encodeURIComponent(question);
+    const currentUrl = window.location.href;
+    const encodedCurrentUrl = encodeURIComponent(currentUrl);
 
-    // For now, streaming is only supported for non-MCP, non-advanced mode
-    if (useMCP || promptMode) {
-        // Fallback to regular response for unsupported modes
+    // MCP mode doesn't support streaming yet
+    if (useMCP) {
         return getChatResponse(question, selectedModel, promptMode, useRAG, useMCP)
             .then(data => {
-                const modelResponse = useMCP ? data.reply : data.resp[selectedModel];
+                const modelResponse = data.reply;
                 onComplete(modelResponse, data);
             })
             .catch(onError);
     }
 
-    // Build SSE URL
-    const url = `http://127.0.0.1:8000/get_chat_response_stream/?question=${encodedQuestion}` +
-        `&models=${selectedModel}` +
-        `&use_rag=${useRAG}` +
-        `&use_r2c=true` +
-        `&session_id=${currentSessionId}`;
+    // Build SSE URL based on mode
+    let url;
+    if (promptMode) {
+        // Extensive mode streaming endpoint
+        url = `http://127.0.0.1:8000/get_adv_response_stream/?question=${encodedQuestion}` +
+            `&models=${selectedModel}` +
+            `&use_rag=${useRAG}` +
+            `&use_r2c=true` +
+            `&session_id=${currentSessionId}` +
+            `&current_url=${encodedCurrentUrl}`;
+
+        // Add preferred links for extensive mode
+        try {
+            const preferredLinks = JSON.parse(localStorage.getItem('preferredLinks') || '[]');
+            if (preferredLinks.length > 0) {
+                url += `&preferred_links=${encodeURIComponent(JSON.stringify(preferredLinks))}`;
+            }
+        } catch (e) {
+            console.error('Error getting preferred links:', e);
+        }
+    } else {
+        // Normal mode streaming endpoint
+        url = `http://127.0.0.1:8000/get_chat_response_stream/?question=${encodedQuestion}` +
+            `&models=${selectedModel}` +
+            `&use_rag=${useRAG}` +
+            `&use_r2c=true` +
+            `&session_id=${currentSessionId}` +
+            `&current_url=${encodedCurrentUrl}`;
+    }
 
     // Create EventSource for SSE with credentials support
     const eventSource = new EventSource(url, { withCredentials: true });
     let fullResponse = '';
     let connectionAttempts = 0;
     const maxReconnectAttempts = 3;
+    let usedUrls = [];  // Store source URLs for extensive mode
 
     // Handle connection event
     eventSource.addEventListener('connected', (event) => {
-        console.log('SSE connection established');
+        console.log(`SSE connection established for ${promptMode ? 'extensive' : 'normal'} mode`);
         connectionAttempts = 0; // Reset on successful connection
     });
 
@@ -134,7 +162,18 @@ function getChatResponseStream(question, selectedModel, promptMode, useRAG, useM
 
             if (data.done) {
                 eventSource.close();
-                onComplete(fullResponse, data);
+                // For extensive mode, include used_urls in the completion data
+                const completionData = {
+                    ...data,
+                    used_urls: usedUrls
+                };
+                onComplete(fullResponse, completionData);
+            }
+
+            // Handle source URLs for extensive mode
+            if (data.used_urls && Array.isArray(data.used_urls)) {
+                usedUrls = data.used_urls;
+                console.log(`[Extensive Mode] Received ${usedUrls.length} source URLs`);
             }
 
             // Handle R2C stats if present
