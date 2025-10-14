@@ -148,8 +148,8 @@ function handleChatResponse(question, promptMode = false, useStreaming = true) {
 
     const selectedModel = getSelectedModel();
 
-    // Check if streaming is available (not for MCP, Advanced, or RAG modes)
-    const canStream = useStreaming && !useMCP && !promptMode && !useRAG;
+    // Check if streaming is available (not for MCP or RAG modes)
+    const canStream = useStreaming && !useMCP && !useRAG;
 
     if (canStream) {
         // Use streaming response
@@ -190,6 +190,16 @@ function handleChatResponse(question, promptMode = false, useStreaming = true) {
                 actionRow.appendChild(actionButtons);
                 actionRow.appendChild(ratingElement);
                 responseContainer.appendChild(actionRow);
+
+                // If this is extensive mode streaming and contains used_urls, cache them
+                if (promptMode && data.used_urls && data.used_urls.length > 0) {
+                    console.log('[Sources Debug] Extensive mode streaming response received');
+                    console.log('[Sources Debug] used_urls:', data.used_urls);
+                    console.log('[Sources Debug] Number of URLs:', data.used_urls.length);
+
+                    setCachedSources(data.used_urls, question);
+                    console.log('[Sources Debug] Cached', data.used_urls.length, 'source URLs from extensive mode streaming');
+                }
 
                 // Clear the user textbox
                 document.getElementById('textbox').value = '';

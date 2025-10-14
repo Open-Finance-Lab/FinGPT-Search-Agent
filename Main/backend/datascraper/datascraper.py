@@ -76,30 +76,11 @@ def create_rag_response(user_input, message_list, model):
         return error_message
 
 
-def create_response(
-        user_input: str,
-        message_list: list[dict],
-        model: str = "o4-mini",
-        stream: bool = False
-) -> str:
+def _prepare_messages(message_list: list[dict], user_input: str):
     """
-    Creates a chat completion using the appropriate provider based on model configuration.
-    Supports both streaming and non-streaming modes.
+    Helper to parse message list with headers and convert to proper format for APIs.
+    Returns (msgs, system_message) tuple.
     """
-    # Get model configuration
-    model_config = get_model_config(model)
-    if not model_config:
-        raise ValueError(f"Unsupported model: {model}")
-
-    provider = model_config["provider"]
-    model_name = model_config["model_name"]
-
-    # Get the appropriate client
-    client = clients.get(provider)
-    if not client:
-        raise ValueError(f"No client available for provider: {provider}. Please check API key configuration.")
-
-    # Parse message list with headers and convert to proper format for APIs
     msgs = []
     system_message = None
 
@@ -132,67 +113,109 @@ def create_response(
     # Add current user input
     msgs.append({"role": "user", "content": user_input})
 
-    # Provider-specific handling
+    return msgs, system_message
+
+
+def create_response(
+        user_input: str,
+        message_list: list[dict],
+        model: str = "o4-mini",
+        stream: bool = False
+):
+    """
+    Creates a chat completion using the appropriate provider based on model configuration.
+    Returns a string when stream=False, or a generator when stream=True.
+    """
+    # Get model configuration
+    model_config = get_model_config(model)
+    if not model_config:
+        raise ValueError(f"Unsupported model: {model}")
+
+    provider = model_config["provider"]
+    model_name = model_config["model_name"]
+    logging.info(f"[REGULAR RESPONSE] Using {model} -> {model_name} (provider: {provider}, stream: {stream})")
+
+    # Get the appropriate client
+    client = clients.get(provider)
+    if not client:
+        raise ValueError(f"No client available for provider: {provider}. Please check API key configuration.")
+
+    msgs, system_message = _prepare_messages(message_list, user_input)
+
+    # Route to streaming or non-streaming based on flag
+    if stream:
+        return _create_response_stream(client, provider, model_name, model_config, msgs, system_message)
+    else:
+        return _create_response_sync(client, provider, model_name, model_config, msgs, system_message)
+
+
+def _create_response_sync(client, provider: str, model_name: str, model_config: dict, msgs: list, system_message: str) -> str:
+    """Non-streaming response - returns a string directly."""
     if provider == "anthropic":
         # Anthropic uses a different API structure
-        # Extract system message content for Anthropic
         system_content = msgs[0]["content"] if msgs and msgs[0].get("role") == "system" else INSTRUCTION
-        # Get non-system messages
         anthropic_msgs = [msg for msg in msgs if msg.get("role") != "system"]
 
-        if stream:
-            # Streaming mode for Anthropic using context manager
-            with client.messages.stream(
-                model=model_name,
-                messages=anthropic_msgs,
-                system=system_content,
-                max_tokens=1024
-            ) as stream_response:
-                for text in stream_response.text_stream:
-                    yield text
-        else:
-            # Non-streaming mode
-            response = client.messages.create(
-                model=model_name,
-                messages=anthropic_msgs,
-                system=system_content,
-                max_tokens=1024
-            )
-            return response.content[0].text
+        response = client.messages.create(
+            model=model_name,
+            messages=anthropic_msgs,
+            system=system_content,
+            max_tokens=1024
+        )
+        return response.content[0].text
     else:
         # OpenAI and DeepSeek use the same API structure
-        # Handle DeepSeek temperature recommendations
         kwargs = {}
         if provider == "deepseek" and "recommended_temperature" in model_config:
             kwargs["temperature"] = model_config["recommended_temperature"]
 
-        if stream:
-            # Streaming mode for OpenAI/DeepSeek
-            stream_response = client.chat.completions.create(
-                model=model_name,
-                messages=msgs,
-                stream=True,
-                **kwargs
-            )
-            for chunk in stream_response:
-                if chunk.choices and chunk.choices[0].delta.content is not None:
-                    yield chunk.choices[0].delta.content
-        else:
-            # Non-streaming mode
-            response = client.chat.completions.create(
-                model=model_name,
-                messages=msgs,
-                **kwargs
-            )
-            return response.choices[0].message.content
+        response = client.chat.completions.create(
+            model=model_name,
+            messages=msgs,
+            **kwargs
+        )
+        return response.choices[0].message.content
+
+
+def _create_response_stream(client, provider: str, model_name: str, model_config: dict, msgs: list, system_message: str):
+    """Streaming response - returns a generator."""
+    if provider == "anthropic":
+        # Anthropic streaming
+        system_content = msgs[0]["content"] if msgs and msgs[0].get("role") == "system" else INSTRUCTION
+        anthropic_msgs = [msg for msg in msgs if msg.get("role") != "system"]
+
+        with client.messages.stream(
+            model=model_name,
+            messages=anthropic_msgs,
+            system=system_content,
+            max_tokens=1024
+        ) as stream_response:
+            for text in stream_response.text_stream:
+                yield text
+    else:
+        # OpenAI and DeepSeek streaming
+        kwargs = {}
+        if provider == "deepseek" and "recommended_temperature" in model_config:
+            kwargs["temperature"] = model_config["recommended_temperature"]
+
+        stream_response = client.chat.completions.create(
+            model=model_name,
+            messages=msgs,
+            stream=True,
+            **kwargs
+        )
+        for chunk in stream_response:
+            if chunk.choices and chunk.choices[0].delta.content is not None:
+                yield chunk.choices[0].delta.content
 
 
 def create_advanced_response(
         user_input: str,
         message_list: list[dict],
         model: str = "o4-mini",
-        preferred_links: list[str] = None
-) -> str:
+        preferred_links: list[str] = None,
+        stream: bool = False
+):
     """
     Creates an advanced response using OpenAI Responses API with web search.
 
@@ -207,19 +230,17 @@ def create_advanced_response(
         message_list: Previous conversation history
         model: Model ID from frontend (e.g., "FinGPT-Light")
         preferred_links: List of preferred URLs/domains to prioritize
+        stream: If True, returns async generator for streaming
 
     Returns:
-        Generated response with web-sourced information
+        If stream=False: Generated response string with web-sourced information
+        If stream=True: Async generator yielding (text_chunk, source_urls) tuples
     """
-    logging.info(f"Starting advanced response with model ID: {model}")
+    logging.info(f"Starting advanced response with model ID: {model} (stream={stream})")
 
-    # Clear previous used URLs
     used_urls.clear()
 
-    # Get the actual model configuration
     model_config = get_model_config(model)
-
-    # Get the actual model name from config
     if model_config:
         actual_model = model_config.get("model_name")
         logging.info(f"Model mapping: {model} -> {actual_model}")
@@ -230,7 +251,7 @@ def create_advanced_response(
     # Check if the actual model supports Responses API
     if not is_responses_api_available(actual_model):
         # Fallback to a model that does support it
-        fallback_model = "gpt-4o-mini"
+        fallback_model = "gpt-4o"
         logging.warning(f"Model {actual_model} (from {model}) doesn't support Responses API")
         logging.info(f"FALLBACK: Using {fallback_model} for web search instead")
         actual_model = fallback_model
@@ -240,7 +261,6 @@ def create_advanced_response(
     # Get the preferred links manager
     manager = get_manager()
 
-    # Sync and get preferred links
     if preferred_links is not None and len(preferred_links) > 0:
         # Frontend provided links - sync them to storage
         manager.sync_from_frontend(preferred_links)
@@ -252,28 +272,79 @@ def create_advanced_response(
         logging.info(f"Using {len(preferred_urls)} stored preferred URLs")
 
     try:
-        # Call the new OpenAI Responses API search function with the actual model name
-        response_text, source_urls = create_responses_api_search(
-            user_query=user_input,
-            message_history=message_list,
-            model=actual_model,  # Use the actual model name, not the frontend ID
-            preferred_links=preferred_urls
-        )
+        if stream:
+            # Return async generator for streaming
+            return asyncio.run(_create_advanced_response_stream_async(
+                user_input=user_input,
+                message_list=message_list,
+                actual_model=actual_model,
+                preferred_urls=preferred_urls
+            ))
+        else:
+            # Call OpenAI Responses API search function
+            response_text, source_urls = create_responses_api_search(
+                user_query=user_input,
+                message_history=message_list,
+                model=actual_model,  # Use the actual model name from model_config.py, not the frontend ID
+                preferred_links=preferred_urls
+            )
 
-        # Update the global used_urls set for compatibility with get_sources
-        used_urls.clear()
-        used_urls.update(source_urls)
+            # Update the global used_urls set for compatibility with get_sources
+            used_urls.clear()
+            used_urls.update(source_urls)
 
-        logging.info(f"Advanced response generated with {len(source_urls)} sources")
-        for idx, url in enumerate(source_urls, 1):
-            logging.info(f"  Source {idx}: {url}")
+            logging.info(f"Advanced response generated with {len(source_urls)} sources")
+            for idx, url in enumerate(source_urls, 1):
+                logging.info(f"  Source {idx}: {url}")
 
-        return response_text
+            return response_text
 
     except Exception as e:
         logging.error(f"OpenAI Responses API failed: {e}")
         # Return a fallback response
-        return f"I encountered an error while searching for information: {str(e)}. Please try again."
+        if stream:
+            async def error_gen():
+                yield f"I encountered an error while searching for information: {str(e)}. Please try again.", []
+            return error_gen()
+        else:
+            return f"I encountered an error while searching for information: {str(e)}. Please try again."
+
+
+async def _create_advanced_response_stream_async(
+        user_input: str,
+        message_list: list[dict],
+        actual_model: str,
+        preferred_urls: list[str]
+):
+    """
+    Async generator for streaming advanced response.
+
+    Yields:
+        Tuples of (text_chunk, source_urls_list)
+    """
+    from datascraper.openai_search import create_responses_api_search_async
+
+    try:
+        # Get async generator from the streaming API
+        stream_gen = await create_responses_api_search_async(
+            user_query=user_input,
+            message_history=message_list,
+            model=actual_model,
+            preferred_links=preferred_urls,
+            stream=True
+        )
+
+        # Yield chunks from the stream
+        async for text_chunk, source_urls in stream_gen:
+            # Update global used_urls when we get sources
+            if source_urls:
+                used_urls.clear()
+                used_urls.update(source_urls)
+            yield text_chunk, source_urls
+
+    except Exception as e:
+        logging.error(f"Error in advanced streaming: {e}")
+        yield f"Error: {str(e)}", []
 
 
 def create_rag_advanced_response(user_input: str, message_list: list[dict], model: str = "o4-mini", preferred_links: list[str] = None) -> str:
@@ -293,30 +364,62 @@ def create_rag_advanced_response(user_input: str, message_list: list[dict], mode
     return create_advanced_response(user_input, message_list, model, preferred_links)
 
 
-def create_mcp_response(user_input: str, message_list: list[dict], model: str = "o4-mini") -> str:
+def create_agent_response(user_input: str, message_list: list[dict], model: str = "o4-mini", use_playwright: bool = False, restricted_domain: str = None, current_url: str = None) -> str:
     """
-    Creates a response using the MCP-enabled Agent.
+    Creates a response using the Agent with tools (Playwright, etc.).
+
+    This is the primary response method - tools are always available.
+    Falls back to create_response() (direct LLM) only if agent fails.
+
+    Args:
+        user_input: The user's question
+        message_list: Previous conversation history
+        model: Model ID to use
+        use_playwright: Whether to enable Playwright browser automation tools
+        restricted_domain: Domain restriction for Playwright (e.g., "finance.yahoo.com")
+        current_url: Current webpage URL for context
+
+    Returns:
+        Generated response from the agent
     """
+    # Resolve model ID to actual model name for logging
+    model_config = get_model_config(model)
+    actual_model_name = model_config.get("model_name") if model_config else model
+
     try:
-        # Check if model supports MCP
+        # Check if model supports agent features
         if not validate_model_support(model, "mcp"):
-            logging.warning(f"Model {model} doesn't support MCP, falling back to regular response")
+            logging.warning(f"Model {model} ({actual_model_name}) doesn't support agent features")
+            logging.info(f"FALLBACK: Using regular response with {model} ({actual_model_name})")
             return create_response(user_input, message_list, model)
-        
-        # Run the MCP agent asynchronously
-        return asyncio.run(_create_mcp_response_async(user_input, message_list, model))
-        
+
+        logging.info(f"[AGENT] Attempting agent response with {model} ({actual_model_name})")
+
+        return asyncio.run(_create_agent_response_async(user_input, message_list, model, use_playwright, restricted_domain, current_url))
+
     except Exception as e:
-        logging.error(f"MCP response failed: {e}, falling back to regular response")
+        logging.error(f"Agent response failed for {model} ({actual_model_name}): {e}")
+        logging.info(f"FALLBACK: Using regular response with {model} ({actual_model_name})")
         return create_response(user_input, message_list, model)
 
-async def _create_mcp_response_async(user_input: str, message_list: list[dict], model: str) -> str:
+async def _create_agent_response_async(user_input: str, message_list: list[dict], model: str, use_playwright: bool = False, restricted_domain: str = None, current_url: str = None) -> str:
     """
-    Async helper for creating MCP response.
+    Async helper for creating agent response with tools.
+
+    Args:
+        user_input: The user's question
+        message_list: Previous conversation history
+        model: Model ID to use
+        use_playwright: Whether to enable Playwright browser automation tools
+        restricted_domain: Domain restriction for Playwright navigation
+        current_url: Current webpage URL for context
+
+    Returns:
+        Generated response from the agent
     """
     from mcp_client.agent import create_fin_agent
     from agents import Runner
-    
+
     # Convert message list to context, parsing headers
     context = ""
     for msg in message_list:
@@ -335,18 +438,25 @@ async def _create_mcp_response_async(user_input: str, message_list: list[dict], 
         else:
             # Legacy format or web content - treat as user message
             context += f"User: {content}\n"
-    
-    # Combine context with current input
+
     full_prompt = f"{context}User: {user_input}"
-    
-    # Create MCP agent using async context manager
-    async with create_fin_agent(model) as agent:
+
+    # Create agent with tools and domain restriction
+    async with create_fin_agent(
+        model=model,
+        use_playwright=use_playwright,
+        restricted_domain=restricted_domain,
+        current_url=current_url
+    ) as agent:
         # Run the agent with the full prompt
-        logging.info(f"[MCP DEBUG] Running agent with prompt: {full_prompt}")
+        tool_status = f"with Playwright (domain: {restricted_domain})" if use_playwright and restricted_domain else "with Playwright" if use_playwright else "without tools"
+        logging.info(f"[AGENT] Running agent {tool_status}")
+        logging.info(f"[AGENT] Current URL: {current_url}")
+        logging.info(f"[AGENT] Prompt preview: {full_prompt[:150]}...")
+
         result = await Runner.run(agent, full_prompt)
-        logging.info(f"[MCP DEBUG] Runner result: {result}")
-        logging.info(f"[MCP DEBUG] Result type: {type(result)}")
-        logging.info(f"[MCP DEBUG] Result final_output: {result.final_output}")
+
+        logging.info(f"[AGENT] Result length: {len(result.final_output) if result.final_output else 0}")
         return result.final_output
 
 
@@ -360,7 +470,7 @@ def get_sources(query):
     for idx, url in enumerate(used_urls, 1):
         logging.info(f"  [{idx}] {url}")
 
-    # Return URLs with None for icons (frontend will handle missing icons)
+    # Return URLs with None for icons (frontend handles missing icons)
     sources = [(url, None) for url in used_urls]
     logging.info(f"Returning {len(sources)} source URLs")
     return sources

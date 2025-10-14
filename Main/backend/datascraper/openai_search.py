@@ -117,8 +117,9 @@ async def create_responses_api_search_async(
     user_query: str,
     message_history: List[Dict[str, str]],
     model: str = "gpt-4o-mini",
-    preferred_links: List[str] = None
-) -> Tuple[str, List[str]]:
+    preferred_links: List[str] = None,
+    stream: bool = False
+):
     """
     Async version: Create a response using OpenAI Responses API with web search.
 
@@ -127,9 +128,11 @@ async def create_responses_api_search_async(
         message_history: Previous conversation messages
         model: OpenAI model to use (must support Responses API)
         preferred_links: List of preferred URLs/domains to search
+        stream: If True, returns async generator; if False, returns Tuple[str, List[str]]
 
     Returns:
-        Tuple of (response_text, list_of_source_urls)
+        If stream=False: Tuple of (response_text, list_of_source_urls)
+        If stream=True: Async generator yielding text chunks
     """
     try:
         # Extract domains from preferred links
@@ -154,7 +157,7 @@ async def create_responses_api_search_async(
             f"{enhanced_prompt}"
         )
 
-        logger.info(f"Calling OpenAI Responses API with model: {model}")
+        logger.info(f"Calling OpenAI Responses API with model: {model} (stream={stream})")
         logger.info(f"Web search enabled for query: {user_query[:100]}...")
 
         # Call the Responses API with web_search tool (no system parameter)
@@ -162,47 +165,50 @@ async def create_responses_api_search_async(
             model=model,
             input=combined_input,
             tools=[{"type": "web_search"}],  # Enable web search
-            tool_choice="auto"  # Let model decide when to search
-            # Note: modalities parameter removed - not needed for basic web search per docs
+            tool_choice="auto",  # Let model decide when to search
+            stream=stream  # Enable streaming if requested
         )
 
-        # Extract the response text
-        # Based on documentation, the response structure is simpler
-        response_text = ""
+        if stream:
+            # Return async generator for streaming
+            return _stream_response_chunks(response)
+        else:
+            # Extract the response text (non-streaming mode)
+            response_text = ""
 
-        # Primary method: check output_text directly
-        if hasattr(response, 'output_text') and response.output_text:
-            response_text = response.output_text
-        # Fallback: check output field for structured content
-        elif hasattr(response, 'output') and response.output:
-            # The output may contain the text directly or in structured format
-            if isinstance(response.output, str):
-                response_text = response.output
-            elif isinstance(response.output, list):
-                # Extract text from list of output items
-                for item in response.output:
-                    if hasattr(item, 'content'):
-                        response_text = str(item.content)
-                        break
+            # Primary method: check output_text directly
+            if hasattr(response, 'output_text') and response.output_text:
+                response_text = response.output_text
+            # Fallback: check output field for structured content
+            elif hasattr(response, 'output') and response.output:
+                # The output may contain the text directly or in structured format
+                if isinstance(response.output, str):
+                    response_text = response.output
+                elif isinstance(response.output, list):
+                    # Extract text from list of output items
+                    for item in response.output:
+                        if hasattr(item, 'content'):
+                            response_text = str(item.content)
+                            break
 
-        if not response_text:
-            logger.warning("Could not extract text from response. Response structure may have changed.")
+            if not response_text:
+                logger.warning("Could not extract text from response. Response structure may have changed.")
 
-        # Extract citations/sources
-        citations = extract_citations_from_response(response)
-        source_urls = [c['url'] for c in citations if c['type'] == 'url_citation']
+            # Extract citations/sources
+            citations = extract_citations_from_response(response)
+            source_urls = [c['url'] for c in citations if c['type'] == 'url_citation']
 
-        # Remove duplicates while preserving order
-        seen = set()
-        unique_urls = []
-        for url in source_urls:
-            if url not in seen:
-                seen.add(url)
-                unique_urls.append(url)
+            # Remove duplicates while preserving order
+            seen = set()
+            unique_urls = []
+            for url in source_urls:
+                if url not in seen:
+                    seen.add(url)
+                    unique_urls.append(url)
 
-        logger.info(f"Response generated successfully with {len(unique_urls)} unique source URLs")
+            logger.info(f"Response generated successfully with {len(unique_urls)} unique source URLs")
 
-        return response_text, unique_urls
+            return response_text, unique_urls
 
     except Exception as e:
         # Provide more detailed error information
@@ -223,6 +229,73 @@ async def create_responses_api_search_async(
         logger.debug(f"Preferred domains: {preferred_domains if preferred_domains else 'None'}")
 
         raise Exception(error_msg) from e
+
+
+async def _stream_response_chunks(stream_response):
+    """
+    Async generator that yields text chunks from streaming Responses API.
+    Also collects source URLs and yields them at the end.
+
+    Yields:
+        Tuples of (chunk_text, source_urls_list)
+        During streaming: (chunk_text, [])
+        Final chunk: ("", source_urls_list)
+    """
+    full_response = ""
+    source_urls = []
+
+    try:
+        async for chunk in stream_response:
+            # Handle different chunk types
+            if hasattr(chunk, 'type'):
+                if chunk.type == 'content.delta':
+                    # Text content chunk
+                    if hasattr(chunk, 'delta') and hasattr(chunk.delta, 'text'):
+                        text = chunk.delta.text
+                        full_response += text
+                        yield (text, [])
+                elif chunk.type == 'content.done':
+                    # Content finished, may contain citations
+                    if hasattr(chunk, 'content'):
+                        # Extract citations from completed content
+                        citations = _extract_citations_from_content(chunk.content)
+                        urls = [c['url'] for c in citations if c['type'] == 'url_citation']
+                        source_urls.extend(urls)
+
+        # Yield final chunk with source URLs
+        logger.info(f"Streaming completed with {len(source_urls)} source URLs")
+        yield ("", source_urls)
+
+    except Exception as e:
+        logger.error(f"Error in streaming response: {e}")
+        raise
+
+
+def _extract_citations_from_content(content) -> List[Dict[str, str]]:
+    """
+    Extract citations from content object.
+
+    Args:
+        content: Content object from streaming response
+
+    Returns:
+        List of citation dictionaries
+    """
+    citations = []
+
+    try:
+        if hasattr(content, 'annotations') and content.annotations:
+            for annotation in content.annotations:
+                if annotation.type == 'url_citation':
+                    citations.append({
+                        'url': annotation.url,
+                        'title': getattr(annotation, 'title', ''),
+                        'type': 'url_citation'
+                    })
+    except Exception as e:
+        logger.error(f"Error extracting citations from content: {e}")
+
+    return citations
 
 
 def create_responses_api_search(

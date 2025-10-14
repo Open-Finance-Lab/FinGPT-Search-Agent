@@ -179,19 +179,19 @@ def _add_response_to_context(session_id, response, use_r2c=True):
 def _prepare_response_with_stats(responses, session_id, use_r2c=True, single_response_mode=False):
     """
     Prepare JSON response with optional R2C stats.
-    
+
     Args:
         responses: Dictionary of model responses or single response string
         session_id: Session ID for R2C
         use_r2c: Whether R2C is enabled
         single_response_mode: Whether to use 'reply' field for single response
-        
+
     Returns:
         JsonResponse object
     """
     if use_r2c and session_id:
         stats = r2c_manager.get_session_stats(session_id)
-        
+
         if single_response_mode and isinstance(responses, dict) and len(responses) == 1:
             # Single model - return as 'reply' for MCP frontend compatibility
             single_response = next(iter(responses.values()))
@@ -214,6 +214,13 @@ def _prepare_response_with_stats(responses, session_id, use_r2c=True, single_res
         else:
             response_key = 'resp' if isinstance(responses, dict) else 'reply'
             return JsonResponse({response_key: responses})
+
+async def _collect_async_stream(async_gen):
+    """Helper function to collect all items from an async generator into a list."""
+    result = []
+    async for item in async_gen:
+        result.append(item)
+    return result
 
 def _ensure_log_file_exists():
     """Create log file with headers if it doesn't exist, using UTF-8 encoding."""
@@ -310,14 +317,182 @@ def add_webtext(request):
 
 @ratelimit(key='ip', rate=lambda g, r: settings.API_RATE_LIMIT, method='POST')
 def chat_response(request):
-    """Process chat response from selected models"""
+    """
+    Normal Mode: Help user understand the CURRENT website using Playwright navigation.
+    Agent stays within the current domain and navigates to find information.
+    """
     question = request.GET.get('question', '')
     selected_models = request.GET.get('models', '')
     use_rag = request.GET.get('use_rag', 'false').lower() == 'true'
     current_url = request.GET.get('current_url', '')
-    use_r2c = request.GET.get('use_r2c', 'true').lower() == 'true'  # Default to using R2C
+    use_r2c = request.GET.get('use_r2c', 'true').lower() == 'true'
 
-    # logging.info(f"[R2C DEBUG] chat_response - Question: '{question[:50]}...', Models: {selected_models}, use_r2c: {use_r2c}")
+    # Validate and parse models
+    if not selected_models:
+        return JsonResponse({'error': 'No models specified'}, status=400)
+
+    models = [model.strip() for model in selected_models.split(',') if model.strip()]
+    if not models:
+        return JsonResponse({'error': 'No valid models specified'}, status=400)
+
+    # Extract domain from current_url for domain-restricted navigation
+    from urllib.parse import urlparse
+    restricted_domain = None
+    if current_url:
+        try:
+            parsed = urlparse(current_url)
+            restricted_domain = parsed.netloc or None
+            if restricted_domain:
+                logging.info(f"[NORMAL MODE] Domain restriction: {restricted_domain}")
+        except Exception as e:
+            logging.warning(f"Failed to parse current_url: {e}")
+
+    responses = {}
+
+    # Prepare context messages using R2C or legacy system
+    legacy_messages, session_id = _prepare_context_messages(request, question, use_r2c, current_url)
+
+    for model in models:
+        try:
+            if use_rag:
+                # Use the RAG pipeline
+                response = ds.create_rag_response(question, legacy_messages, model)
+            else:
+                # Normal mode always uses agent with Playwright (domain-restricted)
+                response = ds.create_agent_response(
+                    question,
+                    legacy_messages,
+                    model,
+                    use_playwright=True,
+                    restricted_domain=restricted_domain,
+                    current_url=current_url
+                )
+                logging.info(f"[NORMAL MODE] Using Playwright within {restricted_domain or 'any domain'}")
+
+            responses[model] = response
+
+            # Add assistant response to R2C manager
+            _add_response_to_context(session_id, response, use_r2c)
+
+        except Exception as e:
+            logging.error(f"Error processing model {model}: {e}")
+            responses[model] = f"Error: {str(e)}"
+
+    first_model_response = next(iter(responses.values())) if responses else "No response"
+    _log_interaction("normal_mode", current_url, question, first_model_response)
+
+    return _prepare_response_with_stats(responses, session_id, use_r2c)
+
+@ratelimit(key='ip', rate=lambda g, r: settings.API_RATE_LIMIT, method='GET')
+def chat_response_stream(request):
+    """
+    Normal Mode Streaming: Help user understand the CURRENT website using Playwright navigation.
+    Agent stays within the current domain and navigates to find information.
+
+    Note: Agent doesn't support native streaming, so we get full response then simulate streaming.
+    """
+    question = request.GET.get('question', '')
+    selected_models = request.GET.get('models', '')
+    use_rag = request.GET.get('use_rag', 'false').lower() == 'true'
+    current_url = request.GET.get('current_url', '')
+    use_r2c = request.GET.get('use_r2c', 'true').lower() == 'true'
+
+    # Validate and parse models
+    if not selected_models:
+        return JsonResponse({'error': 'No models specified'}, status=400)
+
+    models = [model.strip() for model in selected_models.split(',') if model.strip()]
+    if not models:
+        return JsonResponse({'error': 'No valid models specified'}, status=400)
+
+    model = models[0]
+
+    # Extract domain from current_url for domain-restricted navigation
+    from urllib.parse import urlparse
+    restricted_domain = None
+    if current_url:
+        try:
+            parsed = urlparse(current_url)
+            restricted_domain = parsed.netloc or None
+            if restricted_domain:
+                logging.info(f"[NORMAL MODE STREAM] Domain restriction: {restricted_domain}")
+        except Exception as e:
+            logging.warning(f"Failed to parse current_url: {e}")
+
+    # Prepare context messages using R2C
+    legacy_messages, session_id = _prepare_context_messages(request, question, use_r2c, current_url)
+
+    def event_stream():
+        """Generator function for SSE streaming"""
+        try:
+            # Send initial connection event (as bytes for WSGI compatibility)
+            yield b'event: connected\ndata: {"status": "connected"}\n\n'
+
+            if use_rag:
+                # RAG doesn't support streaming yet, return full response
+                response = ds.create_rag_response(question, legacy_messages, model)
+                sse_data = f'data: {json.dumps({"content": response, "done": True})}\n\n'
+                yield sse_data.encode('utf-8')
+                full_response = response
+            else:
+                # Normal mode always uses agent with Playwright (domain-restricted)
+                logging.info(f"[NORMAL MODE STREAM] Using Playwright within {restricted_domain or 'any domain'}")
+
+                # Agent doesn't seem to support native streaming - get full response
+                full_response = ds.create_agent_response(
+                    question,
+                    legacy_messages,
+                    model,
+                    use_playwright=True,
+                    restricted_domain=restricted_domain,
+                    current_url=current_url
+                )
+
+                # Simulate streaming
+                chunk_size = 50
+                for i in range(0, len(full_response), chunk_size):
+                    chunk = full_response[i:i + chunk_size]
+                    sse_data = f'data: {json.dumps({"content": chunk, "done": False})}\n\n'
+                    yield sse_data.encode('utf-8')
+
+                # Send completion event
+                sse_data = f'data: {json.dumps({"content": "", "done": True})}\n\n'
+                yield sse_data.encode('utf-8')
+
+            _add_response_to_context(session_id, full_response, use_r2c)
+
+            _log_interaction("normal_mode_stream", current_url, question, full_response)
+
+            # Send R2C stats if enabled
+            if use_r2c and session_id:
+                stats = r2c_manager.get_session_stats(session_id)
+                sse_data = f'data: {json.dumps({"r2c_stats": stats})}\n\n'
+                yield sse_data.encode('utf-8')
+
+        except Exception as e:
+            logging.error(f"Error in streaming response: {e}")
+            import traceback
+            traceback.print_exc()
+            sse_data = f'data: {json.dumps({"error": str(e), "done": True})}\n\n'
+            yield sse_data.encode('utf-8')
+
+    response = StreamingHttpResponse(
+        event_stream(),
+        content_type='text/event-stream'
+    )
+    response['Cache-Control'] = 'no-cache'
+    response['X-Accel-Buffering'] = 'no'  # Disable Nginx buffering
+    return response
+
+@csrf_exempt
+@ratelimit(key='ip', rate=lambda g, r: settings.API_RATE_LIMIT, method='POST')
+def agent_chat_response(request):
+    """Process chat response via Agent with optional tools (Playwright, etc.)"""
+    question = request.GET.get('question', '')
+    selected_models = request.GET.get('models', '')
+    current_url = request.GET.get('current_url', '')
+    use_r2c = request.GET.get('use_r2c', 'true').lower() == 'true'
+    use_playwright = request.GET.get('use_playwright', 'false').lower() == 'true'
 
     # Validate and parse models
     if not selected_models:
@@ -331,44 +506,122 @@ def chat_response(request):
 
     # Prepare context messages using R2C or legacy system
     legacy_messages, session_id = _prepare_context_messages(request, question, use_r2c, current_url)
-    # logging.info(f"[R2C DEBUG] Prepared {len(legacy_messages)} messages for session {session_id}")
-
-    # Log message contents for debugging
-    # for i, msg in enumerate(legacy_messages[:3]):  # Log first 3 messages
-    #     content_preview = msg.get('content', '')[:100]
-    #     logging.info(f"[R2C DEBUG] Message {i}: role={msg.get('role')}, content_preview='{content_preview}...'")
 
     for model in models:
         try:
-            if use_rag:
-                # Use the RAG pipeline
-                response = ds.create_rag_response(question, legacy_messages, model)
-            else:
-                # Use regular response
-                response = ds.create_response(question, legacy_messages, model)
-            
+            # Use the Agent path with tools
+            response = ds.create_agent_response(
+                question,
+                legacy_messages,
+                model,
+                use_playwright=use_playwright
+            )
+            if use_playwright:
+                logging.info(f"[AGENT DEBUG] Model {model} response with Playwright tools")
             responses[model] = response
-            
-            # Add assistant response to R2C manager
+
             _add_response_to_context(session_id, response, use_r2c)
-                
+
         except Exception as e:
-            logging.error(f"Error processing model {model}: {e}")
+            logging.error(f"Error processing agent model {model}: {e}")
             responses[model] = f"Error: {str(e)}"
 
+    # Log with a distinct tag allowing filtering later
     first_model_response = next(iter(responses.values())) if responses else "No response"
-    _log_interaction("chat", current_url, question, first_model_response)
+    _log_interaction("agent_chat", current_url, question, first_model_response)
 
-    return _prepare_response_with_stats(responses, session_id, use_r2c)
+    # Return response with optional R2C stats, using single response mode
+    return _prepare_response_with_stats(responses, session_id, use_r2c, single_response_mode=True)
 
-@ratelimit(key='ip', rate=lambda g, r: settings.API_RATE_LIMIT, method='GET')
-def chat_response_stream(request):
-    """Process streaming chat response from selected models using SSE"""
+@csrf_exempt
+@ratelimit(key='ip', rate=lambda g, r: settings.API_RATE_LIMIT, method='POST')
+def adv_response(request):
+    """
+    Extensive Mode: Search for information ANYWHERE on the web using web_search.
+    Uses OpenAI Responses API with built-in web_search tool (no domain restrictions).
+    """
     question = request.GET.get('question', '')
     selected_models = request.GET.get('models', '')
     use_rag = request.GET.get('use_rag', 'false').lower() == 'true'
     current_url = request.GET.get('current_url', '')
     use_r2c = request.GET.get('use_r2c', 'true').lower() == 'true'
+    preferred_links_json = request.GET.get('preferred_links', '')
+
+    # Parse preferred links from frontend
+    preferred_links = []
+    if preferred_links_json:
+        try:
+            preferred_links = json.loads(preferred_links_json)
+            logging.info(f"[EXTENSIVE MODE] Received {len(preferred_links)} preferred links")
+        except json.JSONDecodeError:
+            logging.error(f"Failed to parse preferred links JSON: {preferred_links_json}")
+
+    if not selected_models:
+        return JsonResponse({'error': 'No models specified'}, status=400)
+
+    models = [model.strip() for model in selected_models.split(',') if model.strip()]
+    if not models:
+        return JsonResponse({'error': 'No valid models specified'}, status=400)
+
+    responses = {}
+
+    # Prepare context messages using R2C or legacy system
+    legacy_messages, session_id = _prepare_context_messages(request, question, use_r2c, current_url)
+
+    for model in models:
+        try:
+            if use_rag:
+                # Use the RAG pipeline for advanced response
+                response = ds.create_rag_advanced_response(question, legacy_messages, model, preferred_links)
+            else:
+                # Extensive mode uses OpenAI Responses API with web_search (no Playwright for now)
+                # TODO combine Playwright, web_search and even more tools in the future for the ultimate intelligent web search UX
+                logging.info(f"[EXTENSIVE MODE] Using web_search for external research")
+                response = ds.create_advanced_response(question, legacy_messages, model, preferred_links)
+
+            responses[model] = response
+
+            _add_response_to_context(session_id, response, use_r2c)
+
+        except Exception as e:
+            logging.error(f"Error processing extensive mode model {model}: {e}")
+            responses[model] = f"Error: {str(e)}"
+
+    first_model_response = next(iter(responses.values())) if responses else "No response"
+    _log_interaction("extensive_mode", current_url, question, first_model_response)
+
+    # Get the used URLs from datascraper
+    used_urls_list = list(ds.used_urls)
+
+    logging.info(f"[EXTENSIVE MODE] Sending {len(used_urls_list)} source URLs to frontend:")
+    for idx, url in enumerate(used_urls_list, 1):
+        logging.info(f"  [{idx}] {url}")
+
+    # Return response with optional R2C stats and used URLs
+    response_data = _prepare_response_with_stats(responses, session_id, use_r2c)
+    response_json = json.loads(response_data.content)
+    response_json['used_urls'] = used_urls_list
+    return JsonResponse(response_json)
+
+@csrf_exempt
+@ratelimit(key='ip', rate=lambda g, r: settings.API_RATE_LIMIT, method='POST')
+def adv_response_stream(request):
+    """Process streaming advanced chat response from selected models using SSE"""
+    question = request.GET.get('question', '')
+    selected_models = request.GET.get('models', '')
+    use_rag = request.GET.get('use_rag', 'false').lower() == 'true'
+    current_url = request.GET.get('current_url', '')
+    use_r2c = request.GET.get('use_r2c', 'true').lower() == 'true'
+    preferred_links_json = request.GET.get('preferred_links', '')
+
+    # Parse preferred links from frontend
+    preferred_links = []
+    if preferred_links_json:
+        try:
+            preferred_links = json.loads(preferred_links_json)
+            logging.info(f"Received {len(preferred_links)} preferred links for streaming")
+        except json.JSONDecodeError:
+            logging.error(f"Failed to parse preferred links JSON: {preferred_links_json}")
 
     # Validate and parse models
     if not selected_models:
@@ -386,32 +639,65 @@ def chat_response_stream(request):
     def event_stream():
         """Generator function for SSE streaming"""
         try:
-            # Send initial connection event (as bytes for WSGI compatibility)
+            # Send initial connection event
             yield b'event: connected\ndata: {"status": "connected"}\n\n'
 
             if use_rag:
-                # RAG doesn't support streaming yet, return full response
-                response = ds.create_rag_response(question, legacy_messages, model)
+                # RAG doesn't support streaming yet, can't be bothered to mock streaming
+                response = ds.create_rag_advanced_response(question, legacy_messages, model, preferred_links)
                 sse_data = f'data: {json.dumps({"content": response, "done": True})}\n\n'
                 yield sse_data.encode('utf-8')
-            else:
-                # Stream response from model
-                full_response = ""
-                for chunk in ds.create_response(question, legacy_messages, model, stream=True):
-                    full_response += chunk
-                    # Send each chunk as SSE event (encoded as bytes)
-                    sse_data = f'data: {json.dumps({"content": chunk, "done": False})}\n\n'
-                    yield sse_data.encode('utf-8')
 
-                # Send completion event
+                _add_response_to_context(session_id, response, use_r2c)
+            else:
+                # Stream response from advanced model
+                full_response = ""
+                source_urls = []
+
+                # Get the async generator from create_advanced_response
+                stream_gen = ds.create_advanced_response(
+                    question,
+                    legacy_messages,
+                    model,
+                    preferred_links,
+                    stream=True
+                )
+
+                import asyncio
+
+                async def consume_stream():
+                    """Consume async generator and yield SSE events"""
+                    nonlocal full_response, source_urls
+                    async for text_chunk, urls in stream_gen:
+                        if text_chunk:
+                            full_response += text_chunk
+                            # Send each chunk as SSE event
+                            sse_data = f'data: {json.dumps({"content": text_chunk, "done": False})}\n\n'
+                            yield sse_data.encode('utf-8')
+                        if urls:
+                            # Store source URLs when we get them
+                            source_urls = urls
+
+                # Create event loop and run async generator
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                try:
+                    async_result = loop.run_until_complete(_collect_async_stream(consume_stream()))
+                    for chunk in async_result:
+                        yield chunk
+                finally:
+                    loop.close()
+
                 sse_data = f'data: {json.dumps({"content": "", "done": True})}\n\n'
                 yield sse_data.encode('utf-8')
 
-                # Add complete response to context after streaming
                 _add_response_to_context(session_id, full_response, use_r2c)
 
-                # Log interaction
-                _log_interaction("chat_stream", current_url, question, full_response)
+                _log_interaction("advanced_stream", current_url, question, full_response)
+
+                if source_urls:
+                    sse_data = f'data: {json.dumps({"used_urls": source_urls})}\n\n'
+                    yield sse_data.encode('utf-8')
 
                 # Send R2C stats if enabled
                 if use_r2c and session_id:
@@ -420,11 +706,13 @@ def chat_response_stream(request):
                     yield sse_data.encode('utf-8')
 
         except Exception as e:
-            logging.error(f"Error in streaming response: {e}")
+            logging.error(f"Error in advanced streaming response: {e}")
+            import traceback
+            traceback.print_exc()
             sse_data = f'data: {json.dumps({"error": str(e), "done": True})}\n\n'
             yield sse_data.encode('utf-8')
 
-    # Return streaming response with proper SSE headers
+    # Return streaming response
     response = StreamingHttpResponse(
         event_stream(),
         content_type='text/event-stream'
@@ -433,136 +721,23 @@ def chat_response_stream(request):
     response['X-Accel-Buffering'] = 'no'  # Disable Nginx buffering
     return response
 
-@csrf_exempt
-@ratelimit(key='ip', rate=lambda g, r: settings.API_RATE_LIMIT, method='POST')
-def mcp_chat_response(request):
-    """Process chat response via MCP-enabled Agent"""
-    question = request.GET.get('question', '')
-    selected_models = request.GET.get('models', '')
-    current_url = request.GET.get('current_url', '')
-    use_r2c = request.GET.get('use_r2c', 'true').lower() == 'true'
-    
-    # Validate and parse models
-    if not selected_models:
-        return JsonResponse({'error': 'No models specified'}, status=400)
-    
-    models = [model.strip() for model in selected_models.split(',') if model.strip()]
-    if not models:
-        return JsonResponse({'error': 'No valid models specified'}, status=400)
-
-    responses = {}
-    
-    # Prepare context messages using R2C or legacy system
-    legacy_messages, session_id = _prepare_context_messages(request, question, use_r2c, current_url)
-
-    for model in models:
-        try:
-            # Always use the MCP Agent path
-            response = ds.create_mcp_response(
-                question,
-                legacy_messages,
-                model
-            )
-            # logging.info(f"[MCP DEBUG] Model {model} response: {response}")
-            responses[model] = response
-
-            _add_response_to_context(session_id, response, use_r2c)
-                
-        except Exception as e:
-            logging.error(f"Error processing MCP model {model}: {e}")
-            responses[model] = f"Error: {str(e)}"
-
-    # Log with a distinct tag allowing filtering later
-    first_model_response = next(iter(responses.values())) if responses else "No response"
-    _log_interaction("mcp_chat", current_url, question, first_model_response)
-
-    # Return response with optional R2C stats, using single response mode for MCP
-    return _prepare_response_with_stats(responses, session_id, use_r2c, single_response_mode=True)
-
-@csrf_exempt
-@ratelimit(key='ip', rate=lambda g, r: settings.API_RATE_LIMIT, method='POST')
-def adv_response(request):
-    """Process advanced chat response from selected models"""
-    question = request.GET.get('question', '')
-    selected_models = request.GET.get('models', '')
-    use_rag = request.GET.get('use_rag', 'false').lower() == 'true'
-    current_url = request.GET.get('current_url', '')
-    use_r2c = request.GET.get('use_r2c', 'true').lower() == 'true'  # Default to using R2C
-    preferred_links_json = request.GET.get('preferred_links', '')
-
-    # Parse preferred links from frontend
-    preferred_links = []
-    if preferred_links_json:
-        try:
-            preferred_links = json.loads(preferred_links_json)
-            logging.info(f"Received {len(preferred_links)} preferred links from frontend")
-        except json.JSONDecodeError:
-            logging.error(f"Failed to parse preferred links JSON: {preferred_links_json}")
-
-    # Validate and parse models
-    if not selected_models:
-        return JsonResponse({'error': 'No models specified'}, status=400)
-
-    models = [model.strip() for model in selected_models.split(',') if model.strip()]
-    if not models:
-        return JsonResponse({'error': 'No valid models specified'}, status=400)
-    
-    responses = {}
-    
-    # Prepare context messages using R2C or legacy system
-    legacy_messages, session_id = _prepare_context_messages(request, question, use_r2c, current_url)
-    
-    for model in models:
-        try:
-            if use_rag:
-                # Use the RAG pipeline for advanced response
-                response = ds.create_rag_advanced_response(question, legacy_messages, model, preferred_links)
-            else:
-                # Use regular advanced response with preferred links
-                response = ds.create_advanced_response(question, legacy_messages, model, preferred_links)
-
-            responses[model] = response
-
-            # Add assistant response to R2C manager
-            _add_response_to_context(session_id, response, use_r2c)
-                
-        except Exception as e:
-            logging.error(f"Error processing advanced model {model}: {e}")
-            responses[model] = f"Error: {str(e)}"
-
-    first_model_response = next(iter(responses.values())) if responses else "No response"
-    _log_interaction("advanced", current_url, question, first_model_response)
-
-    # Get the used URLs from datascraper
-    used_urls_list = list(ds.used_urls)
-
-    # Log the URLs being sent to frontend
-    logging.info(f"Advanced response sending {len(used_urls_list)} URLs to frontend:")
-    for idx, url in enumerate(used_urls_list, 1):
-        logging.info(f"  [{idx}] {url}")
-
-    # Return response with optional R2C stats and used URLs
-    response_data = _prepare_response_with_stats(responses, session_id, use_r2c)
-    response_json = json.loads(response_data.content)
-    response_json['used_urls'] = used_urls_list
-    return JsonResponse(response_json)
 
 @csrf_exempt
 def clear(request):
     """Clear conversation messages but preserve scraped web content"""
     use_r2c = request.GET.get('use_r2c', 'true').lower() == 'true'
-    
+
     # For legacy system, only clear non-web content messages
     if message_list:
         # Keep only the system message and web content
-        preserved_messages = [message_list[0]]  # Keep system message
+        preserved_messages = [message_list[0]]
         for msg in message_list[1:]:
             if "[Web Content from" in msg.get("content", "") or msg.get("content", "").startswith("Yahoo Finance") or msg.get("content", "").startswith("<!DOCTYPE"):
                 preserved_messages.append(msg)
-        
+
         message_list.clear()
         message_list.extend(preserved_messages)
-    
+
     # Clear only conversation in R2C if enabled
     if use_r2c:
         session_id = _get_session_id(request)
@@ -576,7 +751,7 @@ def clear(request):
 
     current_url = request.GET.get('current_url', 'N/A')
     _log_interaction("clear", current_url, "Cleared conversation history")
-    
+
     return JsonResponse({'resp': message})
 
 @csrf_exempt

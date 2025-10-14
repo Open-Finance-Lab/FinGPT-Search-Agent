@@ -221,7 +221,7 @@ All **8 critical security issues** have been addressed:
 - Default rate: 100 requests per hour (configurable via environment variable)
 - Applied rate limiting to critical endpoints:
   - `chat_response` (POST)
-  - `mcp_chat_response` (POST)
+  - `agent_chat_response` (POST)
   - `adv_response` (POST)
   - `add_webtext` (POST)
 
@@ -419,9 +419,28 @@ Production dependencies are already configured in `pyproject.toml`:
 ```toml
 gunicorn = "^21.2.0"          # WSGI server
 whitenoise = "^6.6.0"         # Static file serving
+playwright = "^1.49.0"        # Browser automation
 ```
 
 All other dependencies are also pinned with major versions for stability.
+
+**IMPORTANT: Install Chromium browser for Playwright**
+
+```bash
+# After installing Python dependencies
+playwright install chromium
+
+# Linux: Install system dependencies
+playwright install-deps chromium  # Ubuntu/Debian/CentOS
+```
+
+**For Docker deployments:**
+```dockerfile
+# Add to your Dockerfile
+RUN pip install playwright && playwright install --with-deps chromium
+```
+
+**Without Chromium**, Normal Mode (current webpage navigation) will fail with browser errors.
 
 ### Step 4: Run with Production Settings
 

@@ -91,6 +91,12 @@ make dev  # Start development servers
 - **Virtual Environment**: The installer creates `FinGPTenv`. Activate it before running servers.
 - **Port 8000 in use**: Close other servers or continue anyway.
 - **Non-English systems**: UTF-8 encoding is automatically handled.
+- **Playwright browser errors**: If you see browser-related errors, install Chromium:
+  ```bash
+  cd Main/backend
+  playwright install chromium
+  ```
+  See `Main/backend/PLAYWRIGHT_INTEGRATION.md` for detailed troubleshooting.
 
 ## Usage and Documentation
 
