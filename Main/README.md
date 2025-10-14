@@ -66,7 +66,8 @@ backend/
 ├── runtime.txt                 # Python version specification for deployment
 ├── package.json                # npm scripts for auxiliary tooling
 ├── .env.example                # Environment variable template
-├── DEPLOYMENT_GUIDE.md         # A tmp file keeping track of deployment-related stuff
+├── DEPLOYMENT_GUIDE.md         # Deployment and production configuration guide
+├── PLAYWRIGHT_INTEGRATION.md   # Playwright browser automation setup and usage
 └── MCP_INSTALLATION.md         # MCP server setup guide
 ```
 
@@ -209,6 +210,7 @@ make html
 - **OpenAI API** – LLM integration
 - **DeepSeek API** – Alternative LLM provider
 - **Anthropic API** – Claude integration
+- **Playwright** – Browser automation (requires Chromium: `playwright install chromium`)
 - **FAISS** – Vector similarity search
 - **BeautifulSoup4** – Web scraping
 - **tiktoken** – Token counting for R2C context management
@@ -234,7 +236,12 @@ make html
 ### Backend Development
 ```bash
 cd Main/backend
-python manage.py runserver          # Start development server
+
+# Install Chromium for Playwright (required for Normal Mode)
+playwright install chromium
+
+# Start development server
+python manage.py runserver
 ```
 
 ### Frontend Development
