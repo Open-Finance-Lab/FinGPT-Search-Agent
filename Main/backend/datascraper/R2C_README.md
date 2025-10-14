@@ -95,10 +95,10 @@ _compress_context() triggers:
 ### 5. API Call Flow
 ```
 Selected endpoint based on mode:
-    - Normal: ds.create_response()
+    - Agent (with tools): ds.create_agent_response() [Primary method]
+    - Regular (direct LLM): ds.create_response() [Fallback only]
     - RAG: ds.create_rag_response()
     - Advanced: ds.create_advanced_response()
-    - MCP: ds.create_mcp_response()
     ↓
     All receive the prepared context messages
     ↓
@@ -156,9 +156,11 @@ The system uses three tiers of financial keywords for importance scoring:
 ## API Endpoints
 
 ### Chat Endpoints
-- `GET /get_chat_response/` - Standard chat response
-- `GET /get_mcp_response/` - MCP-enabled response
-- `GET /get_adv_response/` - Advanced response with web search
+- `GET /get_chat_response/` - Normal mode (agent with domain-restricted Playwright)
+- `GET /get_chat_response_stream/` - Normal mode with streaming
+- `POST /get_agent_response/` - Direct agent endpoint with optional tools
+- `GET /get_adv_response/` - Extensive mode (web search across internet)
+- `GET /get_adv_response_stream/` - Extensive mode with streaming
 - `POST /input_webtext/` - Add scraped web content to context
 
 ### Management Endpoints
