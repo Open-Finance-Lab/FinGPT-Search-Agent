@@ -67,10 +67,6 @@ function createRatingElement() {
     const ratingContainer = document.createElement('div');
     ratingContainer.className = 'rating-container';
 
-    const ratingText = document.createElement('span');
-    ratingText.className = 'rating-text';
-    ratingText.innerText = 'How was this response?';
-
     const ratingStars = document.createElement('div');
     ratingStars.className = 'rating-stars';
 
@@ -119,7 +115,6 @@ function createRatingElement() {
         });
     });
 
-    ratingContainer.appendChild(ratingText);
     ratingContainer.appendChild(ratingStars);
 
     return ratingContainer;
@@ -191,14 +186,14 @@ function handleChatResponse(question, promptMode = false, useStreaming = true) {
                 actionRow.appendChild(ratingElement);
                 responseContainer.appendChild(actionRow);
 
-                // If this is extensive mode streaming and contains used_urls, cache them
+                // If this is research mode streaming and contains used_urls, cache them
                 if (promptMode && data.used_urls && data.used_urls.length > 0) {
-                    console.log('[Sources Debug] Extensive mode streaming response received');
+                    console.log('[Sources Debug] Research mode streaming response received');
                     console.log('[Sources Debug] used_urls:', data.used_urls);
                     console.log('[Sources Debug] Number of URLs:', data.used_urls.length);
 
                     setCachedSources(data.used_urls, question);
-                    console.log('[Sources Debug] Cached', data.used_urls.length, 'source URLs from extensive mode streaming');
+                    console.log('[Sources Debug] Cached', data.used_urls.length, 'source URLs from research mode streaming');
                 }
 
                 // Clear the user textbox

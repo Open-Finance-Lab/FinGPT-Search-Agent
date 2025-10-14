@@ -131,19 +131,19 @@
 }
 
 /* Mode-specific colors */
-.mode-selector-button.mode-normal {
+.mode-selector-button.mode-thinking {
     background-color: #5C8F4D !important;
 }
 
-.mode-selector-button.mode-normal:hover {
+.mode-selector-button.mode-thinking:hover {
     background-color: #6EAD5B !important;
 }
 
-.mode-selector-button.mode-extensive {
+.mode-selector-button.mode-research {
     background-color: #337789 !important;
 }
 
-.mode-selector-button.mode-extensive:hover {
+.mode-selector-button.mode-research:hover {
     background-color: #5B9BAD !important;
 }
 
@@ -338,12 +338,6 @@
     align-items: center;
     gap: 15px;
     transition: background-color 0.2s ease;
-}
-
-.rating-text {
-    color: white;
-    font-size: 14px;
-    white-space: nowrap;
 }
 
 .rating-stars {
