@@ -6,7 +6,7 @@ function createChatInterface(searchQuery) {
     inputContainer.id = "inputContainer";
 
     // State for current mode
-    let currentMode = 'Normal';  // Default to Normal mode
+    let currentMode = 'Thinking';  // Default to Thinking mode
 
     const textbox = document.createElement("input");
     textbox.type = "text";
@@ -30,7 +30,7 @@ function createChatInterface(searchQuery) {
     // Main button that shows current mode
     const modeSelectorButton = document.createElement('button');
     modeSelectorButton.id = 'modeSelectorButton';
-    modeSelectorButton.className = 'mode-selector-button mode-normal';
+    modeSelectorButton.className = 'mode-selector-button mode-thinking';
 
     const modeText = document.createElement('span');
     modeText.className = 'mode-text';
@@ -49,41 +49,41 @@ function createChatInterface(searchQuery) {
     modeDropdown.className = 'mode-dropdown';
     modeDropdown.style.display = 'none';
 
-    // Normal mode option
-    const normalOption = document.createElement('div');
-    normalOption.className = 'mode-option mode-option-selected';
-    normalOption.dataset.mode = 'Normal';
+    // Thinking mode option
+    const thinkingOption = document.createElement('div');
+    thinkingOption.className = 'mode-option mode-option-selected';
+    thinkingOption.dataset.mode = 'Thinking';
 
-    const normalCheckmark = document.createElement('span');
-    normalCheckmark.className = 'mode-checkmark';
-    normalCheckmark.innerHTML = '✓';
+    const thinkingCheckmark = document.createElement('span');
+    thinkingCheckmark.className = 'mode-checkmark';
+    thinkingCheckmark.innerHTML = '✓';
 
-    const normalText = document.createElement('span');
-    normalText.className = 'mode-option-text';
-    normalText.innerText = 'Normal';
+    const thinkingText = document.createElement('span');
+    thinkingText.className = 'mode-option-text';
+    thinkingText.innerText = 'Thinking';
 
-    normalOption.appendChild(normalText);
-    normalOption.appendChild(normalCheckmark);
+    thinkingOption.appendChild(thinkingText);
+    thinkingOption.appendChild(thinkingCheckmark);
 
-    // Extensive mode option
-    const extensiveOption = document.createElement('div');
-    extensiveOption.className = 'mode-option';
-    extensiveOption.dataset.mode = 'Extensive';
+    // Research mode option
+    const researchOption = document.createElement('div');
+    researchOption.className = 'mode-option';
+    researchOption.dataset.mode = 'Research';
 
-    const extensiveCheckmark = document.createElement('span');
-    extensiveCheckmark.className = 'mode-checkmark';
-    extensiveCheckmark.innerHTML = '✓';
-    extensiveCheckmark.style.visibility = 'hidden';
+    const researchCheckmark = document.createElement('span');
+    researchCheckmark.className = 'mode-checkmark';
+    researchCheckmark.innerHTML = '✓';
+    researchCheckmark.style.visibility = 'hidden';
 
-    const extensiveText = document.createElement('span');
-    extensiveText.className = 'mode-option-text';
-    extensiveText.innerText = 'Extensive';
+    const researchText = document.createElement('span');
+    researchText.className = 'mode-option-text';
+    researchText.innerText = 'Research';
 
-    extensiveOption.appendChild(extensiveText);
-    extensiveOption.appendChild(extensiveCheckmark);
+    researchOption.appendChild(researchText);
+    researchOption.appendChild(researchCheckmark);
 
-    modeDropdown.appendChild(normalOption);
-    modeDropdown.appendChild(extensiveOption);
+    modeDropdown.appendChild(thinkingOption);
+    modeDropdown.appendChild(researchOption);
 
     modeSelector.appendChild(modeSelectorButton);
     modeSelector.appendChild(modeDropdown);
@@ -102,7 +102,7 @@ function createChatInterface(searchQuery) {
     };
 
     // Handle mode selection
-    [normalOption, extensiveOption].forEach(option => {
+    [thinkingOption, researchOption].forEach(option => {
         option.onclick = function(e) {
             e.stopPropagation();
             const selectedMode = this.dataset.mode;
@@ -112,23 +112,23 @@ function createChatInterface(searchQuery) {
             modeText.innerText = currentMode;
 
             // Update button styling
-            if (currentMode === 'Normal') {
-                modeSelectorButton.className = 'mode-selector-button mode-normal';
+            if (currentMode === 'Thinking') {
+                modeSelectorButton.className = 'mode-selector-button mode-thinking';
             } else {
-                modeSelectorButton.className = 'mode-selector-button mode-extensive';
+                modeSelectorButton.className = 'mode-selector-button mode-research';
             }
 
             // Update checkmarks
-            if (currentMode === 'Normal') {
-                normalOption.classList.add('mode-option-selected');
-                extensiveOption.classList.remove('mode-option-selected');
-                normalCheckmark.style.visibility = 'visible';
-                extensiveCheckmark.style.visibility = 'hidden';
+            if (currentMode === 'Thinking') {
+                thinkingOption.classList.add('mode-option-selected');
+                researchOption.classList.remove('mode-option-selected');
+                thinkingCheckmark.style.visibility = 'visible';
+                researchCheckmark.style.visibility = 'hidden';
             } else {
-                normalOption.classList.remove('mode-option-selected');
-                extensiveOption.classList.add('mode-option-selected');
-                normalCheckmark.style.visibility = 'hidden';
-                extensiveCheckmark.style.visibility = 'visible';
+                thinkingOption.classList.remove('mode-option-selected');
+                researchOption.classList.add('mode-option-selected');
+                thinkingCheckmark.style.visibility = 'hidden';
+                researchCheckmark.style.visibility = 'visible';
             }
 
             // Close dropdown

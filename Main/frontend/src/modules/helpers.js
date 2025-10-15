@@ -78,16 +78,16 @@ function submit_question(mode) {
         return;
     }
 
-    if (mode === 'Normal') {
-        // Normal mode - equivalent to old "Ask" button
+    if (mode === 'Thinking') {
+        // Thinking mode - equivalent to old "Ask" button
         handleChatResponse(question, false);
-        logQuestion(question, 'Normal');
-    } else if (mode === 'Extensive') {
-        // Extensive mode - equivalent to old "Advanced Ask" button
+        logQuestion(question, 'Thinking');
+    } else if (mode === 'Research') {
+        // Research mode - equivalent to old "Advanced Ask" button
         // Clear previous cached sources before making new advanced request
         clearCachedSources();
         handleChatResponse(question, true);
-        logQuestion(question, 'Extensive');
+        logQuestion(question, 'Research');
     }
 
     document.getElementById('textbox').value = '';
