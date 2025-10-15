@@ -52,8 +52,13 @@ function createActionButtons(responseText, userQuestion, promptMode, useRAG, use
             retryButton.classList.remove('action-button-clicked');
         }, 200);
 
-        // Resend the question
-        handleChatResponse(userQuestion, promptMode);
+        // Get current mode from DOM (don't use captured promptMode)
+        const selectedModeElement = document.querySelector('.mode-option-selected');
+        const currentMode = selectedModeElement ? selectedModeElement.dataset.mode : 'Normal';
+        const currentPromptMode = currentMode === 'Extensive';
+
+        // Resend the question with current settings
+        handleChatResponse(userQuestion, currentPromptMode);
     };
 
     buttonContainer.appendChild(copyButton);
