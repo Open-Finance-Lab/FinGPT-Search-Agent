@@ -38,11 +38,24 @@ function postWebTextToServer(textContent, currentUrl) {
         });
 }
 
+// Function to get user's timezone and current time
+function getUserTimeInfo() {
+    return {
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        currentTime: new Date().toISOString()
+    };
+}
+
 // Function to get chat response from server (now supports MCP mode)
 function getChatResponse(question, selectedModel, promptMode, useRAG, useMCP) {
     const encodedQuestion = encodeURIComponent(question);
     const currentUrl = window.location.href;
     const encodedCurrentUrl = encodeURIComponent(currentUrl);
+
+    // Get user's timezone and time
+    const timeInfo = getUserTimeInfo();
+    const encodedTimezone = encodeURIComponent(timeInfo.timezone);
+    const encodedCurrentTime = encodeURIComponent(timeInfo.currentTime);
 
     let endpoint;
     if (useMCP) {
@@ -58,7 +71,9 @@ function getChatResponse(question, selectedModel, promptMode, useRAG, useMCP) {
         `&use_rag=${useRAG}` +
         `&use_r2c=true` +
         `&session_id=${currentSessionId}` +
-        `&current_url=${encodedCurrentUrl}`;
+        `&current_url=${encodedCurrentUrl}` +
+        `&user_timezone=${encodedTimezone}` +
+        `&user_time=${encodedCurrentTime}`;
 
     // Add preferred links if in advanced mode
     if (promptMode) {
@@ -86,6 +101,11 @@ function getChatResponseStream(question, selectedModel, promptMode, useRAG, useM
     const currentUrl = window.location.href;
     const encodedCurrentUrl = encodeURIComponent(currentUrl);
 
+    // Get user's timezone and time
+    const timeInfo = getUserTimeInfo();
+    const encodedTimezone = encodeURIComponent(timeInfo.timezone);
+    const encodedCurrentTime = encodeURIComponent(timeInfo.currentTime);
+
     // MCP mode doesn't support streaming yet
     if (useMCP) {
         return getChatResponse(question, selectedModel, promptMode, useRAG, useMCP)
@@ -105,7 +125,9 @@ function getChatResponseStream(question, selectedModel, promptMode, useRAG, useM
             `&use_rag=${useRAG}` +
             `&use_r2c=true` +
             `&session_id=${currentSessionId}` +
-            `&current_url=${encodedCurrentUrl}`;
+            `&current_url=${encodedCurrentUrl}` +
+            `&user_timezone=${encodedTimezone}` +
+            `&user_time=${encodedCurrentTime}`;
 
         // Add preferred links for research mode
         try {
@@ -123,7 +145,9 @@ function getChatResponseStream(question, selectedModel, promptMode, useRAG, useM
             `&use_rag=${useRAG}` +
             `&use_r2c=true` +
             `&session_id=${currentSessionId}` +
-            `&current_url=${encodedCurrentUrl}`;
+            `&current_url=${encodedCurrentUrl}` +
+            `&user_timezone=${encodedTimezone}` +
+            `&user_time=${encodedCurrentTime}`;
     }
 
     // Create EventSource for SSE with credentials support
