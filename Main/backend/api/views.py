@@ -154,6 +154,12 @@ def _prepare_context_messages(request, question, use_r2c=True, current_url=None)
         if current_url:
             r2c_manager.update_current_webpage(session_id, current_url)
 
+        # Update user's timezone and time if provided
+        user_timezone = request.GET.get('user_timezone')
+        user_time = request.GET.get('user_time')
+        if user_timezone or user_time:
+            r2c_manager.update_user_time_info(session_id, user_timezone, user_time)
+
         r2c_manager.add_message(session_id, "user", question)
 
         context_messages = r2c_manager.get_context(session_id)
@@ -326,6 +332,8 @@ def chat_response(request):
     use_rag = request.GET.get('use_rag', 'false').lower() == 'true'
     current_url = request.GET.get('current_url', '')
     use_r2c = request.GET.get('use_r2c', 'true').lower() == 'true'
+    user_timezone = request.GET.get('user_timezone')
+    user_time = request.GET.get('user_time')
 
     # Validate and parse models
     if not selected_models:
@@ -365,7 +373,9 @@ def chat_response(request):
                     model,
                     use_playwright=True,
                     restricted_domain=restricted_domain,
-                    current_url=current_url
+                    current_url=current_url,
+                    user_timezone=user_timezone,
+                    user_time=user_time
                 )
                 logging.info(f"[NORMAL MODE] Using Playwright within {restricted_domain or 'any domain'}")
 
@@ -396,6 +406,8 @@ def chat_response_stream(request):
     use_rag = request.GET.get('use_rag', 'false').lower() == 'true'
     current_url = request.GET.get('current_url', '')
     use_r2c = request.GET.get('use_r2c', 'true').lower() == 'true'
+    user_timezone = request.GET.get('user_timezone')
+    user_time = request.GET.get('user_time')
 
     # Validate and parse models
     if not selected_models:
@@ -445,7 +457,9 @@ def chat_response_stream(request):
                     model,
                     use_playwright=True,
                     restricted_domain=restricted_domain,
-                    current_url=current_url
+                    current_url=current_url,
+                    user_timezone=user_timezone,
+                    user_time=user_time
                 )
 
                 # Simulate streaming
@@ -493,6 +507,8 @@ def agent_chat_response(request):
     current_url = request.GET.get('current_url', '')
     use_r2c = request.GET.get('use_r2c', 'true').lower() == 'true'
     use_playwright = request.GET.get('use_playwright', 'false').lower() == 'true'
+    user_timezone = request.GET.get('user_timezone')
+    user_time = request.GET.get('user_time')
 
     # Validate and parse models
     if not selected_models:
@@ -514,7 +530,9 @@ def agent_chat_response(request):
                 question,
                 legacy_messages,
                 model,
-                use_playwright=use_playwright
+                use_playwright=use_playwright,
+                user_timezone=user_timezone,
+                user_time=user_time
             )
             if use_playwright:
                 logging.info(f"[AGENT DEBUG] Model {model} response with Playwright tools")
@@ -546,6 +564,8 @@ def adv_response(request):
     current_url = request.GET.get('current_url', '')
     use_r2c = request.GET.get('use_r2c', 'true').lower() == 'true'
     preferred_links_json = request.GET.get('preferred_links', '')
+    user_timezone = request.GET.get('user_timezone')
+    user_time = request.GET.get('user_time')
 
     # Parse preferred links from frontend
     preferred_links = []
@@ -577,7 +597,7 @@ def adv_response(request):
                 # Extensive mode uses OpenAI Responses API with web_search (no Playwright for now)
                 # TODO combine Playwright, web_search and even more tools in the future for the ultimate intelligent web search UX
                 logging.info(f"[EXTENSIVE MODE] Using web_search for external research")
-                response = ds.create_advanced_response(question, legacy_messages, model, preferred_links)
+                response = ds.create_advanced_response(question, legacy_messages, model, preferred_links, user_timezone=user_timezone, user_time=user_time)
 
             responses[model] = response
 
@@ -613,6 +633,8 @@ def adv_response_stream(request):
     current_url = request.GET.get('current_url', '')
     use_r2c = request.GET.get('use_r2c', 'true').lower() == 'true'
     preferred_links_json = request.GET.get('preferred_links', '')
+    user_timezone = request.GET.get('user_timezone')
+    user_time = request.GET.get('user_time')
 
     # Parse preferred links from frontend
     preferred_links = []
@@ -660,7 +682,9 @@ def adv_response_stream(request):
                     legacy_messages,
                     model,
                     preferred_links,
-                    stream=True
+                    stream=True,
+                    user_timezone=user_timezone,
+                    user_time=user_time
                 )
 
                 import asyncio

@@ -214,7 +214,9 @@ def create_advanced_response(
         message_list: list[dict],
         model: str = "o4-mini",
         preferred_links: list[str] = None,
-        stream: bool = False
+        stream: bool = False,
+        user_timezone: str = None,
+        user_time: str = None
 ):
     """
     Creates an advanced response using OpenAI Responses API with web search.
@@ -231,6 +233,8 @@ def create_advanced_response(
         model: Model ID from frontend (e.g., "FinGPT-Light")
         preferred_links: List of preferred URLs/domains to prioritize
         stream: If True, returns async generator for streaming
+        user_timezone: User's IANA timezone
+        user_time: User's current time in ISO format
 
     Returns:
         If stream=False: Generated response string with web-sourced information
@@ -278,7 +282,9 @@ def create_advanced_response(
                 user_input=user_input,
                 message_list=message_list,
                 actual_model=actual_model,
-                preferred_urls=preferred_urls
+                preferred_urls=preferred_urls,
+                user_timezone=user_timezone,
+                user_time=user_time
             ))
         else:
             # Call OpenAI Responses API search function
@@ -286,7 +292,9 @@ def create_advanced_response(
                 user_query=user_input,
                 message_history=message_list,
                 model=actual_model,  # Use the actual model name from model_config.py, not the frontend ID
-                preferred_links=preferred_urls
+                preferred_links=preferred_urls,
+                user_timezone=user_timezone,
+                user_time=user_time
             )
 
             # Update the global used_urls set for compatibility with get_sources
@@ -314,7 +322,9 @@ async def _create_advanced_response_stream_async(
         user_input: str,
         message_list: list[dict],
         actual_model: str,
-        preferred_urls: list[str]
+        preferred_urls: list[str],
+        user_timezone: str = None,
+        user_time: str = None
 ):
     """
     Async generator for streaming advanced response.
@@ -331,7 +341,9 @@ async def _create_advanced_response_stream_async(
             message_history=message_list,
             model=actual_model,
             preferred_links=preferred_urls,
-            stream=True
+            stream=True,
+            user_timezone=user_timezone,
+            user_time=user_time
         )
 
         # Yield chunks from the stream
@@ -364,7 +376,7 @@ def create_rag_advanced_response(user_input: str, message_list: list[dict], mode
     return create_advanced_response(user_input, message_list, model, preferred_links)
 
 
-def create_agent_response(user_input: str, message_list: list[dict], model: str = "o4-mini", use_playwright: bool = False, restricted_domain: str = None, current_url: str = None) -> str:
+def create_agent_response(user_input: str, message_list: list[dict], model: str = "o4-mini", use_playwright: bool = False, restricted_domain: str = None, current_url: str = None, user_timezone: str = None, user_time: str = None) -> str:
     """
     Creates a response using the Agent with tools (Playwright, etc.).
 
@@ -378,6 +390,8 @@ def create_agent_response(user_input: str, message_list: list[dict], model: str 
         use_playwright: Whether to enable Playwright browser automation tools
         restricted_domain: Domain restriction for Playwright (e.g., "finance.yahoo.com")
         current_url: Current webpage URL for context
+        user_timezone: User's IANA timezone
+        user_time: User's current time in ISO format
 
     Returns:
         Generated response from the agent
@@ -395,14 +409,14 @@ def create_agent_response(user_input: str, message_list: list[dict], model: str 
 
         logging.info(f"[AGENT] Attempting agent response with {model} ({actual_model_name})")
 
-        return asyncio.run(_create_agent_response_async(user_input, message_list, model, use_playwright, restricted_domain, current_url))
+        return asyncio.run(_create_agent_response_async(user_input, message_list, model, use_playwright, restricted_domain, current_url, user_timezone, user_time))
 
     except Exception as e:
         logging.error(f"Agent response failed for {model} ({actual_model_name}): {e}")
         logging.info(f"FALLBACK: Using regular response with {model} ({actual_model_name})")
         return create_response(user_input, message_list, model)
 
-async def _create_agent_response_async(user_input: str, message_list: list[dict], model: str, use_playwright: bool = False, restricted_domain: str = None, current_url: str = None) -> str:
+async def _create_agent_response_async(user_input: str, message_list: list[dict], model: str, use_playwright: bool = False, restricted_domain: str = None, current_url: str = None, user_timezone: str = None, user_time: str = None) -> str:
     """
     Async helper for creating agent response with tools.
 
@@ -413,6 +427,8 @@ async def _create_agent_response_async(user_input: str, message_list: list[dict]
         use_playwright: Whether to enable Playwright browser automation tools
         restricted_domain: Domain restriction for Playwright navigation
         current_url: Current webpage URL for context
+        user_timezone: User's IANA timezone
+        user_time: User's current time in ISO format
 
     Returns:
         Generated response from the agent
@@ -446,7 +462,9 @@ async def _create_agent_response_async(user_input: str, message_list: list[dict]
         model=model,
         use_playwright=use_playwright,
         restricted_domain=restricted_domain,
-        current_url=current_url
+        current_url=current_url,
+        user_timezone=user_timezone,
+        user_time=user_time
     ) as agent:
         # Run the agent with the full prompt
         tool_status = f"with Playwright (domain: {restricted_domain})" if use_playwright and restricted_domain else "with Playwright" if use_playwright else "without tools"
