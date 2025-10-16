@@ -118,7 +118,9 @@ async def create_responses_api_search_async(
     message_history: List[Dict[str, str]],
     model: str = "gpt-4o-mini",
     preferred_links: List[str] = None,
-    stream: bool = False
+    stream: bool = False,
+    user_timezone: str = None,
+    user_time: str = None
 ):
     """
     Async version: Create a response using OpenAI Responses API with web search.
@@ -129,6 +131,8 @@ async def create_responses_api_search_async(
         model: OpenAI model to use (must support Responses API)
         preferred_links: List of preferred URLs/domains to search
         stream: If True, returns async generator; if False, returns Tuple[str, List[str]]
+        user_timezone: User's IANA timezone
+        user_time: User's current time in ISO format
 
     Returns:
         If stream=False: Tuple of (response_text, list_of_source_urls)
@@ -148,14 +152,41 @@ async def create_responses_api_search_async(
         # Prepare enhanced prompt
         enhanced_prompt = prepare_search_prompt(user_query, preferred_domains)
 
-        # Combine system instructions with the user prompt (Responses API doesn't accept system parameter)
-        combined_input = (
+        # Build system instructions with timezone/time context
+        system_instructions = (
             "Instructions: You are a helpful assistant with access to web search. "
             "Always search for current information when answering questions. "
             "Cite your sources inline and provide comprehensive, accurate answers. "
-            "Focus on factual information from reputable sources.\n\n"
-            f"{enhanced_prompt}"
+            "Focus on factual information from reputable sources."
         )
+
+        # Add timezone and time information if available
+        if user_timezone or user_time:
+            from datetime import datetime
+            import pytz
+
+            time_info_parts = []
+            if user_timezone and user_time:
+                try:
+                    # Parse ISO time and convert to user's timezone
+                    utc_time = datetime.fromisoformat(user_time.replace('Z', '+00:00'))
+                    user_tz = pytz.timezone(user_timezone)
+                    local_time = utc_time.astimezone(user_tz)
+
+                    time_info_parts.append(f"User's timezone: {user_timezone}")
+                    time_info_parts.append(f"Current local time for user: {local_time.strftime('%Y-%m-%d %H:%M:%S %Z')}")
+                except Exception as e:
+                    logger.warning(f"Error formatting time info in search: {e}")
+                    if user_timezone:
+                        time_info_parts.append(f"User's timezone: {user_timezone}")
+            elif user_timezone:
+                time_info_parts.append(f"User's timezone: {user_timezone}")
+
+            if time_info_parts:
+                system_instructions += f"\n\n[TIME CONTEXT]: {' | '.join(time_info_parts)}"
+
+        # Combine system instructions with the user prompt (Responses API doesn't accept system parameter)
+        combined_input = f"{system_instructions}\n\n{enhanced_prompt}"
 
         logger.info(f"Calling OpenAI Responses API with model: {model} (stream={stream})")
         logger.info(f"Web search enabled for query: {user_query[:100]}...")
@@ -243,26 +274,78 @@ async def _stream_response_chunks(stream_response):
     """
     full_response = ""
     source_urls = []
+    final_response = None
 
     try:
-        async for chunk in stream_response:
-            # Handle different chunk types
-            if hasattr(chunk, 'type'):
-                if chunk.type == 'content.delta':
-                    # Text content chunk
-                    if hasattr(chunk, 'delta') and hasattr(chunk.delta, 'text'):
-                        text = chunk.delta.text
-                        full_response += text
-                        yield (text, [])
-                elif chunk.type == 'content.done':
-                    # Content finished, may contain citations
-                    if hasattr(chunk, 'content'):
-                        # Extract citations from completed content
-                        citations = _extract_citations_from_content(chunk.content)
-                        urls = [c['url'] for c in citations if c['type'] == 'url_citation']
-                        source_urls.extend(urls)
+        async for event in stream_response:
+            event_type = getattr(event, "type", None)
 
-        # Yield final chunk with source URLs
+            if event_type == "response.output_text.delta":
+                delta = getattr(event, "delta", "")
+                text = getattr(delta, "text", "") if hasattr(delta, "text") else delta or ""
+                if text:
+                    full_response += text
+                    yield (text, [])
+            elif event_type == "response.refusal.delta":
+                # Treat refusal deltas as streamed text so the UI shows the reason
+                delta = getattr(event, "delta", "")
+                text = getattr(delta, "text", "") if hasattr(delta, "text") else delta or ""
+                if text:
+                    full_response += text
+                    yield (text, [])
+            elif event_type in ("response.citation.delta", "response.citation.done"):
+                citation = getattr(event, "citation", None)
+                if citation:
+                    url = getattr(citation, "url", None)
+                    if url and url not in source_urls:
+                        source_urls.append(url)
+            elif event_type == "response.error":
+                error_obj = getattr(event, "error", None)
+                message = getattr(error_obj, "message", None) if error_obj else None
+                raise RuntimeError(message or "Responses API streaming error")
+            elif event_type == "response.completed":
+                final_response = getattr(event, "response", None)
+            elif event_type == "response.output_text.done":
+                # Nothing to do, wait for completed event which carries full payload
+                continue
+            else:
+                # Handle tool outputs that may include interim search notes
+                if event_type and event_type.startswith("response.tool"):
+                    output = getattr(event, "output", None)
+                    if isinstance(output, str) and output:
+                        logger.debug(f"Tool output during streaming: {output[:200]}")
+                    elif isinstance(output, list):
+                        for entry in output:
+                            if isinstance(entry, dict):
+                                text = entry.get("output_text") or entry.get("result") or ""
+                                if text:
+                                    logger.debug(f"Tool output during streaming: {text[:200]}")
+                # Ignore other event types (logs, metrics, etc.)
+                continue
+
+        # Extract citations from the final response if available
+        if not final_response:
+            get_final = getattr(stream_response, "get_final_response", None)
+            if callable(get_final):
+                try:
+                    final_candidate = await get_final()
+                    if final_candidate:
+                        final_response = final_candidate
+                except Exception as final_err:
+                    logger.debug(f"Unable to fetch final streamed response: {final_err}")
+
+        if final_response:
+            try:
+                citations = extract_citations_from_response(final_response)
+                existing = list(source_urls)
+                for citation in citations:
+                    url = citation.get('url')
+                    if citation.get('type') == 'url_citation' and url and url not in existing:
+                        existing.append(url)
+                source_urls = existing
+            except Exception as citation_err:
+                logger.warning(f"Failed to extract citations from final response: {citation_err}")
+
         logger.info(f"Streaming completed with {len(source_urls)} source URLs")
         yield ("", source_urls)
 
@@ -302,7 +385,9 @@ def create_responses_api_search(
     user_query: str,
     message_history: List[Dict[str, str]],
     model: str = "gpt-4o-mini",
-    preferred_links: List[str] = None
+    preferred_links: List[str] = None,
+    user_timezone: str = None,
+    user_time: str = None
 ) -> Tuple[str, List[str]]:
     """
     Synchronous wrapper for create_responses_api_search_async.
@@ -312,6 +397,8 @@ def create_responses_api_search(
         message_history: Previous conversation messages
         model: OpenAI model to use
         preferred_links: List of preferred URLs/domains
+        user_timezone: User's IANA timezone
+        user_time: User's current time in ISO format
 
     Returns:
         Tuple of (response_text, list_of_source_urls)
@@ -323,18 +410,18 @@ def create_responses_api_search(
         if loop.is_running():
             # If loop is already running, create a task
             task = asyncio.create_task(
-                create_responses_api_search_async(user_query, message_history, model, preferred_links)
+                create_responses_api_search_async(user_query, message_history, model, preferred_links, stream=False, user_timezone=user_timezone, user_time=user_time)
             )
             return asyncio.run_coroutine_threadsafe(task, loop).result()
         else:
             # If no loop is running, use asyncio.run
             return asyncio.run(
-                create_responses_api_search_async(user_query, message_history, model, preferred_links)
+                create_responses_api_search_async(user_query, message_history, model, preferred_links, stream=False, user_timezone=user_timezone, user_time=user_time)
             )
     except RuntimeError:
         # No event loop exists, create one
         return asyncio.run(
-            create_responses_api_search_async(user_query, message_history, model, preferred_links)
+            create_responses_api_search_async(user_query, message_history, model, preferred_links, stream=False, user_timezone=user_timezone, user_time=user_time)
         )
 
 

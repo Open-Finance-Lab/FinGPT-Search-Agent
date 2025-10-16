@@ -1,6 +1,8 @@
 import os
 import logging
 import asyncio
+from collections.abc import AsyncIterator
+from typing import Any, Dict, Tuple
 
 from dotenv import load_dotenv
 
@@ -58,6 +60,39 @@ INSTRUCTION = (
 
 # A module-level set to keep track of used URLs
 used_urls: set[str] = set()
+
+
+def _prepare_advanced_search_inputs(model: str, preferred_links: list[str] | None) -> tuple[str, list[str]]:
+    """
+    Resolve the actual model and preferred URLs list for advanced responses.
+    """
+    model_config = get_model_config(model)
+    if model_config:
+        actual_model = model_config.get("model_name")
+        logging.info(f"Model mapping: {model} -> {actual_model}")
+    else:
+        actual_model = model
+        logging.warning(f"No config found for model {model}, using as-is")
+
+    if not is_responses_api_available(actual_model):
+        fallback_model = "gpt-4o"
+        logging.warning(f"Model {actual_model} (from {model}) doesn't support Responses API")
+        logging.info(f"FALLBACK: Using {fallback_model} for web search instead")
+        actual_model = fallback_model
+    else:
+        logging.info(f"Model {actual_model} supports Responses API with web search")
+
+    manager = get_manager()
+
+    if preferred_links is not None and len(preferred_links) > 0:
+        manager.sync_from_frontend(preferred_links)
+        preferred_urls = manager.get_links()
+        logging.info(f"Using {len(preferred_urls)} preferred URLs")
+    else:
+        preferred_urls = manager.get_links()
+        logging.info(f"Using {len(preferred_urls)} stored preferred URLs")
+
+    return actual_model, preferred_urls
 
 
 
@@ -214,7 +249,9 @@ def create_advanced_response(
         message_list: list[dict],
         model: str = "o4-mini",
         preferred_links: list[str] = None,
-        stream: bool = False
+        stream: bool = False,
+        user_timezone: str = None,
+        user_time: str = None
 ):
     """
     Creates an advanced response using OpenAI Responses API with web search.
@@ -231,6 +268,8 @@ def create_advanced_response(
         model: Model ID from frontend (e.g., "FinGPT-Light")
         preferred_links: List of preferred URLs/domains to prioritize
         stream: If True, returns async generator for streaming
+        user_timezone: User's IANA timezone
+        user_time: User's current time in ISO format
 
     Returns:
         If stream=False: Generated response string with web-sourced information
@@ -240,53 +279,28 @@ def create_advanced_response(
 
     used_urls.clear()
 
-    model_config = get_model_config(model)
-    if model_config:
-        actual_model = model_config.get("model_name")
-        logging.info(f"Model mapping: {model} -> {actual_model}")
-    else:
-        actual_model = model
-        logging.warning(f"No config found for model {model}, using as-is")
-
-    # Check if the actual model supports Responses API
-    if not is_responses_api_available(actual_model):
-        # Fallback to a model that does support it
-        fallback_model = "gpt-4o"
-        logging.warning(f"Model {actual_model} (from {model}) doesn't support Responses API")
-        logging.info(f"FALLBACK: Using {fallback_model} for web search instead")
-        actual_model = fallback_model
-    else:
-        logging.info(f"Model {actual_model} supports Responses API with web search")
-
-    # Get the preferred links manager
-    manager = get_manager()
-
-    if preferred_links is not None and len(preferred_links) > 0:
-        # Frontend provided links - sync them to storage
-        manager.sync_from_frontend(preferred_links)
-        preferred_urls = manager.get_links()
-        logging.info(f"Using {len(preferred_urls)} preferred URLs")
-    else:
-        # No frontend links - use stored ones
-        preferred_urls = manager.get_links()
-        logging.info(f"Using {len(preferred_urls)} stored preferred URLs")
+    actual_model, preferred_urls = _prepare_advanced_search_inputs(model, preferred_links)
 
     try:
         if stream:
             # Return async generator for streaming
-            return asyncio.run(_create_advanced_response_stream_async(
+            return _create_advanced_response_stream_async(
                 user_input=user_input,
                 message_list=message_list,
                 actual_model=actual_model,
-                preferred_urls=preferred_urls
-            ))
+                preferred_urls=preferred_urls,
+                user_timezone=user_timezone,
+                user_time=user_time
+            )
         else:
             # Call OpenAI Responses API search function
             response_text, source_urls = create_responses_api_search(
                 user_query=user_input,
                 message_history=message_list,
                 model=actual_model,  # Use the actual model name from model_config.py, not the frontend ID
-                preferred_links=preferred_urls
+                preferred_links=preferred_urls,
+                user_timezone=user_timezone,
+                user_time=user_time
             )
 
             # Update the global used_urls set for compatibility with get_sources
@@ -303,8 +317,9 @@ def create_advanced_response(
         logging.error(f"OpenAI Responses API failed: {e}")
         # Return a fallback response
         if stream:
+            error_message = str(e)
             async def error_gen():
-                yield f"I encountered an error while searching for information: {str(e)}. Please try again.", []
+                yield f"I encountered an error while searching for information: {error_message}. Please try again.", []
             return error_gen()
         else:
             return f"I encountered an error while searching for information: {str(e)}. Please try again."
@@ -314,7 +329,9 @@ async def _create_advanced_response_stream_async(
         user_input: str,
         message_list: list[dict],
         actual_model: str,
-        preferred_urls: list[str]
+        preferred_urls: list[str],
+        user_timezone: str = None,
+        user_time: str = None
 ):
     """
     Async generator for streaming advanced response.
@@ -331,7 +348,9 @@ async def _create_advanced_response_stream_async(
             message_history=message_list,
             model=actual_model,
             preferred_links=preferred_urls,
-            stream=True
+            stream=True,
+            user_timezone=user_timezone,
+            user_time=user_time
         )
 
         # Yield chunks from the stream
@@ -345,6 +364,60 @@ async def _create_advanced_response_stream_async(
     except Exception as e:
         logging.error(f"Error in advanced streaming: {e}")
         yield f"Error: {str(e)}", []
+
+
+def create_advanced_response_streaming(
+        user_input: str,
+        message_list: list[dict],
+        model: str = "o4-mini",
+        preferred_links: list[str] | None = None,
+        user_timezone: str | None = None,
+        user_time: str | None = None
+) -> Tuple[AsyncIterator[tuple[str, list[str]]], Dict[str, Any]]:
+    """
+    Wrapper that returns an async generator and streaming state for advanced responses.
+    """
+    logging.info(f"Starting advanced streaming response with model ID: {model}")
+
+    used_urls.clear()
+    actual_model, preferred_urls = _prepare_advanced_search_inputs(model, preferred_links)
+
+    state: Dict[str, Any] = {
+        "final_output": "",
+        "used_urls": []
+    }
+
+    async def _stream() -> AsyncIterator[tuple[str, list[str]]]:
+        aggregated_chunks: list[str] = []
+        latest_urls: list[str] = []
+        base_stream = _create_advanced_response_stream_async(
+            user_input=user_input,
+            message_list=message_list,
+            actual_model=actual_model,
+            preferred_urls=preferred_urls,
+            user_timezone=user_timezone,
+            user_time=user_time
+        )
+
+        try:
+            async for text_chunk, source_urls in base_stream:
+                if text_chunk:
+                    aggregated_chunks.append(text_chunk)
+                if source_urls:
+                    latest_urls = source_urls
+                yield text_chunk, source_urls
+        except Exception as stream_error:
+            logging.error(f"[ADVANCED STREAM] Error during streaming: {stream_error}")
+            raise
+        finally:
+            final_text = "".join(aggregated_chunks)
+            state["final_output"] = final_text
+            state["used_urls"] = latest_urls
+            used_urls.clear()
+            used_urls.update(latest_urls)
+            logging.info(f"[ADVANCED STREAM] Completed with {len(final_text)} characters and {len(latest_urls)} sources")
+
+    return _stream(), state
 
 
 def create_rag_advanced_response(user_input: str, message_list: list[dict], model: str = "o4-mini", preferred_links: list[str] = None) -> str:
@@ -364,7 +437,7 @@ def create_rag_advanced_response(user_input: str, message_list: list[dict], mode
     return create_advanced_response(user_input, message_list, model, preferred_links)
 
 
-def create_agent_response(user_input: str, message_list: list[dict], model: str = "o4-mini", use_playwright: bool = False, restricted_domain: str = None, current_url: str = None) -> str:
+def create_agent_response(user_input: str, message_list: list[dict], model: str = "o4-mini", use_playwright: bool = False, restricted_domain: str = None, current_url: str = None, user_timezone: str = None, user_time: str = None) -> str:
     """
     Creates a response using the Agent with tools (Playwright, etc.).
 
@@ -378,6 +451,8 @@ def create_agent_response(user_input: str, message_list: list[dict], model: str 
         use_playwright: Whether to enable Playwright browser automation tools
         restricted_domain: Domain restriction for Playwright (e.g., "finance.yahoo.com")
         current_url: Current webpage URL for context
+        user_timezone: User's IANA timezone
+        user_time: User's current time in ISO format
 
     Returns:
         Generated response from the agent
@@ -395,14 +470,14 @@ def create_agent_response(user_input: str, message_list: list[dict], model: str 
 
         logging.info(f"[AGENT] Attempting agent response with {model} ({actual_model_name})")
 
-        return asyncio.run(_create_agent_response_async(user_input, message_list, model, use_playwright, restricted_domain, current_url))
+        return asyncio.run(_create_agent_response_async(user_input, message_list, model, use_playwright, restricted_domain, current_url, user_timezone, user_time))
 
     except Exception as e:
         logging.error(f"Agent response failed for {model} ({actual_model_name}): {e}")
         logging.info(f"FALLBACK: Using regular response with {model} ({actual_model_name})")
         return create_response(user_input, message_list, model)
 
-async def _create_agent_response_async(user_input: str, message_list: list[dict], model: str, use_playwright: bool = False, restricted_domain: str = None, current_url: str = None) -> str:
+async def _create_agent_response_async(user_input: str, message_list: list[dict], model: str, use_playwright: bool = False, restricted_domain: str = None, current_url: str = None, user_timezone: str = None, user_time: str = None) -> str:
     """
     Async helper for creating agent response with tools.
 
@@ -413,6 +488,8 @@ async def _create_agent_response_async(user_input: str, message_list: list[dict]
         use_playwright: Whether to enable Playwright browser automation tools
         restricted_domain: Domain restriction for Playwright navigation
         current_url: Current webpage URL for context
+        user_timezone: User's IANA timezone
+        user_time: User's current time in ISO format
 
     Returns:
         Generated response from the agent
@@ -446,7 +523,9 @@ async def _create_agent_response_async(user_input: str, message_list: list[dict]
         model=model,
         use_playwright=use_playwright,
         restricted_domain=restricted_domain,
-        current_url=current_url
+        current_url=current_url,
+        user_timezone=user_timezone,
+        user_time=user_time
     ) as agent:
         # Run the agent with the full prompt
         tool_status = f"with Playwright (domain: {restricted_domain})" if use_playwright and restricted_domain else "with Playwright" if use_playwright else "without tools"
@@ -458,6 +537,87 @@ async def _create_agent_response_async(user_input: str, message_list: list[dict]
 
         logging.info(f"[AGENT] Result length: {len(result.final_output) if result.final_output else 0}")
         return result.final_output
+
+
+def create_agent_response_stream(
+    user_input: str,
+    message_list: list[dict],
+    model: str = "o4-mini",
+    use_playwright: bool = False,
+    restricted_domain: str | None = None,
+    current_url: str | None = None,
+    user_timezone: str | None = None,
+    user_time: str | None = None
+) -> Tuple[AsyncIterator[str], Dict[str, str]]:
+    """
+    Create a streaming agent response, returning an async iterator and final state.
+    """
+    state: Dict[str, str] = {"final_output": ""}
+
+    async def _stream() -> AsyncIterator[str]:
+        from agents import Runner
+
+        context = ""
+        for msg in message_list:
+            content = msg.get("content", "")
+            if content.startswith("[SYSTEM MESSAGE]: "):
+                actual_content = content.replace("[SYSTEM MESSAGE]: ", "")
+                context += f"System: {actual_content}\n"
+            elif content.startswith("[USER MESSAGE]: "):
+                actual_content = content.replace("[USER MESSAGE]: ", "")
+                context += f"User: {actual_content}\n"
+            elif content.startswith("[ASSISTANT MESSAGE]: "):
+                actual_content = content.replace("[ASSISTANT MESSAGE]: ", "")
+                context += f"Assistant: {actual_content}\n"
+            else:
+                context += f"User: {content}\n"
+
+        full_prompt = f"{context}User: {user_input}"
+        aggregated_chunks: list[str] = []
+        result = None
+
+        async with create_fin_agent(
+            model=model,
+            use_playwright=use_playwright,
+            restricted_domain=restricted_domain,
+            current_url=current_url,
+            user_timezone=user_timezone,
+            user_time=user_time
+        ) as agent:
+            logging.info("[AGENT STREAM] Starting streamed agent run")
+            logging.info(f"[AGENT STREAM] Prompt preview: {full_prompt[:150]}...")
+            result = Runner.run_streamed(agent, full_prompt)
+
+            try:
+                async for event in result.stream_events():
+                    event_type = getattr(event, "type", "")
+                    if event_type == "raw_response_event":
+                        data = getattr(event, "data", None)
+                        data_type = getattr(data, "type", "")
+                        if data_type == "response.output_text.delta":
+                            chunk = getattr(data, "delta", "")
+                            if chunk:
+                                aggregated_chunks.append(chunk)
+                                yield chunk
+                    elif event_type == "run_item_stream_event":
+                        event_name = getattr(event, "name", "")
+                        if event_name in {"tool_called", "tool_output"}:
+                            tool_item = getattr(event, "item", None)
+                            tool_type = getattr(tool_item, "type", "")
+                            logging.debug(f"[AGENT STREAM] Tool event: {event_name} ({tool_type})")
+            except Exception as stream_error:
+                logging.error(f"[AGENT STREAM] Error during streaming: {stream_error}")
+                raise
+            finally:
+                final_text = ""
+                if result and isinstance(result.final_output, str) and result.final_output:
+                    final_text = result.final_output
+                elif aggregated_chunks:
+                    final_text = "".join(aggregated_chunks)
+                state["final_output"] = final_text
+                logging.info(f"[AGENT STREAM] Completed with {len(final_text)} characters")
+
+    return _stream(), state
 
 
 def get_sources(query):

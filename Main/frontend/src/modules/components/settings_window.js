@@ -83,13 +83,20 @@ function createSettingsWindow(isFixedModeRef, settingsIcon, positionModeIcon) {
         }
     }
 
-    // Populate model list when settings window is created
-    populateModelList();
+    // Don't populate immediately - wait for user to click
+    // This ensures models have been fetched from backend
+    let modelsPopulated = false;
 
     modelContainer.appendChild(modelContent);
     settings_window.appendChild(modelContainer);
 
     modelHeader.onclick = () => {
+        // Populate models on first click (lazy loading)
+        if (!modelsPopulated) {
+            populateModelList();
+            modelsPopulated = true;
+        }
+
         modelContent.style.display = modelContent.style.display === "none" ? "block" : "none";
         modelToggleIcon.innerText = modelContent.style.display === "none" ? "⯆" : "⯅";
     };
@@ -336,7 +343,7 @@ function createSettingsWindow(isFixedModeRef, settingsIcon, positionModeIcon) {
         event.stopPropagation();
         const rect = settingsIcon.getBoundingClientRect();
         const y = rect.bottom + (isFixedModeRef.value ? 0 : window.scrollY);
-        const x = rect.left + (isFixedModeRef.value ? 0 : window.scrollX);
+        const x = rect.left + (isFixedModeRef.value ? 0 : window.scrollX) - 100;
         settings_window.style.top = `${y}px`;
         settings_window.style.left = `${x}px`;
         settings_window.style.display = settings_window.style.display === 'none' ? 'block' : 'none';
