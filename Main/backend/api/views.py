@@ -221,13 +221,6 @@ def _prepare_response_with_stats(responses, session_id, use_r2c=True, single_res
             response_key = 'resp' if isinstance(responses, dict) else 'reply'
             return JsonResponse({response_key: responses})
 
-async def _collect_async_stream(async_gen):
-    """Helper function to collect all items from an async generator into a list."""
-    result = []
-    async for item in async_gen:
-        result.append(item)
-    return result
-
 def _ensure_log_file_exists():
     """Create log file with headers if it doesn't exist, using UTF-8 encoding."""
     if not os.path.isfile(QUESTION_LOG_PATH):
@@ -689,45 +682,47 @@ def adv_response_stream(request):
 
                 import asyncio
 
-                async def consume_stream():
-                    """Consume async generator and yield SSE events"""
-                    nonlocal full_response, source_urls
-                    async for text_chunk, urls in stream_gen:
-                        if text_chunk:
-                            full_response += text_chunk
-                            # Send each chunk as SSE event
-                            sse_data = f'data: {json.dumps({"content": text_chunk, "done": False})}\n\n'
-                            yield sse_data.encode('utf-8')
-                        if urls:
-                            # Store source URLs when we get them
-                            source_urls = urls
-
-                # Create event loop and run async generator
+                # Bridge async generator into synchronous SSE stream
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
                 try:
-                    async_result = loop.run_until_complete(_collect_async_stream(consume_stream()))
-                    for chunk in async_result:
-                        yield chunk
+                    stream_iter = stream_gen.__aiter__()
+                    while True:
+                        try:
+                            text_chunk, urls = loop.run_until_complete(stream_iter.__anext__())
+                        except StopAsyncIteration:
+                            break
+
+                        if text_chunk:
+                            full_response += text_chunk
+                            sse_data = f'data: {json.dumps({"content": text_chunk, "done": False})}\n\n'
+                            yield sse_data.encode('utf-8')
+                        if urls:
+                            source_urls = urls
                 finally:
+                    try:
+                        loop.run_until_complete(loop.shutdown_asyncgens())
+                    except Exception:
+                        pass
+                    asyncio.set_event_loop(None)
                     loop.close()
 
-                sse_data = f'data: {json.dumps({"content": "", "done": True})}\n\n'
-                yield sse_data.encode('utf-8')
-
                 _add_response_to_context(session_id, full_response, use_r2c)
-
                 _log_interaction("advanced_stream", current_url, question, full_response)
 
-                if source_urls:
-                    sse_data = f'data: {json.dumps({"used_urls": source_urls})}\n\n'
-                    yield sse_data.encode('utf-8')
+                final_payload = {
+                    "content": "",
+                    "done": True
+                }
 
-                # Send R2C stats if enabled
+                if source_urls:
+                    final_payload["used_urls"] = source_urls
                 if use_r2c and session_id:
                     stats = r2c_manager.get_session_stats(session_id)
-                    sse_data = f'data: {json.dumps({"r2c_stats": stats})}\n\n'
-                    yield sse_data.encode('utf-8')
+                    final_payload["r2c_stats"] = stats
+
+                sse_data = f'data: {json.dumps(final_payload)}\n\n'
+                yield sse_data.encode('utf-8')
 
         except Exception as e:
             logging.error(f"Error in advanced streaming response: {e}")
