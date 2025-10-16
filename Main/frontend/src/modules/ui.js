@@ -42,7 +42,7 @@ function createUI() {
             const settingsIconRect = settingsIcon.getBoundingClientRect();
             settings_window.style.position = "absolute";
             settings_window.style.top = `${settingsIconRect.bottom + window.scrollY}px`;
-            settings_window.style.left = `${settingsIconRect.left + window.scrollX}px`;
+            settings_window.style.left = `${settingsIconRect.left + window.scrollX - 100}px`;
 
             // Update sources window position mode
             const sources_window = document.getElementById('sources_window');
@@ -60,7 +60,7 @@ function createUI() {
             const settingsIconRect = settingsIcon.getBoundingClientRect();
             settings_window.style.position = "fixed";
             settings_window.style.top = `${settingsIconRect.bottom}px`;
-            settings_window.style.left = `${settingsIconRect.left}px`;
+            settings_window.style.left = `${settingsIconRect.left - 100}px`;
 
             // Update sources window position mode
             const sources_window = document.getElementById('sources_window');

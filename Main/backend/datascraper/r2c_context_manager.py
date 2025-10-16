@@ -54,7 +54,9 @@ class R2CContextManager:
             "compressed_context": None,
             "token_count": 0,
             "compression_history": [],
-            "current_webpage": None  # Store current webpage info
+            "current_webpage": None,  # Store current webpage info
+            "user_timezone": None,  # Store user's timezone
+            "user_time": None  # Store user's current time
         })
 
         # Base system message for financial assistant
@@ -87,6 +89,22 @@ class R2CContextManager:
         session = self.sessions[session_id]
         session["current_webpage"] = url
         # logging.info(f"[R2C DEBUG] Updated current webpage for session {session_id}: {url}")
+
+    def update_user_time_info(self, session_id: str, timezone: str = None, current_time: str = None) -> None:
+        """
+        Update the user's timezone and current time for a session.
+
+        Args:
+            session_id: Session identifier
+            timezone: User's IANA timezone (e.g., "America/New_York")
+            current_time: User's current time in ISO format
+        """
+        session = self.sessions[session_id]
+        if timezone:
+            session["user_timezone"] = timezone
+        if current_time:
+            session["user_time"] = current_time
+        # logging.info(f"[R2C DEBUG] Updated time info for session {session_id}: {timezone}, {current_time}")
     
     def add_message(self, session_id: str, role: str, content: str) -> None:
         """
@@ -145,8 +163,34 @@ class R2CContextManager:
         """
         session = self.sessions[session_id]
 
-        # Build system prompt with current webpage info
+        # Build system prompt with current webpage info and time/timezone
         system_prompt = self.base_system_prompt
+
+        # Add timezone and time information
+        if session.get("user_timezone") or session.get("user_time"):
+            from datetime import datetime
+            import pytz
+
+            time_info_parts = []
+            if session.get("user_timezone") and session.get("user_time"):
+                try:
+                    # Parse ISO time and convert to user's timezone
+                    utc_time = datetime.fromisoformat(session["user_time"].replace('Z', '+00:00'))
+                    user_tz = pytz.timezone(session["user_timezone"])
+                    local_time = utc_time.astimezone(user_tz)
+
+                    time_info_parts.append(f"User's timezone: {session['user_timezone']}")
+                    time_info_parts.append(f"Current local time for user: {local_time.strftime('%Y-%m-%d %H:%M:%S %Z')}")
+                except Exception as e:
+                    logging.warning(f"Error formatting time info: {e}")
+                    if session.get("user_timezone"):
+                        time_info_parts.append(f"User's timezone: {session['user_timezone']}")
+            elif session.get("user_timezone"):
+                time_info_parts.append(f"User's timezone: {session['user_timezone']}")
+
+            if time_info_parts:
+                system_prompt += f"\n\n[TIME CONTEXT]: {' | '.join(time_info_parts)}"
+
         if session.get("current_webpage"):
             system_prompt += f"\n\n[CURRENT CONTEXT]: You are currently viewing the webpage: {session['current_webpage']}. When users ask 'which page am I on' or similar questions about the current page, always confidently tell them they are on: {session['current_webpage']}"
 

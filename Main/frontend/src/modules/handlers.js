@@ -133,6 +133,9 @@ function handleChatResponse(question, promptMode = false, useStreaming = true) {
     // Show the user's question
     appendChatElement(responseContainer, 'your_question', question);
 
+    // Scroll to show the new question immediately
+    responseContainer.scrollTop = responseContainer.scrollHeight;
+
     // Placeholder "Loading..." text
     const loadingElement = appendChatElement(
         responseContainer,

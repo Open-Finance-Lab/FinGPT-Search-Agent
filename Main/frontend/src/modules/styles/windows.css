@@ -64,6 +64,12 @@
     float: right;
 }
 
+/* MODEL SELECTION CONTAINER */
+#model_selection_content {
+    margin: 10px 0;
+    display: none;
+}
+
 /* MODEL SELECTION ITEMS */
 .model-selection-item {
     background-color: #444;

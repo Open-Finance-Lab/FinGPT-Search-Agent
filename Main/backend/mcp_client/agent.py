@@ -88,7 +88,9 @@ async def create_fin_agent(model: str = "gpt-4o",
                           system_prompt: Optional[str] = None,
                           use_playwright: bool = False,
                           restricted_domain: Optional[str] = None,
-                          current_url: Optional[str] = None):
+                          current_url: Optional[str] = None,
+                          user_timezone: Optional[str] = None,
+                          user_time: Optional[str] = None):
     """
     Create a financial agent with optional Playwright browser automation tools.
 
@@ -98,6 +100,8 @@ async def create_fin_agent(model: str = "gpt-4o",
         use_playwright: Whether to enable Playwright browser automation tools
         restricted_domain: Restrict navigation to this domain (e.g., "finance.yahoo.com")
         current_url: Current webpage URL for context
+        user_timezone: User's IANA timezone (e.g., "America/New_York")
+        user_time: User's current time in ISO format
 
     Yields:
         Agent instance configured with appropriate tools
@@ -113,6 +117,31 @@ async def create_fin_agent(model: str = "gpt-4o",
         instructions = PLAYWRIGHT_PROMPT
     else:
         instructions = DEFAULT_PROMPT
+
+    # Add timezone and time information to instructions
+    if user_timezone or user_time:
+        from datetime import datetime
+        import pytz
+
+        time_info_parts = []
+        if user_timezone and user_time:
+            try:
+                # Parse ISO time and convert to user's timezone
+                utc_time = datetime.fromisoformat(user_time.replace('Z', '+00:00'))
+                user_tz = pytz.timezone(user_timezone)
+                local_time = utc_time.astimezone(user_tz)
+
+                time_info_parts.append(f"User's timezone: {user_timezone}")
+                time_info_parts.append(f"Current local time for user: {local_time.strftime('%Y-%m-%d %H:%M:%S %Z')}")
+            except Exception as e:
+                logging.warning(f"Error formatting time info in agent: {e}")
+                if user_timezone:
+                    time_info_parts.append(f"User's timezone: {user_timezone}")
+        elif user_timezone:
+            time_info_parts.append(f"User's timezone: {user_timezone}")
+
+        if time_info_parts:
+            instructions = f"{instructions}\n\n[TIME CONTEXT]: {' | '.join(time_info_parts)}"
 
     # Resolve model ID to actual model name via models_config
     model_config = get_model_config(model)
