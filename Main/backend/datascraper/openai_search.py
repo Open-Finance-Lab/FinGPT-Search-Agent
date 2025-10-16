@@ -274,26 +274,78 @@ async def _stream_response_chunks(stream_response):
     """
     full_response = ""
     source_urls = []
+    final_response = None
 
     try:
-        async for chunk in stream_response:
-            # Handle different chunk types
-            if hasattr(chunk, 'type'):
-                if chunk.type == 'content.delta':
-                    # Text content chunk
-                    if hasattr(chunk, 'delta') and hasattr(chunk.delta, 'text'):
-                        text = chunk.delta.text
-                        full_response += text
-                        yield (text, [])
-                elif chunk.type == 'content.done':
-                    # Content finished, may contain citations
-                    if hasattr(chunk, 'content'):
-                        # Extract citations from completed content
-                        citations = _extract_citations_from_content(chunk.content)
-                        urls = [c['url'] for c in citations if c['type'] == 'url_citation']
-                        source_urls.extend(urls)
+        async for event in stream_response:
+            event_type = getattr(event, "type", None)
 
-        # Yield final chunk with source URLs
+            if event_type == "response.output_text.delta":
+                delta = getattr(event, "delta", "")
+                text = getattr(delta, "text", "") if hasattr(delta, "text") else delta or ""
+                if text:
+                    full_response += text
+                    yield (text, [])
+            elif event_type == "response.refusal.delta":
+                # Treat refusal deltas as streamed text so the UI shows the reason
+                delta = getattr(event, "delta", "")
+                text = getattr(delta, "text", "") if hasattr(delta, "text") else delta or ""
+                if text:
+                    full_response += text
+                    yield (text, [])
+            elif event_type in ("response.citation.delta", "response.citation.done"):
+                citation = getattr(event, "citation", None)
+                if citation:
+                    url = getattr(citation, "url", None)
+                    if url and url not in source_urls:
+                        source_urls.append(url)
+            elif event_type == "response.error":
+                error_obj = getattr(event, "error", None)
+                message = getattr(error_obj, "message", None) if error_obj else None
+                raise RuntimeError(message or "Responses API streaming error")
+            elif event_type == "response.completed":
+                final_response = getattr(event, "response", None)
+            elif event_type == "response.output_text.done":
+                # Nothing to do, wait for completed event which carries full payload
+                continue
+            else:
+                # Handle tool outputs that may include interim search notes
+                if event_type and event_type.startswith("response.tool"):
+                    output = getattr(event, "output", None)
+                    if isinstance(output, str) and output:
+                        logger.debug(f"Tool output during streaming: {output[:200]}")
+                    elif isinstance(output, list):
+                        for entry in output:
+                            if isinstance(entry, dict):
+                                text = entry.get("output_text") or entry.get("result") or ""
+                                if text:
+                                    logger.debug(f"Tool output during streaming: {text[:200]}")
+                # Ignore other event types (logs, metrics, etc.)
+                continue
+
+        # Extract citations from the final response if available
+        if not final_response:
+            get_final = getattr(stream_response, "get_final_response", None)
+            if callable(get_final):
+                try:
+                    final_candidate = await get_final()
+                    if final_candidate:
+                        final_response = final_candidate
+                except Exception as final_err:
+                    logger.debug(f"Unable to fetch final streamed response: {final_err}")
+
+        if final_response:
+            try:
+                citations = extract_citations_from_response(final_response)
+                existing = list(source_urls)
+                for citation in citations:
+                    url = citation.get('url')
+                    if citation.get('type') == 'url_citation' and url and url not in existing:
+                        existing.append(url)
+                source_urls = existing
+            except Exception as citation_err:
+                logger.warning(f"Failed to extract citations from final response: {citation_err}")
+
         logger.info(f"Streaming completed with {len(source_urls)} source URLs")
         yield ("", source_urls)
 

@@ -278,14 +278,14 @@ def create_advanced_response(
     try:
         if stream:
             # Return async generator for streaming
-            return asyncio.run(_create_advanced_response_stream_async(
+            return _create_advanced_response_stream_async(
                 user_input=user_input,
                 message_list=message_list,
                 actual_model=actual_model,
                 preferred_urls=preferred_urls,
                 user_timezone=user_timezone,
                 user_time=user_time
-            ))
+            )
         else:
             # Call OpenAI Responses API search function
             response_text, source_urls = create_responses_api_search(
@@ -311,8 +311,9 @@ def create_advanced_response(
         logging.error(f"OpenAI Responses API failed: {e}")
         # Return a fallback response
         if stream:
+            error_message = str(e)
             async def error_gen():
-                yield f"I encountered an error while searching for information: {str(e)}. Please try again.", []
+                yield f"I encountered an error while searching for information: {error_message}. Please try again.", []
             return error_gen()
         else:
             return f"I encountered an error while searching for information: {str(e)}. Please try again."
