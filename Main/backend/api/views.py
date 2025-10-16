@@ -391,8 +391,6 @@ def chat_response_stream(request):
     """
     Normal Mode Streaming: Help user understand the CURRENT website using Playwright navigation.
     Agent stays within the current domain and navigates to find information.
-
-    Note: Agent doesn't support native streaming, so we get full response then simulate streaming.
     """
     question = request.GET.get('question', '')
     selected_models = request.GET.get('models', '')
@@ -443,24 +441,56 @@ def chat_response_stream(request):
                 # Normal mode always uses agent with Playwright (domain-restricted)
                 logging.info(f"[NORMAL MODE STREAM] Using Playwright within {restricted_domain or 'any domain'}")
 
-                # Agent doesn't seem to support native streaming - get full response
-                full_response = ds.create_agent_response(
-                    question,
-                    legacy_messages,
-                    model,
-                    use_playwright=True,
-                    restricted_domain=restricted_domain,
-                    current_url=current_url,
-                    user_timezone=user_timezone,
-                    user_time=user_time
-                )
+                full_response = ""
+                stream_generator = None
+                stream_state = {"final_output": ""}
+                loop = None
+                stream_iter = None
 
-                # Simulate streaming
-                chunk_size = 50
-                for i in range(0, len(full_response), chunk_size):
-                    chunk = full_response[i:i + chunk_size]
-                    sse_data = f'data: {json.dumps({"content": chunk, "done": False})}\n\n'
-                    yield sse_data.encode('utf-8')
+                try:
+                    stream_generator, stream_state = ds.create_agent_response_stream(
+                        question,
+                        legacy_messages,
+                        model,
+                        use_playwright=True,
+                        restricted_domain=restricted_domain,
+                        current_url=current_url,
+                        user_timezone=user_timezone,
+                        user_time=user_time
+                    )
+
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    stream_iter = stream_generator.__aiter__()
+
+                    while True:
+                        try:
+                            chunk = loop.run_until_complete(stream_iter.__anext__())
+                        except StopAsyncIteration:
+                            break
+
+                        if chunk:
+                            full_response += chunk
+                            sse_payload = {"content": chunk, "done": False}
+                            sse_data = f"data: {json.dumps(sse_payload)}\n\n"
+                            yield sse_data.encode('utf-8')
+
+                finally:
+                    if stream_iter and loop:
+                        try:
+                            loop.run_until_complete(stream_iter.aclose())
+                        except Exception:
+                            pass
+                    if loop:
+                        try:
+                            loop.run_until_complete(loop.shutdown_asyncgens())
+                        except Exception:
+                            pass
+                        asyncio.set_event_loop(None)
+                        loop.close()
+
+                final_response = stream_state.get("final_output") or full_response
+                full_response = final_response
 
                 # Send completion event
                 sse_data = f'data: {json.dumps({"content": "", "done": True})}\n\n'
@@ -667,26 +697,28 @@ def adv_response_stream(request):
             else:
                 # Stream response from advanced model
                 full_response = ""
-                source_urls = []
-
-                # Get the async generator from create_advanced_response
-                stream_gen = ds.create_advanced_response(
-                    question,
-                    legacy_messages,
-                    model,
-                    preferred_links,
-                    stream=True,
-                    user_timezone=user_timezone,
-                    user_time=user_time
-                )
+                source_urls: list[str] = []
+                stream_generator = None
+                stream_state = {"final_output": "", "used_urls": []}
+                loop = None
+                stream_iter = None
 
                 import asyncio
 
-                # Bridge async generator into synchronous SSE stream
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
                 try:
-                    stream_iter = stream_gen.__aiter__()
+                    stream_generator, stream_state = ds.create_advanced_response_streaming(
+                        question,
+                        legacy_messages,
+                        model,
+                        preferred_links,
+                        user_timezone=user_timezone,
+                        user_time=user_time
+                    )
+
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    stream_iter = stream_generator.__aiter__()
+
                     while True:
                         try:
                             text_chunk, urls = loop.run_until_complete(stream_iter.__anext__())
@@ -699,24 +731,34 @@ def adv_response_stream(request):
                             yield sse_data.encode('utf-8')
                         if urls:
                             source_urls = urls
-                finally:
-                    try:
-                        loop.run_until_complete(loop.shutdown_asyncgens())
-                    except Exception:
-                        pass
-                    asyncio.set_event_loop(None)
-                    loop.close()
 
-                _add_response_to_context(session_id, full_response, use_r2c)
-                _log_interaction("advanced_stream", current_url, question, full_response)
+                finally:
+                    if stream_iter and loop:
+                        try:
+                            loop.run_until_complete(stream_iter.aclose())
+                        except Exception:
+                            pass
+                    if loop:
+                        try:
+                            loop.run_until_complete(loop.shutdown_asyncgens())
+                        except Exception:
+                            pass
+                        asyncio.set_event_loop(None)
+                        loop.close()
+
+                final_response = stream_state.get("final_output") or full_response
+                final_urls = stream_state.get("used_urls") or source_urls
+
+                _add_response_to_context(session_id, final_response, use_r2c)
+                _log_interaction("advanced_stream", current_url, question, final_response)
 
                 final_payload = {
                     "content": "",
                     "done": True
                 }
 
-                if source_urls:
-                    final_payload["used_urls"] = source_urls
+                if final_urls:
+                    final_payload["used_urls"] = final_urls
                 if use_r2c and session_id:
                     stats = r2c_manager.get_session_stats(session_id)
                     final_payload["r2c_stats"] = stats
