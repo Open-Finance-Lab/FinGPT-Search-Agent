@@ -57,7 +57,7 @@ MODELS_CONFIG = {
         "supports_mcp": True,
         "supports_advanced": True,
         "max_tokens": 400000,
-        "description": "Warren Buffet has revived from the graves"
+        "description": "The power of the Warren, in the palm of my hands"
     },
 
     # DeepSeek Models
