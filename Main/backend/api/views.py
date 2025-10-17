@@ -634,7 +634,7 @@ def adv_response(request):
     _log_interaction("extensive_mode", current_url, question, first_model_response)
 
     # Get the used URLs from datascraper
-    used_urls_list = list(ds.used_urls)
+    used_urls_list = list(ds.used_urls_ordered) if getattr(ds, "used_urls_ordered", None) else list(ds.used_urls)
 
     logging.info(f"[EXTENSIVE MODE] Sending {len(used_urls_list)} source URLs to frontend:")
     for idx, url in enumerate(used_urls_list, 1):
@@ -819,11 +819,11 @@ def clear(request):
 def get_sources(request):
     """Get sources for a query"""
     query = request.GET.get('query', '')
-    sources = ds.get_sources(query)
+    current_url = request.GET.get('current_url')
+    sources = ds.get_sources(query, current_url=current_url)
     
     # Log the source request
-    current_url = request.GET.get('current_url', 'N/A')
-    _log_interaction("sources", current_url, f"Source request: {query}")
+    _log_interaction("sources", current_url or 'N/A', f"Source request: {query}")
     
     return JsonResponse({'resp': sources})
 
