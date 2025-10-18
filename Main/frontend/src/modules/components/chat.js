@@ -164,7 +164,7 @@ function createChatInterface(searchQuery) {
     const sourcesButton = document.createElement('button');
     sourcesButton.innerText = "Sources";
     sourcesButton.className = "sources-button";
-    sourcesButton.onclick = function () { get_sources(searchQuery); };
+    sourcesButton.onclick = function () { get_sources(); };
 
     buttonRow.appendChild(sourcesButton);
     buttonRow.appendChild(clearButton);

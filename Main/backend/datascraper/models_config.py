@@ -50,6 +50,15 @@ MODELS_CONFIG = {
         "max_tokens": 400000,
         "description": "A much faster smaller FinGPT model"
     },
+    "Buffet-Agent": {
+        "provider": "openai",
+        "model_name": "gpt-5-nano",
+        "supports_rag": True,
+        "supports_mcp": True,
+        "supports_advanced": True,
+        "max_tokens": 400000,
+        "description": "The power of the Warren, in the palm of my hands"
+    },
 
     # DeepSeek Models
     # "deepseek-reasoner": {
