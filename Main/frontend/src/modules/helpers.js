@@ -1,7 +1,7 @@
 // helpers.js
 import { clearMessages, getSourceUrls, logQuestion } from './api.js';
 import { handleChatResponse, handleImageResponse } from './handlers.js';
-import { getCachedSources, hasCachedSources, clearCachedSources, getCurrentPageUrl, getCachedSourcesWithoutCurrentPage } from './sourcesCache.js';
+import { clearCachedSources, getCurrentPageUrl, getCachedSourcesWithoutCurrentPage, getLastSearchQuery } from './sourcesCache.js';
 
 // Function to append chat elements
 function appendChatElement(parent, className, text) {
@@ -94,96 +94,249 @@ function submit_question(mode) {
 }
 
 // Function to get sources
-function get_sources(searchQuery) {
+async function get_sources() {
     const sources_window = document.getElementById('sources_window');
     const loadingSpinner = document.getElementById('loading_spinner');
-    const source_urls = document.getElementById('source_urls');
+    const sourceContainer = document.getElementById('source_urls');
 
-    console.log('[Sources Debug] get_sources called with query:', searchQuery);
     sources_window.style.display = 'block';
+    loadingSpinner.style.display = 'block';
+    sourceContainer.style.display = 'none';
+    sourceContainer.innerHTML = '';
 
-    // Hide spinner and show source URLs container
-    loadingSpinner.style.display = 'none';
-    source_urls.style.display = 'block';
-
-    // Get current page and other sources
     const currentPageUrl = getCurrentPageUrl();
     const otherSources = getCachedSourcesWithoutCurrentPage();
+    const searchQuery = getLastSearchQuery();
 
-    console.log('[Sources Debug] Current page URL:', currentPageUrl);
-    console.log('[Sources Debug] Other sources:', otherSources);
+    console.log('[Sources Debug] Loading sources for query:', searchQuery);
+    console.log('[Sources Debug] Cached sources (excluding current page):', otherSources);
 
-    // Clear and rebuild the source URLs display
-    source_urls.innerHTML = '';
+    const neutralDomainParts = ['co', 'com', 'org', 'net', 'gov', 'edu'];
 
-    // ALWAYS create "Current active webpage" section
-    const currentPageSection = document.createElement('div');
-    currentPageSection.className = 'source-section';
+    const toTitleCase = (value) => value.replace(/\b\w/g, (letter) => letter.toUpperCase());
 
-    const currentPageHeader = document.createElement('div');
-    currentPageHeader.className = 'source-section-header';
-    currentPageHeader.innerText = 'Current active webpage';
-    currentPageSection.appendChild(currentPageHeader);
-
-    const currentPageContent = document.createElement('ul');
-    currentPageContent.className = 'source-section-content';
-
-    if (currentPageUrl) {
-        const link = document.createElement('a');
-        link.href = currentPageUrl;
-        link.innerText = currentPageUrl;
-        link.target = "_blank";
-
-        const listItem = document.createElement('li');
-        listItem.appendChild(link);
-        currentPageContent.appendChild(listItem);
-    } else {
-        const emptyMsg = document.createElement('div');
-        emptyMsg.className = 'empty-sources';
-        emptyMsg.innerText = 'No current webpage detected';
-        currentPageContent.appendChild(emptyMsg);
-    }
-
-    currentPageSection.appendChild(currentPageContent);
-    source_urls.appendChild(currentPageSection);
-
-    // ALWAYS create "Sources used" section
-    const sourcesSection = document.createElement('div');
-    sourcesSection.className = 'source-section';
-
-    const sourcesHeader = document.createElement('div');
-    sourcesHeader.className = 'source-section-header';
-    sourcesHeader.innerText = 'Sources used';
-    sourcesSection.appendChild(sourcesHeader);
-
-    const sourcesContent = document.createElement('ul');
-    sourcesContent.className = 'source-section-content';
-
-    if (otherSources.length > 0) {
-        otherSources.forEach((url, idx) => {
-            console.log(`[Sources Debug] Displaying source URL ${idx + 1}: ${url}`);
-            if (url.includes('duckduckgo')) {
-                console.warn(`[Sources Debug] WARNING: DuckDuckGo URL being displayed at index ${idx}: ${url}`);
+    const getSiteNameFromUrl = (url) => {
+        try {
+            const { hostname } = new URL(url);
+            const trimmed = hostname.replace(/^www\./i, '');
+            const parts = trimmed.split('.');
+            let candidate = parts.length >= 2 ? parts[parts.length - 2] : parts[0];
+            if (neutralDomainParts.includes(candidate) && parts.length >= 3) {
+                candidate = parts[parts.length - 3];
             }
+            const cleaned = candidate.replace(/[-_]/g, ' ').trim();
+            return cleaned ? toTitleCase(cleaned) : trimmed;
+        } catch (error) {
+            return 'Source';
+        }
+    };
 
-            const link = document.createElement('a');
-            link.href = url;
-            link.innerText = url;
-            link.target = "_blank";
+    const formatDisplayUrl = (url) => {
+        if (!url) {
+            return '';
+        }
+        try {
+            const parsed = new URL(url);
+            let display = `${parsed.hostname}${parsed.pathname}`;
+            if (parsed.search) {
+                display += parsed.search;
+            }
+            display = display.replace(/^www\./i, '');
+            if (display.length > 80) {
+                display = `${display.slice(0, 77)}...`;
+            }
+            return display || url;
+        } catch (error) {
+            return url;
+        }
+    };
 
-            const listItem = document.createElement('li');
-            listItem.appendChild(link);
-            sourcesContent.appendChild(listItem);
-        });
-    } else {
-        const emptyMsg = document.createElement('div');
-        emptyMsg.className = 'empty-sources';
-        emptyMsg.innerText = 'Sources used for agent responses when using Advanced Ask is displayed here.';
-        sourcesContent.appendChild(emptyMsg);
+    const createFallbackMetadata = (url) => {
+        if (!url) {
+            return null;
+        }
+        const displayUrl = formatDisplayUrl(url);
+        return {
+            url,
+            site_name: getSiteNameFromUrl(url),
+            display_url: displayUrl,
+            title: displayUrl,
+            snippet: null,
+            image: null,
+        };
+    };
+
+    const buildThumbnail = (wrapper, metadata) => {
+        const fallbackInitial = (metadata.site_name || metadata.display_url || '?').charAt(0).toUpperCase();
+
+        const applyFallback = () => {
+            wrapper.innerHTML = '';
+            wrapper.classList.add('source-card-thumbnail--fallback');
+            wrapper.textContent = fallbackInitial || '?';
+        };
+
+        if (metadata.image) {
+            const img = document.createElement('img');
+            img.src = metadata.image;
+            img.alt = metadata.title || metadata.display_url || 'Source preview';
+            img.loading = 'lazy';
+            img.onerror = applyFallback;
+            wrapper.appendChild(img);
+        } else {
+            applyFallback();
+        }
+    };
+
+    const buildSourceCard = (metadata) => {
+        const safeMeta = metadata || {};
+        if (!safeMeta.url) {
+            return null;
+        }
+
+        const cardLink = document.createElement('a');
+        cardLink.className = 'source-card';
+        cardLink.href = safeMeta.url;
+        cardLink.target = '_blank';
+        cardLink.rel = 'noopener noreferrer';
+
+        const thumbnailWrapper = document.createElement('div');
+        thumbnailWrapper.className = 'source-card-thumbnail';
+        buildThumbnail(thumbnailWrapper, safeMeta);
+
+        const contentWrapper = document.createElement('div');
+        contentWrapper.className = 'source-card-content';
+
+        const metaWrapper = document.createElement('div');
+        metaWrapper.className = 'source-card-meta';
+
+        const siteName = document.createElement('span');
+        siteName.className = 'source-card-site';
+        siteName.innerText = safeMeta.site_name || getSiteNameFromUrl(safeMeta.url);
+
+        const displayUrl = document.createElement('span');
+        displayUrl.className = 'source-card-url';
+        displayUrl.innerText = safeMeta.display_url || formatDisplayUrl(safeMeta.url);
+
+        metaWrapper.appendChild(siteName);
+        metaWrapper.appendChild(displayUrl);
+
+        const titleLink = document.createElement('span');
+        titleLink.className = 'source-card-title';
+        titleLink.innerText = safeMeta.title || siteName.innerText || displayUrl.innerText;
+
+        const snippet = document.createElement('p');
+        snippet.className = 'source-card-snippet';
+        const snippetSource = typeof safeMeta.snippet === 'string' ? safeMeta.snippet : '';
+        const snippetText = snippetSource.replace(/\s+/g, ' ').trim();
+        snippet.innerText = snippetText ? snippetText : 'Preview unavailable.';
+
+        contentWrapper.appendChild(metaWrapper);
+        contentWrapper.appendChild(titleLink);
+        contentWrapper.appendChild(snippet);
+
+        cardLink.appendChild(thumbnailWrapper);
+        cardLink.appendChild(contentWrapper);
+        cardLink.setAttribute('aria-label', `${siteName.innerText}: ${titleLink.innerText}`);
+        return cardLink;
+    };
+
+    const appendSection = (title, items, emptyMessage) => {
+        const section = document.createElement('div');
+        section.className = 'source-section';
+
+        const header = document.createElement('div');
+        header.className = 'source-section-header';
+        header.innerText = title;
+        section.appendChild(header);
+
+        const content = document.createElement('div');
+        content.className = 'source-section-content';
+
+        if (items.length === 0) {
+            const empty = document.createElement('div');
+            empty.className = 'empty-sources';
+            empty.innerText = emptyMessage;
+            content.appendChild(empty);
+        } else {
+            items.forEach((metadata) => {
+                const card = buildSourceCard(metadata);
+                if (card) {
+                    content.appendChild(card);
+                }
+            });
+        }
+
+        section.appendChild(content);
+        sourceContainer.appendChild(section);
+    };
+
+    let currentMetadata = currentPageUrl ? createFallbackMetadata(currentPageUrl) : null;
+    let sourcesToRender = otherSources.map((url) => createFallbackMetadata(url)).filter(Boolean);
+
+    try {
+        const response = await getSourceUrls(searchQuery || '', currentPageUrl);
+        const payload = response?.resp || {};
+        const metadataMap = new Map();
+
+        if (Array.isArray(payload.sources)) {
+            payload.sources.forEach((entry) => {
+                if (entry && entry.url) {
+                    metadataMap.set(entry.url, entry);
+                }
+            });
+        }
+
+        if (payload.current_page && payload.current_page.url) {
+            currentMetadata = payload.current_page;
+        } else if (currentPageUrl && metadataMap.has(currentPageUrl)) {
+            currentMetadata = metadataMap.get(currentPageUrl);
+        } else if (!currentPageUrl) {
+            currentMetadata = null;
+        }
+
+        const seen = new Set();
+        sourcesToRender = [];
+
+        if (otherSources.length > 0) {
+            otherSources.forEach((url) => {
+                if (!url || seen.has(url)) {
+                    return;
+                }
+                const metadata = metadataMap.get(url) || createFallbackMetadata(url);
+                if (metadata) {
+                    sourcesToRender.push(metadata);
+                    seen.add(url);
+                }
+            });
+        }
+
+        if (sourcesToRender.length === 0 && Array.isArray(payload.sources)) {
+            payload.sources.forEach((entry) => {
+                if (!entry || !entry.url || seen.has(entry.url)) {
+                    return;
+                }
+                sourcesToRender.push(entry);
+                seen.add(entry.url);
+            });
+        }
+    } catch (error) {
+        console.error('Unable to load source previews:', error);
+    } finally {
+        loadingSpinner.style.display = 'none';
+        sourceContainer.style.display = 'flex';
     }
 
-    sourcesSection.appendChild(sourcesContent);
-    source_urls.appendChild(sourcesSection);
+    appendSection(
+        'Current active webpage',
+        currentMetadata ? [currentMetadata] : [],
+        'No current webpage detected'
+    );
+
+    appendSection(
+        'Sources used',
+        sourcesToRender,
+        'Sources used for agent responses when using Research mode will appear here.'
+    );
 }
 
 // Removed old preferred links functions - now handled by link_manager.js component
@@ -231,10 +384,12 @@ function makeDraggableAndResizable(element, sourceWindowOffsetX = 10, isFixedMod
 
         // Move sources window with main popup (now on the left side)
         const sourcesWindow = document.getElementById('sources_window');
-        // Calculate left position for sources window, ensure it doesn't go off-screen
-        const sourcesLeft = Math.max(0, newX - 310); // 300px width + 10px offset
-        sourcesWindow.style.left = `${sourcesLeft}px`;
-        sourcesWindow.style.top = `${newY}px`;
+        if (sourcesWindow) {
+            const measuredWidth = sourcesWindow.offsetWidth || 360;
+            const sourcesLeft = Math.max(0, newX - (measuredWidth + sourceWindowOffsetX));
+            sourcesWindow.style.left = `${sourcesLeft}px`;
+            sourcesWindow.style.top = `${newY}px`;
+        }
     }
 
     function resizeElement(e) {
@@ -248,12 +403,12 @@ function makeDraggableAndResizable(element, sourceWindowOffsetX = 10, isFixedMod
             element.style.height = `${newHeight}px`;
         }
 
-        // Keep sources window on the left (no need to move when resizing)
         const sourcesWindow = document.getElementById('sources_window');
-        // Sources window stays at same position relative to left edge of main window
-        // Ensure it doesn't go off-screen
-        const sourcesLeft = Math.max(0, element.offsetLeft - 310); // 300px width + 10px offset
-        sourcesWindow.style.left = `${sourcesLeft}px`;
+        if (sourcesWindow) {
+            const measuredWidth = sourcesWindow.offsetWidth || 360;
+            const sourcesLeft = Math.max(0, element.offsetLeft - (measuredWidth + sourceWindowOffsetX));
+            sourcesWindow.style.left = `${sourcesLeft}px`;
+        }
     }
 
     function closeDragOrResizeElement() {

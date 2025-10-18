@@ -49,7 +49,7 @@ function createUI() {
             if (sources_window) {
                 sources_window.style.position = "absolute";
                 sources_window.style.top = `${rect.top + window.scrollY}px`;
-                sources_window.style.left = `${rect.left - 310 + window.scrollX}px`; // Keep on left
+                sources_window.style.left = `${rect.left - 370 + window.scrollX}px`; // Keep on left (360px width + 10px gap)
             }
         } else {
             popup.style.position = "fixed";
@@ -67,7 +67,7 @@ function createUI() {
             if (sources_window) {
                 sources_window.style.position = "fixed";
                 sources_window.style.top = `${rect.top}px`;
-                sources_window.style.left = `${rect.left - 310}px`; // Keep on left
+                sources_window.style.left = `${rect.left - 370}px`; // Keep on left (360px width + 10px gap)
             }
         }
         isFixedModeRef.value = !isFixedModeRef.value;
@@ -126,7 +126,7 @@ function createUI() {
     loadingSpinner.className = "spinner";
     loadingSpinner.style.display = 'none';
 
-    const source_urls = document.createElement('ul');
+    const source_urls = document.createElement('div');
     source_urls.id = "source_urls";
 
     sources_window.appendChild(sourcesHeader);
@@ -160,7 +160,7 @@ function createUI() {
     const popupRect = popup.getBoundingClientRect();
     // Position sources window to the left of the main popup
     // Ensure sources window doesn't go off-screen
-    const sourcesLeft = Math.max(0, popupRect.left - 310); // 300px width + 10px offset
+    const sourcesLeft = Math.max(0, popupRect.left - 370); // 360px width + 10px offset
     sources_window.style.left = `${sourcesLeft}px`;
     sources_window.style.top = `${popupRect.top}px`;
 

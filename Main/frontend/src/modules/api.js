@@ -256,8 +256,21 @@ function clearMessages() {
 }
 
 // Function to get sources
-function getSourceUrls(searchQuery) {
-    return fetch(`http://127.0.0.1:8000/get_source_urls/?query=${String(searchQuery)}`, { method: "GET", credentials: "include" })
+function getSourceUrls(searchQuery, currentUrl) {
+    const params = new URLSearchParams();
+    if (searchQuery) {
+        params.append('query', searchQuery);
+    }
+    if (currentUrl) {
+        params.append('current_url', currentUrl);
+    }
+
+    const queryString = params.toString();
+    const endpoint = queryString
+        ? `http://127.0.0.1:8000/get_source_urls/?${queryString}`
+        : 'http://127.0.0.1:8000/get_source_urls/';
+
+    return fetch(endpoint, { method: "GET", credentials: "include" })
         .then(response => response.json())
         .catch(error => {
             console.error('There was a problem with your fetch operation:', error);
