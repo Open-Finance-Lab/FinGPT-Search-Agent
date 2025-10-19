@@ -16,7 +16,32 @@ function appendChatElement(parent, className, text) {
     element.className = className;
     element.innerText = text;
     parent.appendChild(element);
+    scrollChatToBottom();
     return element;
+}
+
+// Ensure the chat history stays pinned to the most recent message
+function scrollChatToBottom() {
+    const scrollContainer = document.getElementById('content');
+    const responseContainer = document.getElementById('respons');
+    if (!scrollContainer && !responseContainer) {
+        return;
+    }
+
+    requestAnimationFrame(() => {
+        const targets = [scrollContainer, responseContainer].filter(Boolean);
+        targets.forEach((element) => {
+            if (typeof element.scrollTo === 'function') {
+                element.scrollTo({ top: element.scrollHeight, behavior: 'auto' });
+            } else {
+                element.scrollTop = element.scrollHeight;
+            }
+        });
+
+        if (responseContainer && responseContainer.lastElementChild) {
+            responseContainer.lastElementChild.scrollIntoView({ block: 'end', inline: 'nearest' });
+        }
+    });
 }
 
 // Function to clear chat
@@ -37,7 +62,7 @@ function clear() {
         .then(data => {
             console.log(data);
             const clearMsg = appendChatElement(response, 'system_message', 'FinGPT: Conversation cleared. Web content context preserved.');
-            response.scrollTop = response.scrollHeight;
+            scrollChatToBottom();
         })
         .catch(error => {
             console.error('There was a problem clearing messages:', error);
@@ -157,7 +182,7 @@ async function get_sources() {
             display_url: entry.display_url || fallback.display_url,
             title: entry.title || fallback.title,
             snippet: normalizedSnippet || fallback.snippet,
-            image: entry.image !== undefined ? entry.image : fallback.image,
+            icon: entry.icon !== undefined ? entry.icon : fallback.icon,
         };
     };
 
@@ -165,34 +190,47 @@ async function get_sources() {
         if (!url) {
             return '';
         }
+
+        const MAX_DISPLAY_URL_LENGTH = 30;
+        let display = url;
         try {
             const parsed = new URL(url);
-            let display = `${parsed.hostname}${parsed.pathname}`;
-            if (parsed.search) {
-                display += parsed.search;
-            }
-            display = display.replace(/^www\./i, '');
-            if (display.length > 80) {
-                display = `${display.slice(0, 77)}...`;
-            }
-            return display || url;
+            display = `${parsed.hostname}${parsed.pathname}${parsed.search || ''}`;
         } catch (error) {
-            return url;
+            // Leave display as url when it cannot be parsed
         }
+
+        display = String(display).replace(/^www\./i, '');
+
+        if (display.length > MAX_DISPLAY_URL_LENGTH) {
+            const truncatedLength = Math.max(0, MAX_DISPLAY_URL_LENGTH - 3);
+            display = `${display.slice(0, truncatedLength)}...`;
+        }
+
+        return display;
     };
 
-    const createFallbackMetadata = (url) => {
+    const createFallbackMetadata = (entry) => {
+        if (!entry) {
+            return null;
+        }
+
+        const url = typeof entry === 'string' ? entry : entry.url || '';
         if (!url) {
             return null;
         }
+
         const displayUrl = formatDisplayUrl(url);
+        const siteName = getSiteNameFromUrl(url);
+        const title = siteName || displayUrl;
+
         return {
             url,
-            site_name: getSiteNameFromUrl(url),
+            site_name: siteName,
             display_url: displayUrl,
-            title: displayUrl,
+            title,
             snippet: null,
-            image: null,
+            icon: null,
         };
     };
 
@@ -205,16 +243,27 @@ async function get_sources() {
             wrapper.textContent = fallbackInitial || '?';
         };
 
-        if (metadata.image) {
-            const img = document.createElement('img');
-            img.src = metadata.image;
-            img.alt = metadata.title || metadata.display_url || 'Source preview';
-            img.loading = 'lazy';
-            img.onerror = applyFallback;
-            wrapper.appendChild(img);
-        } else {
+        const candidateSrc = metadata.icon;
+        if (!candidateSrc) {
             applyFallback();
+            return;
         }
+
+        const img = document.createElement('img');
+        img.alt = metadata.title || metadata.display_url || 'Source preview';
+        img.loading = 'lazy';
+        img.decoding = 'async';
+        img.referrerPolicy = 'no-referrer';
+        img.onerror = applyFallback;
+        img.onload = () => {
+            wrapper.classList.remove('source-card-thumbnail--fallback');
+            wrapper.innerHTML = '';
+            wrapper.appendChild(img);
+        };
+
+        // Show fallback character while the image loads
+        applyFallback();
+        img.src = candidateSrc;
     };
 
     const buildSourceCard = (metadata) => {
@@ -233,11 +282,8 @@ async function get_sources() {
         thumbnailWrapper.className = 'source-card-thumbnail';
         buildThumbnail(thumbnailWrapper, safeMeta);
 
-        const contentWrapper = document.createElement('div');
-        contentWrapper.className = 'source-card-content';
-
-        const metaWrapper = document.createElement('div');
-        metaWrapper.className = 'source-card-meta';
+        const headerWrapper = document.createElement('div');
+        headerWrapper.className = 'source-card-header';
 
         const siteName = document.createElement('span');
         siteName.className = 'source-card-site';
@@ -245,10 +291,22 @@ async function get_sources() {
 
         const displayUrl = document.createElement('span');
         displayUrl.className = 'source-card-url';
-        displayUrl.innerText = safeMeta.display_url || formatDisplayUrl(safeMeta.url);
+        const formattedDisplayUrl = formatDisplayUrl(safeMeta.url || safeMeta.display_url);
+        displayUrl.innerText = formattedDisplayUrl;
+        if (safeMeta.url || safeMeta.display_url) {
+            displayUrl.title = safeMeta.url || safeMeta.display_url;
+        }
 
+        const metaWrapper = document.createElement('div');
+        metaWrapper.className = 'source-card-meta';
         metaWrapper.appendChild(siteName);
         metaWrapper.appendChild(displayUrl);
+
+        headerWrapper.appendChild(thumbnailWrapper);
+        headerWrapper.appendChild(metaWrapper);
+
+        const contentWrapper = document.createElement('div');
+        contentWrapper.className = 'source-card-content';
 
         const titleLink = document.createElement('span');
         titleLink.className = 'source-card-title';
@@ -260,11 +318,10 @@ async function get_sources() {
         const snippetText = snippetSource.replace(/\s+/g, ' ').trim();
         snippet.innerText = snippetText ? snippetText : 'Preview unavailable.';
 
-        contentWrapper.appendChild(metaWrapper);
         contentWrapper.appendChild(titleLink);
         contentWrapper.appendChild(snippet);
 
-        cardLink.appendChild(thumbnailWrapper);
+        cardLink.appendChild(headerWrapper);
         cardLink.appendChild(contentWrapper);
         cardLink.setAttribute('aria-label', `${siteName.innerText}: ${titleLink.innerText}`);
         return cardLink;
@@ -437,5 +494,13 @@ function makeDraggableAndResizable(element, sourceWindowOffsetX = 10, isFixedMod
     }
 }
 
-export { appendChatElement, clear, get_chat_response, get_adv_chat_response, submit_question, get_sources,
-    makeDraggableAndResizable };
+export {
+    appendChatElement,
+    clear,
+    get_chat_response,
+    get_adv_chat_response,
+    submit_question,
+    get_sources,
+    makeDraggableAndResizable,
+    scrollChatToBottom,
+};

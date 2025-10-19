@@ -1,5 +1,5 @@
 // handlers.js
-import { appendChatElement } from './helpers.js';
+import { appendChatElement, scrollChatToBottom } from './helpers.js';
 import { getChatResponse, getChatResponseStream } from './api.js';
 import { getSelectedModel, selectedModel } from './config.js';
 import { setCachedSources } from './sourcesCache.js';
@@ -134,7 +134,7 @@ function handleChatResponse(question, promptMode = false, useStreaming = true) {
     appendChatElement(responseContainer, 'your_question', question);
 
     // Scroll to show the new question immediately
-    responseContainer.scrollTop = responseContainer.scrollHeight;
+    scrollChatToBottom();
 
     // Placeholder "Loading..." text
     const loadingElement = appendChatElement(
@@ -172,13 +172,15 @@ function handleChatResponse(question, promptMode = false, useStreaming = true) {
                 } else {
                     loadingElement.innerText = `FinGPT: ${fullResponse}`;
                 }
-                responseContainer.scrollTop = responseContainer.scrollHeight;
+                scrollChatToBottom();
             },
             // onComplete callback - called when streaming is done
             (fullResponse, data) => {
                 const endTime = performance.now();
                 const responseTime = endTime - startTime;
                 console.log(`Time taken for streaming response: ${responseTime} ms`);
+                console.log('[Debug] onComplete data:', data);
+                console.log('[Debug] promptMode:', promptMode);
 
                 const responseText = `FinGPT: ${fullResponse}`;
                 loadingElement.innerText = responseText;
@@ -195,19 +197,32 @@ function handleChatResponse(question, promptMode = false, useStreaming = true) {
                 responseContainer.appendChild(actionRow);
 
                 // If this is research mode streaming and contains used_urls, cache them
-                if (promptMode && data.used_urls && data.used_urls.length > 0) {
-                    console.log('[Sources Debug] Research mode streaming response received');
-                    console.log('[Sources Debug] used_urls:', data.used_urls);
-                    console.log('[Sources Debug] Number of URLs:', data.used_urls.length);
+                if (promptMode) {
+                    console.log('[Sources Debug] Research mode streaming - checking for URLs');
+                    console.log('[Sources Debug] data.used_urls exists?', !!data.used_urls);
+                    console.log('[Sources Debug] data.used_urls is array?', Array.isArray(data.used_urls));
+                    console.log('[Sources Debug] data.used_urls length:', data.used_urls?.length);
+                    console.log('[Sources Debug] data.used_sources exists?', !!data.used_sources);
 
-                    const metadata = Array.isArray(data.used_sources) ? data.used_sources : [];
-                    setCachedSources(data.used_urls, question, metadata);
-                    console.log('[Sources Debug] Cached', data.used_urls.length, 'source URLs from research mode streaming');
+                    if (data.used_urls && data.used_urls.length > 0) {
+                        console.log('[Sources Debug] Research mode streaming response received');
+                        console.log('[Sources Debug] used_urls:', data.used_urls);
+                        console.log('[Sources Debug] Number of URLs:', data.used_urls.length);
+
+                        const metadata = Array.isArray(data.used_sources) ? data.used_sources : [];
+                        setCachedSources(data.used_urls, question, metadata);
+                        console.log('[Sources Debug] Called setCachedSources with', data.used_urls.length, 'URLs and', metadata.length, 'metadata entries');
+                        console.log('[Sources Debug] Sources should now be cached for query:', question);
+                    } else {
+                        console.warn('[Sources Debug] Research mode but NO URLs found in response!');
+                    }
+                } else {
+                    console.log('[Sources Debug] Not in promptMode, skipping source caching');
                 }
 
                 // Clear the user textbox
                 document.getElementById('textbox').value = '';
-                responseContainer.scrollTop = responseContainer.scrollHeight;
+                scrollChatToBottom();
             },
             // onError callback
             (error) => {
@@ -270,7 +285,7 @@ function handleChatResponse(question, promptMode = false, useStreaming = true) {
 
                 // Clear the user textbox
                 document.getElementById('textbox').value = '';
-                responseContainer.scrollTop = responseContainer.scrollHeight;
+                scrollChatToBottom();
             })
             .catch(error => {
                 console.error('There was a problem with your fetch operation:', error);
@@ -289,7 +304,7 @@ function handleImageResponse(question, description) {
     responseDiv.innerText = description;
     responseContainer.appendChild(responseDiv);
 
-    responseContainer.scrollTop = responseContainer.scrollHeight;
+    scrollChatToBottom();
 }
 
 export { handleChatResponse, handleImageResponse };

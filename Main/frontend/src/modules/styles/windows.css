@@ -221,7 +221,10 @@
 
 .source-card {
     display: flex;
+    flex-direction: column;
+    align-items: flex-start;
     gap: 12px;
+    width: 100%;
     padding: 12px;
     border-radius: 12px;
     background-color: #2a2a2a;
@@ -231,14 +234,21 @@
     transition: background-color 0.2s ease, transform 0.2s ease;
 }
 
+.source-card-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+}
+
 .source-card:hover {
     background-color: #353535;
     transform: translateY(-1px);
 }
 
 .source-card-thumbnail {
-    width: 64px;
-    height: 64px;
+    width: 32px;
+    height: 32px;
     border-radius: 10px;
     overflow: hidden;
     display: flex;
@@ -256,11 +266,11 @@
 }
 
 .source-card-thumbnail--fallback {
-    background: linear-gradient(135deg, rgba(26, 188, 156, 0.25), rgba(26, 188, 156, 0.1));
-    color: #1abc9c;
-    font-size: 22px;
+    background-color: #225766;
+    color: #ffffff;
+    font-size: 16px;
     font-weight: bold;
-    border: 1px solid rgba(26, 188, 156, 0.4);
+    border: 1px solid rgba(34, 87, 102, 0.4);
 }
 
 .source-card-content {
@@ -268,6 +278,7 @@
     flex-direction: column;
     gap: 6px;
     flex: 1;
+    width: 100%;
 }
 
 .source-card-meta {
@@ -276,6 +287,7 @@
     gap: 2px;
     font-size: 12px;
     color: #95b0d0;
+    flex: 1;
 }
 
 .source-card-site {
@@ -287,13 +299,16 @@
 .source-card-url {
     font-size: 12px;
     color: #6fb8ff;
-    word-break: break-word;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    display: block;
 }
 
 .source-card-title {
     font-size: 14px;
     font-weight: 600;
-    color: #4bd4b3;
+    color: #5B9BAD;
     display: block;
 }
 
