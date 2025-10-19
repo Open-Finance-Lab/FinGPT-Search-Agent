@@ -6,9 +6,16 @@ with OpenAI's built-in web_search tool from the Responses API.
 """
 
 import os
+import re
+import html
+import socket
 import logging
 import asyncio
+from html.parser import HTMLParser
 from typing import List, Dict, Tuple, Optional, Any, Iterable
+from urllib.parse import urlparse
+from urllib.request import Request, urlopen
+from urllib.error import URLError, HTTPError
 from openai import OpenAI, AsyncOpenAI
 from dotenv import load_dotenv
 from pathlib import Path
@@ -32,6 +39,167 @@ USE_RESPONSES_API = os.getenv("USE_OPENAI_RESPONSES_API", "true").lower() == "tr
 # Initialize clients
 sync_client = OpenAI(api_key=OPENAI_API_KEY)
 async_client = AsyncOpenAI(api_key=OPENAI_API_KEY)
+
+_PREVIEW_CACHE: Dict[str, str] = {}
+_PREVIEW_FAILURES: set[str] = set()
+_MAX_PREVIEW_CACHE_LENGTH = 2048
+_PREVIEW_FETCH_TIMEOUT = 6
+_PREVIEW_FETCH_BYTES = 65536
+_ALLOWED_SCHEMES = {"http", "https"}
+
+
+class _PreviewHTMLParser(HTMLParser):
+    """
+    Lightweight HTML parser to collect visible text for previews.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._parts: list[str] = []
+
+    def handle_data(self, data: str) -> None:
+        if data and not data.isspace():
+            self._parts.append(data.strip())
+
+    def get_text(self) -> str:
+        return " ".join(self._parts)
+
+
+def _truncate_preview(text: str, max_chars: int = 160) -> str:
+    if not text:
+        return ""
+    if len(text) <= max_chars:
+        return text
+    truncated = text[:max_chars].rstrip()
+    if len(truncated) < len(text):
+        truncated = truncated.rstrip(" ,.;:-")
+        return f"{truncated}..."
+    return truncated
+
+
+def _coerce_preview_text(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value
+    if isinstance(value, (list, tuple)):
+        return " ".join(_coerce_preview_text(item) for item in value if item)
+    if isinstance(value, dict):
+        for key in ("text", "snippet", "content", "value"):
+            if key in value and value[key]:
+                return _coerce_preview_text(value[key])
+        return ""
+    text_attr = getattr(value, "text", None)
+    if text_attr:
+        return _coerce_preview_text(text_attr)
+    snippet_attr = getattr(value, "snippet", None)
+    if snippet_attr:
+        return _coerce_preview_text(snippet_attr)
+    return str(value)
+
+
+def _normalize_preview_text(value: Any) -> str:
+    text = _coerce_preview_text(value)
+    if not text:
+        return ""
+    text = html.unescape(text)
+    text = re.sub(r"\s+", " ", text).strip()
+    return text
+
+
+def _extract_meta_description(html_content: str) -> str:
+    if not html_content:
+        return ""
+    meta_pattern = re.compile(
+        r'<meta\s+[^>]*(?:name|property)\s*=\s*["\'](?:description|og:description)["\'][^>]*?>',
+        re.IGNORECASE
+    )
+    content_pattern = re.compile(r'content\s*=\s*["\']([^"\']+)["\']', re.IGNORECASE)
+    match = meta_pattern.search(html_content)
+    if not match:
+        return ""
+    tag = match.group(0)
+    content_match = content_pattern.search(tag)
+    if not content_match:
+        return ""
+    return html.unescape(content_match.group(1).strip())
+
+
+def _extract_text_from_html(html_content: str) -> str:
+    parser = _PreviewHTMLParser()
+    try:
+        parser.feed(html_content)
+        parser.close()
+    except Exception as exc:
+        logger.debug(f"HTML parsing error for preview extraction: {exc}")
+    return parser.get_text()
+
+
+def _fetch_preview_from_url(url: str, *, max_chars: int = 160) -> str:
+    if not url:
+        return ""
+    parsed = urlparse(url)
+    if parsed.scheme.lower() not in _ALLOWED_SCHEMES:
+        return ""
+    if url in _PREVIEW_CACHE:
+        cached = _PREVIEW_CACHE[url]
+        return _truncate_preview(cached, max_chars)
+    if url in _PREVIEW_FAILURES:
+        return ""
+
+    request = Request(
+        url,
+        headers={
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/123.0.0.0 Safari/537.36"
+            ),
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,text/plain;q=0.8,*/*;q=0.5",
+            "Accept-Language": "en-US,en;q=0.9",
+        },
+    )
+
+    try:
+        with urlopen(request, timeout=_PREVIEW_FETCH_TIMEOUT) as response:
+            content_type = response.headers.get("Content-Type", "") or ""
+            charset = response.headers.get_content_charset() or "utf-8"
+            raw_content = response.read(_PREVIEW_FETCH_BYTES)
+    except (URLError, HTTPError, TimeoutError, ValueError, socket.timeout) as exc:
+        logger.debug(f"Unable to fetch preview for {url}: {exc}")
+        _PREVIEW_FAILURES.add(url)
+        return ""
+    except Exception as exc:
+        logger.warning(f"Unexpected error fetching preview for {url}: {exc}")
+        _PREVIEW_FAILURES.add(url)
+        return ""
+
+    try:
+        text_content = raw_content.decode(charset, errors="ignore")
+    except LookupError:
+        text_content = raw_content.decode("utf-8", errors="ignore")
+
+    meta_description = _normalize_preview_text(_extract_meta_description(text_content))
+    if meta_description:
+        normalized = meta_description
+    else:
+        if "text/html" in content_type.lower() or "<html" in text_content.lower():
+            body_text = _extract_text_from_html(text_content)
+        elif "text/" in content_type.lower():
+            body_text = text_content
+        else:
+            body_text = ""
+        normalized = _normalize_preview_text(body_text)
+
+    if not normalized:
+        _PREVIEW_FAILURES.add(url)
+        return ""
+
+    if len(normalized) > _MAX_PREVIEW_CACHE_LENGTH:
+        normalized = normalized[:_MAX_PREVIEW_CACHE_LENGTH].rstrip()
+
+    _PREVIEW_CACHE[url] = normalized
+    return _truncate_preview(normalized, max_chars)
 
 
 def extract_citations_from_response(response) -> List[Dict[str, Any]]:
@@ -95,10 +263,15 @@ def _normalize_citation_entry(entry: Dict[str, Any]) -> Dict[str, Any]:
     if not url:
         return {}
 
+    snippet = _normalize_preview_text(entry.get('snippet'))
+    snippet = _truncate_preview(snippet, 160)
+    if not snippet:
+        snippet = ""
+
     return {
         'url': url,
         'title': entry.get('title') or '',
-        'snippet': entry.get('snippet') or '',
+        'snippet': snippet,
         'image': entry.get('image') or None,
     }
 
@@ -161,7 +334,6 @@ async def create_responses_api_search_async(
         if preferred_links:
             for link in preferred_links:
                 # Extract domain from URL
-                from urllib.parse import urlparse
                 domain = urlparse(link).netloc
                 if domain and domain not in preferred_domains:
                     preferred_domains.append(domain)
@@ -473,8 +645,6 @@ def _get_site_name(url: str) -> str:
     if not url:
         return "Source"
 
-    from urllib.parse import urlparse
-
     try:
         parsed = urlparse(url)
         hostname = parsed.netloc.lower()
@@ -496,8 +666,6 @@ def _format_display_url(url: str) -> str:
     """
     if not url:
         return ""
-    from urllib.parse import urlparse
-
     try:
         parsed = urlparse(url)
         display = f"{parsed.netloc}{parsed.path or ''}"
@@ -557,6 +725,21 @@ def format_sources_for_frontend(
             "snippet": "",
             "image": None,
         }
+
+    combined_entries: list[Dict[str, Any]] = []
+    if current_entry:
+        combined_entries.append(current_entry)
+    combined_entries.extend(entries)
+
+    for entry in combined_entries:
+        if not entry.get("url"):
+            continue
+        snippet = _normalize_preview_text(entry.get("snippet"))
+        if snippet:
+            entry["snippet"] = _truncate_preview(snippet, 160)
+            continue
+        fetched_preview = _fetch_preview_from_url(entry["url"], max_chars=160)
+        entry["snippet"] = fetched_preview or ""
 
     return {
         "current_page": current_entry,
