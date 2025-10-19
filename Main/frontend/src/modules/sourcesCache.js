@@ -27,6 +27,8 @@ function getSiteNameFromUrl(url) {
     }
 }
 
+const MAX_DISPLAY_URL_LENGTH = 30;
+
 function formatDisplayUrl(url) {
     if (!url) {
         return '';
@@ -38,8 +40,9 @@ function formatDisplayUrl(url) {
             display += parsed.search;
         }
         display = display.replace(/^www\./i, '');
-        if (display.length > 80) {
-            display = `${display.slice(0, 77)}...`;
+        if (display.length > MAX_DISPLAY_URL_LENGTH) {
+            const truncatedLength = Math.max(0, MAX_DISPLAY_URL_LENGTH - 3);
+            display = `${display.slice(0, truncatedLength)}...`;
         }
         return display || url;
     } catch (error) {

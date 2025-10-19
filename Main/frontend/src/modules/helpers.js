@@ -246,11 +246,8 @@ async function get_sources() {
         thumbnailWrapper.className = 'source-card-thumbnail';
         buildThumbnail(thumbnailWrapper, safeMeta);
 
-        const contentWrapper = document.createElement('div');
-        contentWrapper.className = 'source-card-content';
-
-        const metaWrapper = document.createElement('div');
-        metaWrapper.className = 'source-card-meta';
+        const headerWrapper = document.createElement('div');
+        headerWrapper.className = 'source-card-header';
 
         const siteName = document.createElement('span');
         siteName.className = 'source-card-site';
@@ -264,8 +261,16 @@ async function get_sources() {
             displayUrl.title = safeMeta.url || safeMeta.display_url;
         }
 
+        const metaWrapper = document.createElement('div');
+        metaWrapper.className = 'source-card-meta';
         metaWrapper.appendChild(siteName);
         metaWrapper.appendChild(displayUrl);
+
+        headerWrapper.appendChild(thumbnailWrapper);
+        headerWrapper.appendChild(metaWrapper);
+
+        const contentWrapper = document.createElement('div');
+        contentWrapper.className = 'source-card-content';
 
         const titleLink = document.createElement('span');
         titleLink.className = 'source-card-title';
@@ -277,11 +282,10 @@ async function get_sources() {
         const snippetText = snippetSource.replace(/\s+/g, ' ').trim();
         snippet.innerText = snippetText ? snippetText : 'Preview unavailable.';
 
-        contentWrapper.appendChild(metaWrapper);
         contentWrapper.appendChild(titleLink);
         contentWrapper.appendChild(snippet);
 
-        cardLink.appendChild(thumbnailWrapper);
+        cardLink.appendChild(headerWrapper);
         cardLink.appendChild(contentWrapper);
         cardLink.setAttribute('aria-label', `${siteName.innerText}: ${titleLink.innerText}`);
         return cardLink;
