@@ -16,7 +16,32 @@ function appendChatElement(parent, className, text) {
     element.className = className;
     element.innerText = text;
     parent.appendChild(element);
+    scrollChatToBottom();
     return element;
+}
+
+// Ensure the chat history stays pinned to the most recent message
+function scrollChatToBottom() {
+    const scrollContainer = document.getElementById('content');
+    const responseContainer = document.getElementById('respons');
+    if (!scrollContainer && !responseContainer) {
+        return;
+    }
+
+    requestAnimationFrame(() => {
+        const targets = [scrollContainer, responseContainer].filter(Boolean);
+        targets.forEach((element) => {
+            if (typeof element.scrollTo === 'function') {
+                element.scrollTo({ top: element.scrollHeight, behavior: 'auto' });
+            } else {
+                element.scrollTop = element.scrollHeight;
+            }
+        });
+
+        if (responseContainer && responseContainer.lastElementChild) {
+            responseContainer.lastElementChild.scrollIntoView({ block: 'end', inline: 'nearest' });
+        }
+    });
 }
 
 // Function to clear chat
@@ -37,7 +62,7 @@ function clear() {
         .then(data => {
             console.log(data);
             const clearMsg = appendChatElement(response, 'system_message', 'FinGPT: Conversation cleared. Web content context preserved.');
-            response.scrollTop = response.scrollHeight;
+            scrollChatToBottom();
         })
         .catch(error => {
             console.error('There was a problem clearing messages:', error);
@@ -469,5 +494,13 @@ function makeDraggableAndResizable(element, sourceWindowOffsetX = 10, isFixedMod
     }
 }
 
-export { appendChatElement, clear, get_chat_response, get_adv_chat_response, submit_question, get_sources,
-    makeDraggableAndResizable };
+export {
+    appendChatElement,
+    clear,
+    get_chat_response,
+    get_adv_chat_response,
+    submit_question,
+    get_sources,
+    makeDraggableAndResizable,
+    scrollChatToBottom,
+};
