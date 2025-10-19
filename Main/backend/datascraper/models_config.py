@@ -51,8 +51,9 @@ MODELS_CONFIG = {
         "description": "A much faster smaller FinGPT model"
     },
     "Buffet-Agent": {
-        "provider": "openai",
-        "model_name": "gpt-5-nano",
+        "provider": "buffet",
+        "model_name": "Buffet-Agent",  # Display only: actual calls use the custom endpoint
+        "endpoint_url": "https://l7d6yqg7nzbkumx8.us-east-1.aws.endpoints.huggingface.cloud",
         "supports_rag": True,
         "supports_mcp": True,
         "supports_advanced": True,
@@ -110,6 +111,11 @@ PROVIDER_CONFIGS = {
         "base_url": None,  # Uses default Anthropic URL
         "env_key": "ANTHROPIC_API_KEY",
         "client_class": "Anthropic"
+    },
+    "buffet": {
+        "base_url": "https://l7d6yqg7nzbkumx8.us-east-1.aws.endpoints.huggingface.cloud",
+        "env_key": "BUFFET_AGENT_API_KEY",
+        "client_class": None  # Custom HTTP client implemented in datascraper
     }
 }
 
