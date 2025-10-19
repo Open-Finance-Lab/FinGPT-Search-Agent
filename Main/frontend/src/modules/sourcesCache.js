@@ -61,7 +61,7 @@ function createFallbackMetadata(url) {
         display_url: displayUrl,
         title: displayUrl,
         snippet: '',
-        image: null,
+        icon: null,
     };
 }
 
@@ -80,7 +80,7 @@ function normalizeMetadata(url, raw = {}) {
         display_url: raw.display_url || fallback.display_url,
         title: raw.title || fallback.title,
         snippet: raw.snippet !== undefined && raw.snippet !== null ? raw.snippet : fallback.snippet,
-        image: raw.image !== undefined ? raw.image : fallback.image,
+        icon: raw.icon !== undefined ? raw.icon : fallback.icon,
     };
 }
 
