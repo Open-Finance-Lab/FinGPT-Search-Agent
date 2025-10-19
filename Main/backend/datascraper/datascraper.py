@@ -634,12 +634,23 @@ def create_agent_response_stream(
     return _stream(), state
 
 
-def get_sources(query, current_url: str | None = None) -> Dict[str, Any]:
+def get_sources(query: str, current_url: str | None = None) -> Dict[str, Any]:
     """
     Return structured metadata for sources used in the most recent advanced response.
     """
-    logging.info(f"get_sources called with query: '{query}' (current_url={current_url})")
-    logging.info(f"Current used_sources contains {len(used_source_details)} entries")
+    logging.info(f"get_sources called with query: '{query}'")
+    if current_url:
+        logging.info(f"Context current_url: {current_url}")
+    logging.info(f"Current used_source_details contains {len(used_source_details)} entries")
+
+    # Also log URLs for debugging
+    if used_urls:
+        logging.info(f"Current used_urls contains {len(used_urls)} URLs:")
+        for idx, url in enumerate(used_urls, 1):
+            logging.info(f"  [{idx}] {url}")
+
+    # Log number of source details
+    logging.info(f"Returning {len(used_source_details)} source details")
 
     payload = format_sources_for_frontend(used_source_details, current_url)
     logging.info(f"Returning {len(payload.get('sources', []))} sources to frontend")

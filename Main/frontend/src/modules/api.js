@@ -185,26 +185,36 @@ function getChatResponseStream(question, selectedModel, promptMode, useRAG, useM
                 onChunk(data.content, fullResponse);
             }
 
-            if (data.done) {
-                eventSource.close();
-                // For research mode, include used sources in the completion data
-                const completionData = {
-                    ...data,
-                    used_urls: usedUrls,
-                    used_sources: usedSources,
-                };
-                onComplete(fullResponse, completionData);
-            }
-
             // Handle source URLs for research mode
             if (data.used_urls && Array.isArray(data.used_urls)) {
                 usedUrls = data.used_urls;
                 console.log(`[Research Mode] Received ${usedUrls.length} source URLs`);
+                console.log('[Research Mode] URLs received:', data.used_urls);
             }
 
+            // Handle detailed source metadata for research mode
             if (data.used_sources && Array.isArray(data.used_sources)) {
                 usedSources = data.used_sources;
                 console.log(`[Research Mode] Received ${usedSources.length} detailed sources`);
+            }
+
+            if (data.done) {
+                eventSource.close();
+                // Debug: Log what we're about to pass to completion
+                console.log('[Research Mode] Stream done. Final usedUrls:', usedUrls);
+                console.log('[Research Mode] data.used_urls:', data.used_urls);
+                console.log('[Research Mode] Final usedSources:', usedSources);
+
+                // Ensure completion callback receives latest source list and metadata
+                const completionData = {
+                    ...data,
+                    used_urls: Array.isArray(data.used_urls) ? data.used_urls : usedUrls,
+                    used_sources: Array.isArray(data.used_sources) ? data.used_sources : usedSources
+                };
+
+                console.log('[Research Mode] Passing to onComplete with used_urls:', completionData.used_urls);
+                console.log('[Research Mode] Passing to onComplete with used_sources:', completionData.used_sources);
+                onComplete(fullResponse, completionData);
             }
 
             // Handle R2C stats if present

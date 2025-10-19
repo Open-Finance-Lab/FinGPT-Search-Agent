@@ -165,32 +165,45 @@ async function get_sources() {
         if (!url) {
             return '';
         }
+
+        const MAX_DISPLAY_URL_LENGTH = 30;
+        let display = url;
         try {
             const parsed = new URL(url);
-            let display = `${parsed.hostname}${parsed.pathname}`;
-            if (parsed.search) {
-                display += parsed.search;
-            }
-            display = display.replace(/^www\./i, '');
-            if (display.length > 80) {
-                display = `${display.slice(0, 77)}...`;
-            }
-            return display || url;
+            display = `${parsed.hostname}${parsed.pathname}${parsed.search || ''}`;
         } catch (error) {
-            return url;
+            // Leave display as url when it cannot be parsed
         }
+
+        display = String(display).replace(/^www\./i, '');
+
+        if (display.length > MAX_DISPLAY_URL_LENGTH) {
+            const truncatedLength = Math.max(0, MAX_DISPLAY_URL_LENGTH - 3);
+            display = `${display.slice(0, truncatedLength)}...`;
+        }
+
+        return display;
     };
 
-    const createFallbackMetadata = (url) => {
+    const createFallbackMetadata = (entry) => {
+        if (!entry) {
+            return null;
+        }
+
+        const url = typeof entry === 'string' ? entry : entry.url || '';
         if (!url) {
             return null;
         }
+
         const displayUrl = formatDisplayUrl(url);
+        const siteName = getSiteNameFromUrl(url);
+        const title = siteName || displayUrl;
+
         return {
             url,
-            site_name: getSiteNameFromUrl(url),
+            site_name: siteName,
             display_url: displayUrl,
-            title: displayUrl,
+            title,
             snippet: null,
             image: null,
         };
@@ -245,7 +258,11 @@ async function get_sources() {
 
         const displayUrl = document.createElement('span');
         displayUrl.className = 'source-card-url';
-        displayUrl.innerText = safeMeta.display_url || formatDisplayUrl(safeMeta.url);
+        const formattedDisplayUrl = formatDisplayUrl(safeMeta.url || safeMeta.display_url);
+        displayUrl.innerText = formattedDisplayUrl;
+        if (safeMeta.url || safeMeta.display_url) {
+            displayUrl.title = safeMeta.url || safeMeta.display_url;
+        }
 
         metaWrapper.appendChild(siteName);
         metaWrapper.appendChild(displayUrl);
