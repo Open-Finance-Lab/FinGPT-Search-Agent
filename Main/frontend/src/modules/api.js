@@ -156,6 +156,7 @@ function getChatResponseStream(question, selectedModel, promptMode, useRAG, useM
     let connectionAttempts = 0;
     const maxReconnectAttempts = 3;
     let usedUrls = [];  // Store source URLs for research mode
+    let usedSources = [];  // Store detailed source metadata
 
     // Handle connection event
     eventSource.addEventListener('connected', (event) => {
@@ -186,10 +187,11 @@ function getChatResponseStream(question, selectedModel, promptMode, useRAG, useM
 
             if (data.done) {
                 eventSource.close();
-                // For research mode, include used_urls in the completion data
+                // For research mode, include used sources in the completion data
                 const completionData = {
                     ...data,
-                    used_urls: usedUrls
+                    used_urls: usedUrls,
+                    used_sources: usedSources,
                 };
                 onComplete(fullResponse, completionData);
             }
@@ -198,6 +200,11 @@ function getChatResponseStream(question, selectedModel, promptMode, useRAG, useM
             if (data.used_urls && Array.isArray(data.used_urls)) {
                 usedUrls = data.used_urls;
                 console.log(`[Research Mode] Received ${usedUrls.length} source URLs`);
+            }
+
+            if (data.used_sources && Array.isArray(data.used_sources)) {
+                usedSources = data.used_sources;
+                console.log(`[Research Mode] Received ${usedSources.length} detailed sources`);
             }
 
             // Handle R2C stats if present
