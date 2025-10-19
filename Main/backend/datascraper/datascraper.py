@@ -60,6 +60,8 @@ INSTRUCTION = (
 
 # A module-level set to keep track of used URLs
 used_urls: set[str] = set()
+used_source_details: list[dict[str, Any]] = []
+used_urls_ordered: list[str] = []
 
 
 def _prepare_advanced_search_inputs(model: str, preferred_links: list[str] | None) -> tuple[str, list[str]]:
@@ -244,6 +246,19 @@ def _create_response_stream(client, provider: str, model_name: str, model_config
                 yield chunk.choices[0].delta.content
 
 
+def _update_used_sources(source_entries: list[dict[str, Any]]) -> None:
+    """
+    Synchronize module-level caches for used sources.
+    """
+    global used_source_details, used_urls_ordered
+
+    used_source_details = source_entries or []
+    used_urls_ordered = [entry.get("url") for entry in used_source_details if entry.get("url")]
+
+    used_urls.clear()
+    used_urls.update(used_urls_ordered)
+
+
 def create_advanced_response(
         user_input: str,
         message_list: list[dict],
@@ -294,7 +309,7 @@ def create_advanced_response(
             )
         else:
             # Call OpenAI Responses API search function
-            response_text, source_urls = create_responses_api_search(
+            response_text, source_entries = create_responses_api_search(
                 user_query=user_input,
                 message_history=message_list,
                 model=actual_model,  # Use the actual model name from model_config.py, not the frontend ID
@@ -303,13 +318,12 @@ def create_advanced_response(
                 user_time=user_time
             )
 
-            # Update the global used_urls set for compatibility with get_sources
-            used_urls.clear()
-            used_urls.update(source_urls)
+            # Update cached sources for compatibility with frontend queries
+            _update_used_sources(source_entries)
 
-            logging.info(f"Advanced response generated with {len(source_urls)} sources")
-            for idx, url in enumerate(source_urls, 1):
-                logging.info(f"  Source {idx}: {url}")
+            logging.info(f"Advanced response generated with {len(source_entries)} sources")
+            for idx, entry in enumerate(source_entries, 1):
+                logging.info(f"  Source {idx}: {entry.get('url')}")
 
             return response_text
 
@@ -354,12 +368,11 @@ async def _create_advanced_response_stream_async(
         )
 
         # Yield chunks from the stream
-        async for text_chunk, source_urls in stream_gen:
-            # Update global used_urls when we get sources
-            if source_urls:
-                used_urls.clear()
-                used_urls.update(source_urls)
-            yield text_chunk, source_urls
+        async for text_chunk, source_entries in stream_gen:
+            # Update global caches when we get sources
+            if source_entries:
+                _update_used_sources(source_entries)
+            yield text_chunk, source_entries
 
     except Exception as e:
         logging.error(f"Error in advanced streaming: {e}")
@@ -384,12 +397,13 @@ def create_advanced_response_streaming(
 
     state: Dict[str, Any] = {
         "final_output": "",
-        "used_urls": []
+        "used_urls": [],
+        "used_sources": []
     }
 
     async def _stream() -> AsyncIterator[tuple[str, list[str]]]:
         aggregated_chunks: list[str] = []
-        latest_urls: list[str] = []
+        latest_entries: list[dict[str, Any]] = []
         base_stream = _create_advanced_response_stream_async(
             user_input=user_input,
             message_list=message_list,
@@ -400,22 +414,22 @@ def create_advanced_response_streaming(
         )
 
         try:
-            async for text_chunk, source_urls in base_stream:
+            async for text_chunk, source_entries in base_stream:
                 if text_chunk:
                     aggregated_chunks.append(text_chunk)
-                if source_urls:
-                    latest_urls = source_urls
-                yield text_chunk, source_urls
+                if source_entries:
+                    latest_entries = source_entries
+                yield text_chunk, source_entries
         except Exception as stream_error:
             logging.error(f"[ADVANCED STREAM] Error during streaming: {stream_error}")
             raise
         finally:
             final_text = "".join(aggregated_chunks)
             state["final_output"] = final_text
-            state["used_urls"] = latest_urls
-            used_urls.clear()
-            used_urls.update(latest_urls)
-            logging.info(f"[ADVANCED STREAM] Completed with {len(final_text)} characters and {len(latest_urls)} sources")
+            state["used_sources"] = latest_entries
+            state["used_urls"] = [entry.get("url") for entry in latest_entries if entry.get("url")]
+            _update_used_sources(latest_entries)
+            logging.info(f"[ADVANCED STREAM] Completed with {len(final_text)} characters and {len(latest_entries)} sources")
 
     return _stream(), state
 
@@ -620,20 +634,16 @@ def create_agent_response_stream(
     return _stream(), state
 
 
-def get_sources(query):
+def get_sources(query, current_url: str | None = None) -> Dict[str, Any]:
     """
-    Returns the URLs that were used in the most recent 'create_advanced_response' call.
-    Now returns URLs with None for icons since we don't scrape pages anymore.
+    Return structured metadata for sources used in the most recent advanced response.
     """
-    logging.info(f"get_sources called with query: '{query}'")
-    logging.info(f"Current used_urls contains {len(used_urls)} URLs:")
-    for idx, url in enumerate(used_urls, 1):
-        logging.info(f"  [{idx}] {url}")
+    logging.info(f"get_sources called with query: '{query}' (current_url={current_url})")
+    logging.info(f"Current used_sources contains {len(used_source_details)} entries")
 
-    # Return URLs with None for icons (frontend handles missing icons)
-    sources = [(url, None) for url in used_urls]
-    logging.info(f"Returning {len(sources)} source URLs")
-    return sources
+    payload = format_sources_for_frontend(used_source_details, current_url)
+    logging.info(f"Returning {len(payload.get('sources', []))} sources to frontend")
+    return payload
 
 
 def get_website_icon(url):

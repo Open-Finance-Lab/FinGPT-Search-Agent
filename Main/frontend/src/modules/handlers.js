@@ -200,7 +200,8 @@ function handleChatResponse(question, promptMode = false, useStreaming = true) {
                     console.log('[Sources Debug] used_urls:', data.used_urls);
                     console.log('[Sources Debug] Number of URLs:', data.used_urls.length);
 
-                    setCachedSources(data.used_urls, question);
+                    const metadata = Array.isArray(data.used_sources) ? data.used_sources : [];
+                    setCachedSources(data.used_urls, question, metadata);
                     console.log('[Sources Debug] Cached', data.used_urls.length, 'source URLs from research mode streaming');
                 }
 
@@ -262,7 +263,8 @@ function handleChatResponse(question, promptMode = false, useStreaming = true) {
                         }
                     });
 
-                    setCachedSources(data.used_urls, question);
+                    const metadata = Array.isArray(data.used_sources) ? data.used_sources : [];
+                    setCachedSources(data.used_urls, question, metadata);
                     console.log('[Sources Debug] Cached', data.used_urls.length, 'source URLs from Advanced Ask');
                 }
 
