@@ -2,8 +2,9 @@ import os
 import logging
 import asyncio
 from collections.abc import AsyncIterator
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, Optional, Tuple
 
+import requests
 from dotenv import load_dotenv
 
 from openai import OpenAI
@@ -32,6 +33,10 @@ load_dotenv(backend_dir / '.env')
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
+BUFFET_AGENT_API_KEY = os.getenv("BUFFET_AGENT_API_KEY", "")
+BUFFET_AGENT_DEFAULT_ENDPOINT = "https://l7d6yqg7nzbkumx8.us-east-1.aws.endpoints.huggingface.cloud"
+BUFFET_AGENT_ENDPOINT = os.getenv("BUFFET_AGENT_ENDPOINT", BUFFET_AGENT_DEFAULT_ENDPOINT)
+BUFFET_AGENT_TIMEOUT = float(os.getenv("BUFFET_AGENT_TIMEOUT", "60"))
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -55,6 +60,18 @@ if ANTHROPIC_API_KEY:
 
 INSTRUCTION = (
     "When provided context, use provided context as fact and not your own knowledge; "
+    "the context provided is the most up-to-date information."
+)
+
+# Warren Buffett-specific system prompt for the Buffet Agent
+BUFFETT_INSTRUCTION = (
+    "You are Warren Buffett, the legendary investor and CEO of Berkshire Hathaway. "
+    "Answer questions with his characteristic wisdom, folksy charm, and value investing philosophy. "
+    "Use his well-known principles: invest in what you understand, focus on long-term value, "
+    "be fearful when others are greedy and greedy when others are fearful. "
+    "Reference his experiences with companies like Coca-Cola, American Express, and See's Candies when relevant. "
+    "Speak in a straightforward, accessible manner, using simple analogies and avoiding complex jargon. "
+    "When provided context, use the provided context as fact and not your own knowledge; "
     "the context provided is the most up-to-date information."
 )
 
@@ -113,10 +130,15 @@ def create_rag_response(user_input, message_list, model):
         return error_message
 
 
-def _prepare_messages(message_list: list[dict], user_input: str):
+def _prepare_messages(message_list: list[dict], user_input: str, model: str = None):
     """
     Helper to parse message list with headers and convert to proper format for APIs.
     Returns (msgs, system_message) tuple.
+
+    Args:
+        message_list: Previous conversation history
+        user_input: Current user question
+        model: Model ID to determine appropriate system prompt
     """
     msgs = []
     system_message = None
@@ -141,16 +163,233 @@ def _prepare_messages(message_list: list[dict], user_input: str):
             # Legacy format or web content - treat as user message
             msgs.append({"role": "user", "content": content})
 
+    # Determine which instruction to use based on the model
+    instruction = INSTRUCTION
+    if model:
+        model_config = get_model_config(model)
+        if model_config and model_config.get("provider") == "buffet":
+            instruction = BUFFETT_INSTRUCTION
+            logging.info("[BUFFET] Using Warren Buffett system prompt")
+
     # Add system message at the beginning
     if system_message:
-        msgs.insert(0, {"role": "system", "content": f"{system_message} {INSTRUCTION}"})
+        msgs.insert(0, {"role": "system", "content": f"{system_message} {instruction}"})
     else:
-        msgs.insert(0, {"role": "system", "content": INSTRUCTION})
+        msgs.insert(0, {"role": "system", "content": instruction})
 
     # Add current user input
     msgs.append({"role": "user", "content": user_input})
 
     return msgs, system_message
+
+
+def _truncate_for_log(value: Any, limit: int = 200) -> str:
+    """Utility to keep log entries readable."""
+    text = str(value)
+    if len(text) <= limit:
+        return text
+    return f"{text[:limit]}..."
+
+
+def _format_messages_for_buffet(msgs: list[dict[str, Any]]) -> str:
+    """Flatten chat messages into a minimal prompt for the Buffet agent."""
+    if not msgs:
+        return ""
+
+    system_content: list[str] = []
+    last_user_message: str = ""
+
+    for msg in msgs:
+        role = (msg or {}).get("role", "user")
+        content = (msg or {}).get("content", "")
+        if not content:
+            continue
+
+        if role == "system":
+            system_content.append(content.strip())
+        elif role == "user":
+            last_user_message = content.strip()
+
+    prompt_parts: list[str] = []
+
+    if system_content:
+        prompt_parts.append(f"System: {' '.join(system_content)}")
+
+    if last_user_message:
+        prompt_parts.append(f"User: {last_user_message}")
+
+    prompt_parts.append("Assistant:")
+
+    return "\n\n".join(part for part in prompt_parts if part).strip()
+
+
+def _extract_text_from_buffet_response(payload: Any) -> Optional[str]:
+    """Extract the generated text from Buffet agent responses."""
+    if payload is None:
+        return None
+
+    if isinstance(payload, str):
+        return payload
+
+    if isinstance(payload, dict):
+        if "error" in payload and payload["error"]:
+            raise RuntimeError(f"Buffet agent error: {payload['error']}")
+        for key in ("generated_text", "text", "output", "result"):
+            value = payload.get(key)
+            if value:
+                return _extract_text_from_buffet_response(value)
+        outputs = payload.get("outputs")
+        if outputs:
+            return _extract_text_from_buffet_response(outputs)
+        data_field = payload.get("data")
+        if data_field:
+            return _extract_text_from_buffet_response(data_field)
+        return None
+
+    if isinstance(payload, list):
+        for item in payload:
+            extracted = _extract_text_from_buffet_response(item)
+            if extracted:
+                return extracted
+        return None
+
+    return str(payload)
+
+
+def _sanitize_buffet_output(text: str) -> str:
+    """Strip echoed prompts and return only the assistant's reply."""
+    if not text:
+        return ""
+
+    markers = [
+        "User: [ASSISTANT RESPONSE]:",
+        "[ASSISTANT RESPONSE]:",
+        "Assistant:",
+        "assistant:",
+    ]
+
+    candidate = text
+    for marker in markers:
+        if marker in candidate:
+            candidate = candidate.split(marker, 1)[-1]
+
+    candidate = candidate.strip()
+
+    # If the response still contains user-prefixed text, keep only the tail content.
+    if "User:" in candidate:
+        tail = candidate.rsplit("User:", 1)[-1].strip()
+        if tail:
+            candidate = tail
+
+    skip_prefixes = (
+        "FinGPT:",
+        "System:",
+        "[SYSTEM",
+        "[USER",
+        "[TIME CONTEXT]",
+        "[CURRENT CONTEXT]",
+        "[USER QUESTION]",
+        "[ASSISTANT RESPONSE]",
+        "assistant:",
+        "Assistant:",
+    )
+
+    cleaned_lines: list[str] = []
+    for line in candidate.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            if cleaned_lines:
+                cleaned_lines.append("")
+            continue
+        if any(stripped.startswith(prefix) for prefix in skip_prefixes):
+            # If this is a user-prefixed line with actual content, keep the part after the prefix.
+            if stripped.startswith("User:"):
+                remainder = stripped.split("User:", 1)[-1].strip()
+                if remainder:
+                    cleaned_lines.append(remainder)
+            continue
+        cleaned_lines.append(stripped)
+
+    if cleaned_lines:
+        return "\n".join(cleaned_lines).strip()
+
+    return candidate
+
+
+def _call_buffet_agent(model_config: dict, msgs: list[dict[str, Any]]) -> str:
+    """Invoke the Buffet agent via its Hugging Face Inference Endpoint."""
+    if not BUFFET_AGENT_API_KEY:
+        raise RuntimeError(
+            "Buffet agent is not configured. Set BUFFET_AGENT_API_KEY in the environment."
+        )
+
+    endpoint = model_config.get("endpoint_url") or BUFFET_AGENT_ENDPOINT
+    base_parameters = model_config.get("parameters") or {}
+    parameters = dict(base_parameters)
+    parameters.setdefault("return_full_text", False)
+    prompt = _format_messages_for_buffet(msgs)
+
+    payload = {
+        "inputs": prompt,
+        "parameters": parameters,
+    }
+
+    headers = {
+        "Accept": "application/json",
+        "Authorization": f"Bearer {BUFFET_AGENT_API_KEY}",
+        "Content-Type": "application/json",
+    }
+
+    logging.info(
+        "[BUFFET] Sending request to custom endpoint %s (parameters: %s)",
+        endpoint,
+        parameters if parameters else "{}",
+    )
+
+    try:
+        response = requests.post(
+            endpoint,
+            headers=headers,
+            json=payload,
+            timeout=BUFFET_AGENT_TIMEOUT,
+        )
+        response.raise_for_status()
+    except requests.exceptions.RequestException as exc:
+        logging.error("[BUFFET] Request failed: %s", exc)
+        raise RuntimeError(f"Buffet agent request failed: {exc}") from exc
+
+    try:
+        data = response.json()
+    except ValueError as exc:
+        snippet = _truncate_for_log(response.text)
+        logging.error("[BUFFET] Non-JSON response: %s", snippet)
+        raise RuntimeError("Buffet agent returned a non-JSON response.") from exc
+
+    logging.debug("[BUFFET] Raw response payload: %s", _truncate_for_log(data))
+    generated_text = _extract_text_from_buffet_response(data)
+    if not generated_text:
+        logging.error("[BUFFET] Unexpected response structure: %s", _truncate_for_log(data))
+        raise RuntimeError("Buffet agent returned an unexpected payload.")
+
+    cleaned = _sanitize_buffet_output(generated_text)
+    if cleaned:
+        return cleaned
+
+    logging.warning("[BUFFET] Sanitized response was empty; returning raw text")
+    return str(generated_text).strip()
+
+
+def _create_buffet_response_sync(model_config: dict, msgs: list[dict[str, Any]]) -> str:
+    """Handle non-streaming Buffet responses."""
+    return _call_buffet_agent(model_config, msgs)
+
+
+def _create_buffet_response_stream(model_config: dict, msgs: list[dict[str, Any]]):
+    """Handle streaming Buffet responses by yielding the final text once."""
+    def _generator():
+        yield _call_buffet_agent(model_config, msgs)
+
+    return _generator()
 
 
 def create_response(
@@ -168,16 +407,26 @@ def create_response(
     if not model_config:
         raise ValueError(f"Unsupported model: {model}")
 
+    msgs, system_message = _prepare_messages(message_list, user_input, model)
+
     provider = model_config["provider"]
-    model_name = model_config["model_name"]
-    logging.info(f"[REGULAR RESPONSE] Using {model} -> {model_name} (provider: {provider}, stream: {stream})")
+    model_name = model_config.get("model_name")
+    display_model_name = model_name if model_name else "N/A"
+    logging.info(
+        f"[REGULAR RESPONSE] Using {model} -> {display_model_name} "
+        f"(provider: {provider}, stream: {stream})"
+    )
+
+    if provider == "buffet":
+        logging.info("[REGULAR RESPONSE] Routing through Buffet custom endpoint")
+        if stream:
+            return _create_buffet_response_stream(model_config, msgs)
+        return _create_buffet_response_sync(model_config, msgs)
 
     # Get the appropriate client
     client = clients.get(provider)
     if not client:
         raise ValueError(f"No client available for provider: {provider}. Please check API key configuration.")
-
-    msgs, system_message = _prepare_messages(message_list, user_input)
 
     # Route to streaming or non-streaming based on flag
     if stream:
@@ -474,6 +723,11 @@ def create_agent_response(user_input: str, message_list: list[dict], model: str 
     # Resolve model ID to actual model name for logging
     model_config = get_model_config(model)
     actual_model_name = model_config.get("model_name") if model_config else model
+    provider = model_config.get("provider") if model_config else None
+
+    if provider == "buffet":
+        logging.info(f"[AGENT] Buffet agent does not support tool mode; using direct response for {model}")
+        return create_response(user_input, message_list, model)
 
     try:
         # Check if model supports agent features
@@ -568,6 +822,24 @@ def create_agent_response_stream(
     """
     state: Dict[str, str] = {"final_output": ""}
 
+    model_config = get_model_config(model)
+    provider = model_config.get("provider") if model_config else None
+    if provider == "buffet":
+        logging.info(f"[AGENT STREAM] Buffet agent does not support tool mode; using direct response stream for {model}")
+        # Reuse the regular streaming response helper
+        regular_stream = create_response(user_input, message_list, model, stream=True)
+
+        async def _fallback_stream() -> AsyncIterator[str]:
+            aggregated_text = ""
+            try:
+                for chunk in regular_stream:
+                    aggregated_text += chunk or ""
+                    yield chunk
+            finally:
+                state["final_output"] = aggregated_text
+
+        return _fallback_stream(), state
+
     async def _stream() -> AsyncIterator[str]:
         from agents import Runner
 
@@ -634,12 +906,23 @@ def create_agent_response_stream(
     return _stream(), state
 
 
-def get_sources(query, current_url: str | None = None) -> Dict[str, Any]:
+def get_sources(query: str, current_url: str | None = None) -> Dict[str, Any]:
     """
     Return structured metadata for sources used in the most recent advanced response.
     """
-    logging.info(f"get_sources called with query: '{query}' (current_url={current_url})")
-    logging.info(f"Current used_sources contains {len(used_source_details)} entries")
+    logging.info(f"get_sources called with query: '{query}'")
+    if current_url:
+        logging.info(f"Context current_url: {current_url}")
+    logging.info(f"Current used_source_details contains {len(used_source_details)} entries")
+
+    # Also log URLs for debugging
+    if used_urls:
+        logging.info(f"Current used_urls contains {len(used_urls)} URLs:")
+        for idx, url in enumerate(used_urls, 1):
+            logging.info(f"  [{idx}] {url}")
+
+    # Log number of source details
+    logging.info(f"Returning {len(used_source_details)} source details")
 
     payload = format_sources_for_frontend(used_source_details, current_url)
     logging.info(f"Returning {len(payload.get('sources', []))} sources to frontend")
