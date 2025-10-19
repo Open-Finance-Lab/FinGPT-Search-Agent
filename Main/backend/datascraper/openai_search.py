@@ -11,9 +11,10 @@ import html
 import socket
 import logging
 import asyncio
+from dataclasses import dataclass
 from html.parser import HTMLParser
 from typing import List, Dict, Tuple, Optional, Any, Iterable
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urljoin
 from urllib.request import Request, urlopen
 from urllib.error import URLError, HTTPError
 from openai import OpenAI, AsyncOpenAI
@@ -40,12 +41,39 @@ USE_RESPONSES_API = os.getenv("USE_OPENAI_RESPONSES_API", "true").lower() == "tr
 sync_client = OpenAI(api_key=OPENAI_API_KEY)
 async_client = AsyncOpenAI(api_key=OPENAI_API_KEY)
 
-_PREVIEW_CACHE: Dict[str, str] = {}
-_PREVIEW_FAILURES: set[str] = set()
 _MAX_PREVIEW_CACHE_LENGTH = 2048
 _PREVIEW_FETCH_TIMEOUT = 6
 _PREVIEW_FETCH_BYTES = 65536
 _ALLOWED_SCHEMES = {"http", "https"}
+_DOCUMENT_CACHE_LIMIT = 64
+_SITE_METADATA_CACHE_LIMIT = 128
+
+
+@dataclass
+class _FetchedDocument:
+    text: str
+    content_type: str
+
+
+@dataclass
+class _SiteMetadata:
+    snippet: str = ""
+    icon: Optional[str] = None
+
+
+_DOCUMENT_CACHE: Dict[str, _FetchedDocument] = {}
+_DOCUMENT_FAILURES: set[str] = set()
+_SITE_METADATA_CACHE: Dict[str, _SiteMetadata] = {}
+_SITE_METADATA_FAILURES: set[str] = set()
+
+_ICON_REL_KEYWORDS = {
+    "icon",
+    "shortcut",
+    "apple-touch-icon",
+    "apple-touch-icon-precomposed",
+    "mask-icon",
+    "fluid-icon",
+}
 
 
 class _PreviewHTMLParser(HTMLParser):
@@ -63,6 +91,47 @@ class _PreviewHTMLParser(HTMLParser):
 
     def get_text(self) -> str:
         return " ".join(self._parts)
+
+
+class _SiteMetadataParser(HTMLParser):
+    """
+    HTML parser to discover icons from link/meta tags.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.icon_candidates: list[dict[str, Any]] = []
+        self._icon_index = 0
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, Optional[str]]]) -> None:
+        tag_lower = tag.lower()
+        attr_map = {name.lower(): (value.strip() if isinstance(value, str) else value) for name, value in attrs if name}
+
+        if tag_lower == "link":
+            href = attr_map.get("href")
+            rel_value = attr_map.get("rel")
+            if not href or not rel_value:
+                return
+
+            rel_tokens = [token for token in re.split(r"[\s,]+", rel_value.lower()) if token]
+            if not rel_tokens:
+                return
+
+            if not any(token in _ICON_REL_KEYWORDS for token in rel_tokens):
+                return
+
+            priority = _icon_priority(rel_tokens)
+            size = _parse_icon_size(attr_map.get("sizes"))
+
+            self.icon_candidates.append(
+                {
+                    "href": href.strip(),
+                    "priority": priority,
+                    "size": size,
+                    "order": self._icon_index,
+                }
+            )
+            self._icon_index += 1
 
 
 def _truncate_preview(text: str, max_chars: int = 160) -> str:
@@ -135,17 +204,90 @@ def _extract_text_from_html(html_content: str) -> str:
     return parser.get_text()
 
 
-def _fetch_preview_from_url(url: str, *, max_chars: int = 160) -> str:
+def _make_absolute_asset_url(page_url: str, asset_url: Optional[str]) -> Optional[str]:
+    if not asset_url:
+        return None
+    asset_url = asset_url.strip()
+    if not asset_url:
+        return None
+    if asset_url.startswith("data:"):
+        return asset_url
+    if asset_url.startswith(("http://", "https://")):
+        return asset_url
+    if asset_url.startswith("//"):
+        scheme = urlparse(page_url).scheme or "https"
+        return f"{scheme}:{asset_url}"
+    return urljoin(page_url, asset_url)
+
+
+def _default_favicon_url(page_url: str) -> Optional[str]:
+    parsed = urlparse(page_url)
+    if not parsed.scheme or not parsed.netloc:
+        return None
+    return f"{parsed.scheme}://{parsed.netloc}/favicon.ico"
+
+
+def _parse_icon_size(raw_sizes: Optional[str]) -> int:
+    if not raw_sizes:
+        return 0
+    sizes_value = raw_sizes.strip().lower()
+    if sizes_value == "any":
+        return 512
+    best = 0
+    for token in re.split(r"[\s,]+", sizes_value):
+        if "x" not in token:
+            continue
+        parts = token.split("x", 1)
+        if len(parts) != 2:
+            continue
+        try:
+            width = int(parts[0])
+            height = int(parts[1])
+            best = max(best, min(width, height))
+        except ValueError:
+            continue
+    return best
+
+
+def _icon_priority(rel_tokens: List[str]) -> int:
+    tokens = set(rel_tokens)
+    if "apple-touch-icon" in tokens or "apple-touch-icon-precomposed" in tokens:
+        return 0
+    if "icon" in tokens and "shortcut" not in tokens:
+        return 1
+    if "icon" in tokens and "shortcut" in tokens:
+        return 2
+    if "mask-icon" in tokens:
+        return 3
+    if "fluid-icon" in tokens:
+        return 4
+    return 5
+
+
+def _select_best_icon(candidates: List[Dict[str, Any]], base_url: str) -> Optional[str]:
+    if not candidates:
+        return None
+    seen: set[str] = set()
+    for candidate in sorted(candidates, key=lambda item: (item["priority"], -item["size"], item["order"])):
+        href = candidate.get("href")
+        absolute = _make_absolute_asset_url(base_url, href)
+        if not absolute or absolute in seen:
+            continue
+        seen.add(absolute)
+        return absolute
+    return None
+
+
+def _fetch_document(url: str) -> Optional[_FetchedDocument]:
     if not url:
-        return ""
+        return None
     parsed = urlparse(url)
     if parsed.scheme.lower() not in _ALLOWED_SCHEMES:
-        return ""
-    if url in _PREVIEW_CACHE:
-        cached = _PREVIEW_CACHE[url]
-        return _truncate_preview(cached, max_chars)
-    if url in _PREVIEW_FAILURES:
-        return ""
+        return None
+    if url in _DOCUMENT_CACHE:
+        return _DOCUMENT_CACHE[url]
+    if url in _DOCUMENT_FAILURES:
+        return None
 
     request = Request(
         url,
@@ -166,40 +308,81 @@ def _fetch_preview_from_url(url: str, *, max_chars: int = 160) -> str:
             charset = response.headers.get_content_charset() or "utf-8"
             raw_content = response.read(_PREVIEW_FETCH_BYTES)
     except (URLError, HTTPError, TimeoutError, ValueError, socket.timeout) as exc:
-        logger.debug(f"Unable to fetch preview for {url}: {exc}")
-        _PREVIEW_FAILURES.add(url)
-        return ""
+        logger.debug(f"Unable to fetch metadata for {url}: {exc}")
+        _DOCUMENT_FAILURES.add(url)
+        return None
     except Exception as exc:
-        logger.warning(f"Unexpected error fetching preview for {url}: {exc}")
-        _PREVIEW_FAILURES.add(url)
-        return ""
+        logger.warning(f"Unexpected error fetching metadata for {url}: {exc}")
+        _DOCUMENT_FAILURES.add(url)
+        return None
 
     try:
         text_content = raw_content.decode(charset, errors="ignore")
     except LookupError:
         text_content = raw_content.decode("utf-8", errors="ignore")
 
-    meta_description = _normalize_preview_text(_extract_meta_description(text_content))
-    if meta_description:
-        normalized = meta_description
-    else:
-        if "text/html" in content_type.lower() or "<html" in text_content.lower():
-            body_text = _extract_text_from_html(text_content)
-        elif "text/" in content_type.lower():
-            body_text = text_content
+    if not text_content:
+        _DOCUMENT_FAILURES.add(url)
+        return None
+
+    document = _FetchedDocument(text=text_content, content_type=content_type)
+    _DOCUMENT_CACHE[url] = document
+    if len(_DOCUMENT_CACHE) > _DOCUMENT_CACHE_LIMIT:
+        _DOCUMENT_CACHE.pop(next(iter(_DOCUMENT_CACHE)))
+    return document
+
+
+def _fetch_site_metadata(url: str) -> Optional[_SiteMetadata]:
+    if not url:
+        return None
+    if url in _SITE_METADATA_CACHE:
+        return _SITE_METADATA_CACHE[url]
+    if url in _SITE_METADATA_FAILURES:
+        return None
+
+    document = _fetch_document(url)
+    if not document:
+        _SITE_METADATA_FAILURES.add(url)
+        return None
+
+    parser = _SiteMetadataParser()
+    try:
+        parser.feed(document.text)
+        parser.close()
+    except Exception as exc:
+        logger.debug(f"Metadata parse error for {url}: {exc}")
+
+    snippet = _normalize_preview_text(_extract_meta_description(document.text))
+    content_type_lower = (document.content_type or "").lower()
+
+    if not snippet:
+        if "text/html" in content_type_lower or "<html" in document.text.lower():
+            body_text = _extract_text_from_html(document.text)
+        elif "text/" in content_type_lower:
+            body_text = document.text
         else:
             body_text = ""
-        normalized = _normalize_preview_text(body_text)
+        snippet = _normalize_preview_text(body_text)
 
-    if not normalized:
-        _PREVIEW_FAILURES.add(url)
+    if snippet and len(snippet) > _MAX_PREVIEW_CACHE_LENGTH:
+        snippet = snippet[:_MAX_PREVIEW_CACHE_LENGTH].rstrip()
+
+    icon = _select_best_icon(parser.icon_candidates, url)
+    if not icon:
+        icon = _default_favicon_url(url)
+
+    metadata = _SiteMetadata(snippet=snippet or "", icon=icon)
+    _SITE_METADATA_CACHE[url] = metadata
+    if len(_SITE_METADATA_CACHE) > _SITE_METADATA_CACHE_LIMIT:
+        _SITE_METADATA_CACHE.pop(next(iter(_SITE_METADATA_CACHE)))
+    return metadata
+
+
+def _fetch_preview_from_url(url: str, *, max_chars: int = 160) -> str:
+    metadata = _fetch_site_metadata(url)
+    if not metadata or not metadata.snippet:
         return ""
-
-    if len(normalized) > _MAX_PREVIEW_CACHE_LENGTH:
-        normalized = normalized[:_MAX_PREVIEW_CACHE_LENGTH].rstrip()
-
-    _PREVIEW_CACHE[url] = normalized
-    return _truncate_preview(normalized, max_chars)
+    return _truncate_preview(metadata.snippet, max_chars)
 
 
 def extract_citations_from_response(response) -> List[Dict[str, Any]]:
@@ -272,7 +455,6 @@ def _normalize_citation_entry(entry: Dict[str, Any]) -> Dict[str, Any]:
         'url': url,
         'title': entry.get('title') or '',
         'snippet': snippet,
-        'image': entry.get('image') or None,
     }
 
 
@@ -509,7 +691,6 @@ async def _stream_response_chunks(stream_response):
                         "url": getattr(citation, "url", None),
                         "title": getattr(citation, "title", None),
                         "snippet": getattr(citation, "snippet", None) or getattr(citation, "text", None),
-                        "image": getattr(citation, "image_url", None),
                     }
                     upsert_citation(entry)
             elif event_type == "response.error":
@@ -706,7 +887,7 @@ def format_sources_for_frontend(
             "url": url,
             "title": raw_entry.get("title") or "",
             "snippet": raw_entry.get("snippet") or "",
-            "image": raw_entry.get("image") or None,
+            "icon": raw_entry.get("icon") or None,
         }
         normalized["site_name"] = raw_entry.get("site_name") or _get_site_name(url)
         normalized["display_url"] = raw_entry.get("display_url") or _format_display_url(url)
@@ -723,7 +904,7 @@ def format_sources_for_frontend(
             "site_name": _get_site_name(current_url),
             "display_url": _format_display_url(current_url),
             "snippet": "",
-            "image": None,
+            "icon": None,
         }
 
     combined_entries: list[Dict[str, Any]] = []
@@ -732,14 +913,21 @@ def format_sources_for_frontend(
     combined_entries.extend(entries)
 
     for entry in combined_entries:
-        if not entry.get("url"):
+        url = entry.get("url")
+        if not url:
             continue
-        snippet = _normalize_preview_text(entry.get("snippet"))
-        if snippet:
-            entry["snippet"] = _truncate_preview(snippet, 160)
-            continue
-        fetched_preview = _fetch_preview_from_url(entry["url"], max_chars=160)
-        entry["snippet"] = fetched_preview or ""
+        metadata = _fetch_site_metadata(url)
+
+        existing_snippet = _normalize_preview_text(entry.get("snippet"))
+        if existing_snippet:
+            entry["snippet"] = _truncate_preview(existing_snippet, 160)
+        elif metadata and metadata.snippet:
+            entry["snippet"] = _truncate_preview(metadata.snippet, 160)
+        else:
+            entry["snippet"] = ""
+
+        if metadata:
+            entry["icon"] = metadata.icon
 
     return {
         "current_page": current_entry,

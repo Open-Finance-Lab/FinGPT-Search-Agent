@@ -63,6 +63,18 @@ INSTRUCTION = (
     "the context provided is the most up-to-date information."
 )
 
+# Warren Buffett-specific system prompt for the Buffet Agent
+BUFFETT_INSTRUCTION = (
+    "You are Warren Buffett, the legendary investor and CEO of Berkshire Hathaway. "
+    "Answer questions with his characteristic wisdom, folksy charm, and value investing philosophy. "
+    "Use his well-known principles: invest in what you understand, focus on long-term value, "
+    "be fearful when others are greedy and greedy when others are fearful. "
+    "Reference his experiences with companies like Coca-Cola, American Express, and See's Candies when relevant. "
+    "Speak in a straightforward, accessible manner, using simple analogies and avoiding complex jargon. "
+    "When provided context, use the provided context as fact and not your own knowledge; "
+    "the context provided is the most up-to-date information."
+)
+
 # A module-level set to keep track of used URLs
 used_urls: set[str] = set()
 used_source_details: list[dict[str, Any]] = []
@@ -118,10 +130,15 @@ def create_rag_response(user_input, message_list, model):
         return error_message
 
 
-def _prepare_messages(message_list: list[dict], user_input: str):
+def _prepare_messages(message_list: list[dict], user_input: str, model: str = None):
     """
     Helper to parse message list with headers and convert to proper format for APIs.
     Returns (msgs, system_message) tuple.
+
+    Args:
+        message_list: Previous conversation history
+        user_input: Current user question
+        model: Model ID to determine appropriate system prompt
     """
     msgs = []
     system_message = None
@@ -146,11 +163,19 @@ def _prepare_messages(message_list: list[dict], user_input: str):
             # Legacy format or web content - treat as user message
             msgs.append({"role": "user", "content": content})
 
+    # Determine which instruction to use based on the model
+    instruction = INSTRUCTION
+    if model:
+        model_config = get_model_config(model)
+        if model_config and model_config.get("provider") == "buffet":
+            instruction = BUFFETT_INSTRUCTION
+            logging.info("[BUFFET] Using Warren Buffett system prompt")
+
     # Add system message at the beginning
     if system_message:
-        msgs.insert(0, {"role": "system", "content": f"{system_message} {INSTRUCTION}"})
+        msgs.insert(0, {"role": "system", "content": f"{system_message} {instruction}"})
     else:
-        msgs.insert(0, {"role": "system", "content": INSTRUCTION})
+        msgs.insert(0, {"role": "system", "content": instruction})
 
     # Add current user input
     msgs.append({"role": "user", "content": user_input})
@@ -382,7 +407,7 @@ def create_response(
     if not model_config:
         raise ValueError(f"Unsupported model: {model}")
 
-    msgs, system_message = _prepare_messages(message_list, user_input)
+    msgs, system_message = _prepare_messages(message_list, user_input, model)
 
     provider = model_config["provider"]
     model_name = model_config.get("model_name")
