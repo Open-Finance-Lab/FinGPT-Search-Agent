@@ -8,7 +8,7 @@ with OpenAI's built-in web_search tool from the Responses API.
 import os
 import logging
 import asyncio
-from typing import List, Dict, Tuple, Optional, Any
+from typing import List, Dict, Tuple, Optional, Any, Iterable
 from openai import OpenAI, AsyncOpenAI
 from dotenv import load_dotenv
 from pathlib import Path
@@ -34,7 +34,7 @@ sync_client = OpenAI(api_key=OPENAI_API_KEY)
 async_client = AsyncOpenAI(api_key=OPENAI_API_KEY)
 
 
-def extract_citations_from_response(response) -> List[Dict[str, str]]:
+def extract_citations_from_response(response) -> List[Dict[str, Any]]:
     """
     Extract URL citations from OpenAI Responses API response.
 
@@ -63,7 +63,8 @@ def extract_citations_from_response(response) -> List[Dict[str, str]]:
                                     if annotation.type == 'url_citation':
                                         citations.append({
                                             'url': annotation.url,
-                                            'title': getattr(annotation, 'title', ''),
+                                            'title': getattr(annotation, 'title', '') or '',
+                                            'snippet': getattr(annotation, 'text', '') or getattr(annotation, 'snippet', '') or '',
                                             'type': 'url_citation'
                                         })
                                     # Also handle file citations if needed
@@ -84,6 +85,22 @@ def extract_citations_from_response(response) -> List[Dict[str, str]]:
         logger.error(f"Error extracting citations: {e}")
 
     return citations
+
+
+def _normalize_citation_entry(entry: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Ensure citation entries contain the expected keys and default values.
+    """
+    url = entry.get('url')
+    if not url:
+        return {}
+
+    return {
+        'url': url,
+        'title': entry.get('title') or '',
+        'snippet': entry.get('snippet') or '',
+        'image': entry.get('image') or None,
+    }
 
 
 def prepare_search_prompt(user_query: str, preferred_domains: List[str] = None) -> str:
@@ -227,19 +244,21 @@ async def create_responses_api_search_async(
 
             # Extract citations/sources
             citations = extract_citations_from_response(response)
-            source_urls = [c['url'] for c in citations if c['type'] == 'url_citation']
+            source_entries: List[Dict[str, Any]] = []
+            seen_urls: set[str] = set()
+            for citation in citations:
+                if citation.get('type') != 'url_citation':
+                    continue
+                normalized = _normalize_citation_entry(citation)
+                url = normalized.get('url')
+                if not url or url in seen_urls:
+                    continue
+                source_entries.append(normalized)
+                seen_urls.add(url)
 
-            # Remove duplicates while preserving order
-            seen = set()
-            unique_urls = []
-            for url in source_urls:
-                if url not in seen:
-                    seen.add(url)
-                    unique_urls.append(url)
+            logger.info(f"Response generated successfully with {len(source_entries)} unique source URLs")
 
-            logger.info(f"Response generated successfully with {len(unique_urls)} unique source URLs")
-
-            return response_text, unique_urls
+            return response_text, source_entries
 
     except Exception as e:
         # Provide more detailed error information
@@ -273,8 +292,26 @@ async def _stream_response_chunks(stream_response):
         Final chunk: ("", source_urls_list)
     """
     full_response = ""
-    source_urls = []
     final_response = None
+    source_order: list[str] = []
+    source_map: Dict[str, Dict[str, Any]] = {}
+
+    def upsert_citation(entry: Dict[str, Any]) -> None:
+        normalized = _normalize_citation_entry(entry)
+        url = normalized.get('url')
+        if not url:
+            return
+        if url not in source_map:
+            source_map[url] = normalized
+            source_order.append(url)
+        else:
+            # Merge new details without overwriting existing non-empty values
+            current = source_map[url]
+            for key, value in normalized.items():
+                if key == 'url':
+                    continue
+                if value and not current.get(key):
+                    current[key] = value
 
     try:
         async for event in stream_response:
@@ -296,9 +333,13 @@ async def _stream_response_chunks(stream_response):
             elif event_type in ("response.citation.delta", "response.citation.done"):
                 citation = getattr(event, "citation", None)
                 if citation:
-                    url = getattr(citation, "url", None)
-                    if url and url not in source_urls:
-                        source_urls.append(url)
+                    entry = {
+                        "url": getattr(citation, "url", None),
+                        "title": getattr(citation, "title", None),
+                        "snippet": getattr(citation, "snippet", None) or getattr(citation, "text", None),
+                        "image": getattr(citation, "image_url", None),
+                    }
+                    upsert_citation(entry)
             elif event_type == "response.error":
                 error_obj = getattr(event, "error", None)
                 message = getattr(error_obj, "message", None) if error_obj else None
@@ -337,17 +378,17 @@ async def _stream_response_chunks(stream_response):
         if final_response:
             try:
                 citations = extract_citations_from_response(final_response)
-                existing = list(source_urls)
                 for citation in citations:
-                    url = citation.get('url')
-                    if citation.get('type') == 'url_citation' and url and url not in existing:
-                        existing.append(url)
-                source_urls = existing
+                    if citation.get('type') != 'url_citation':
+                        continue
+                    upsert_citation(citation)
             except Exception as citation_err:
                 logger.warning(f"Failed to extract citations from final response: {citation_err}")
 
-        logger.info(f"Streaming completed with {len(source_urls)} source URLs")
-        yield ("", source_urls)
+        ordered_sources = [source_map[url] for url in source_order if url in source_map]
+
+        logger.info(f"Streaming completed with {len(ordered_sources)} source URLs")
+        yield ("", ordered_sources)
 
     except Exception as e:
         logger.error(f"Error in streaming response: {e}")
@@ -388,7 +429,7 @@ def create_responses_api_search(
     preferred_links: List[str] = None,
     user_timezone: str = None,
     user_time: str = None
-) -> Tuple[str, List[str]]:
+) -> Tuple[str, List[Dict[str, Any]]]:
     """
     Synchronous wrapper for create_responses_api_search_async.
 
@@ -425,20 +466,102 @@ def create_responses_api_search(
         )
 
 
-def format_sources_for_frontend(source_urls: List[str]) -> List[str]:
+def _get_site_name(url: str) -> str:
     """
-    Format source URLs for frontend display.
-    Maintains compatibility with existing frontend expectations.
+    Generate a human-readable site name from a URL.
+    """
+    if not url:
+        return "Source"
+
+    from urllib.parse import urlparse
+
+    try:
+        parsed = urlparse(url)
+        hostname = parsed.netloc.lower()
+        hostname = hostname.lstrip('www.')
+        parts = hostname.split('.')
+        neutral = {"co", "com", "org", "net", "gov", "edu"}
+        candidate = parts[-2] if len(parts) >= 2 else parts[0]
+        if candidate in neutral and len(parts) >= 3:
+            candidate = parts[-3]
+        cleaned = candidate.replace('-', ' ').replace('_', ' ').strip()
+        return cleaned.title() if cleaned else hostname or "Source"
+    except Exception:
+        return "Source"
+
+
+def _format_display_url(url: str) -> str:
+    """
+    Shorten a URL for display purposes.
+    """
+    if not url:
+        return ""
+    from urllib.parse import urlparse
+
+    try:
+        parsed = urlparse(url)
+        display = f"{parsed.netloc}{parsed.path or ''}"
+        if parsed.query:
+            display += f"?{parsed.query}"
+        display = display.lstrip('www.')
+        if len(display) > 80:
+            display = f"{display[:77]}..."
+        return display or url
+    except Exception:
+        return url
+
+
+def format_sources_for_frontend(
+    source_entries: Iterable[Dict[str, Any]],
+    current_url: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Prepare structured source metadata for the frontend.
 
     Args:
-        source_urls: List of source URLs from citations
+        source_entries: Iterable of citation metadata dicts.
+        current_url: The user's active page URL.
 
     Returns:
-        List of URLs formatted for frontend
+        Dict with `current_page` metadata (if available) and ordered `sources` list.
     """
-    # The frontend expects a simple list of URLs
-    # We can enhance this later to include titles if needed
-    return source_urls
+    entries = []
+    seen: set[str] = set()
+    current_entry: Optional[Dict[str, Any]] = None
+
+    for raw_entry in source_entries or []:
+        url = raw_entry.get("url")
+        if not url or url in seen:
+            continue
+        seen.add(url)
+        normalized = {
+            "url": url,
+            "title": raw_entry.get("title") or "",
+            "snippet": raw_entry.get("snippet") or "",
+            "image": raw_entry.get("image") or None,
+        }
+        normalized["site_name"] = raw_entry.get("site_name") or _get_site_name(url)
+        normalized["display_url"] = raw_entry.get("display_url") or _format_display_url(url)
+        if current_url and url == current_url:
+            current_entry = normalized
+        else:
+            entries.append(normalized)
+
+    # If current page not among sources but we have URL, synthesize entry
+    if current_url and not current_entry:
+        current_entry = {
+            "url": current_url,
+            "title": _format_display_url(current_url),
+            "site_name": _get_site_name(current_url),
+            "display_url": _format_display_url(current_url),
+            "snippet": "",
+            "image": None,
+        }
+
+    return {
+        "current_page": current_entry,
+        "sources": entries
+    }
 
 
 def is_responses_api_available(model: str) -> bool:

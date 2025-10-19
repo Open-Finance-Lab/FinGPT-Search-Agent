@@ -22,6 +22,7 @@ import csv
 import asyncio
 import logging
 import re
+from typing import Any
 from datetime import datetime
 from pathlib import Path
 from django.views.decorators.csrf import csrf_exempt
@@ -635,6 +636,7 @@ def adv_response(request):
 
     # Get the used URLs from datascraper
     used_urls_list = list(ds.used_urls_ordered) if getattr(ds, "used_urls_ordered", None) else list(ds.used_urls)
+    used_sources_list = list(getattr(ds, "used_source_details", []))
 
     logging.info(f"[EXTENSIVE MODE] Sending {len(used_urls_list)} source URLs to frontend:")
     for idx, url in enumerate(used_urls_list, 1):
@@ -644,6 +646,7 @@ def adv_response(request):
     response_data = _prepare_response_with_stats(responses, session_id, use_r2c)
     response_json = json.loads(response_data.content)
     response_json['used_urls'] = used_urls_list
+    response_json['used_sources'] = used_sources_list
     return JsonResponse(response_json)
 
 @csrf_exempt
@@ -697,9 +700,9 @@ def adv_response_stream(request):
             else:
                 # Stream response from advanced model
                 full_response = ""
-                source_urls: list[str] = []
+                source_entries: list[dict[str, Any]] = []
                 stream_generator = None
-                stream_state = {"final_output": "", "used_urls": []}
+                stream_state = {"final_output": "", "used_urls": [], "used_sources": []}
                 loop = None
                 stream_iter = None
 
@@ -721,7 +724,7 @@ def adv_response_stream(request):
 
                     while True:
                         try:
-                            text_chunk, urls = loop.run_until_complete(stream_iter.__anext__())
+                            text_chunk, entries = loop.run_until_complete(stream_iter.__anext__())
                         except StopAsyncIteration:
                             break
 
@@ -729,8 +732,8 @@ def adv_response_stream(request):
                             full_response += text_chunk
                             sse_data = f'data: {json.dumps({"content": text_chunk, "done": False})}\n\n'
                             yield sse_data.encode('utf-8')
-                        if urls:
-                            source_urls = urls
+                        if entries:
+                            source_entries = entries
 
                 finally:
                     if stream_iter and loop:
@@ -747,7 +750,8 @@ def adv_response_stream(request):
                         loop.close()
 
                 final_response = stream_state.get("final_output") or full_response
-                final_urls = stream_state.get("used_urls") or source_urls
+                final_entries = stream_state.get("used_sources") or source_entries
+                final_urls = stream_state.get("used_urls") or [entry.get("url") for entry in (final_entries or []) if entry and entry.get("url")]
 
                 _add_response_to_context(session_id, final_response, use_r2c)
                 _log_interaction("advanced_stream", current_url, question, final_response)
@@ -759,6 +763,8 @@ def adv_response_stream(request):
 
                 if final_urls:
                     final_payload["used_urls"] = final_urls
+                if final_entries:
+                    final_payload["used_sources"] = final_entries
                 if use_r2c and session_id:
                     stats = r2c_manager.get_session_stats(session_id)
                     final_payload["r2c_stats"] = stats

@@ -1,7 +1,14 @@
 // helpers.js
 import { clearMessages, getSourceUrls, logQuestion } from './api.js';
 import { handleChatResponse, handleImageResponse } from './handlers.js';
-import { clearCachedSources, getCurrentPageUrl, getCachedSourcesWithoutCurrentPage, getLastSearchQuery } from './sourcesCache.js';
+import {
+    clearCachedSources,
+    getCurrentPageUrl,
+    getCachedSourceEntries,
+    getCurrentPageEntry,
+    getLastSearchQuery,
+    mergeCachedMetadata,
+} from './sourcesCache.js';
 
 // Function to append chat elements
 function appendChatElement(parent, className, text) {
@@ -105,11 +112,12 @@ async function get_sources() {
     sourceContainer.innerHTML = '';
 
     const currentPageUrl = getCurrentPageUrl();
-    const otherSources = getCachedSourcesWithoutCurrentPage();
     const searchQuery = getLastSearchQuery();
+    const cachedOtherSources = getCachedSourceEntries(false);
+    const cachedCurrentSource = getCurrentPageEntry();
 
     console.log('[Sources Debug] Loading sources for query:', searchQuery);
-    console.log('[Sources Debug] Cached sources (excluding current page):', otherSources);
+    console.log('[Sources Debug] Cached sources (excluding current page):', cachedOtherSources);
 
     const neutralDomainParts = ['co', 'com', 'org', 'net', 'gov', 'edu'];
 
@@ -129,6 +137,28 @@ async function get_sources() {
         } catch (error) {
             return 'Source';
         }
+    };
+
+    const normalizeEntry = (entry) => {
+        if (!entry || !entry.url) {
+            return null;
+        }
+        const fallback = createFallbackMetadata(entry.url);
+        if (!fallback) {
+            return null;
+        }
+        const snippetSource = typeof entry.snippet === 'string' ? entry.snippet : fallback.snippet;
+        const normalizedSnippet = snippetSource ? snippetSource.replace(/\s+/g, ' ').trim() : '';
+
+        return {
+            ...fallback,
+            ...entry,
+            site_name: entry.site_name || fallback.site_name,
+            display_url: entry.display_url || fallback.display_url,
+            title: entry.title || fallback.title,
+            snippet: normalizedSnippet || fallback.snippet,
+            image: entry.image !== undefined ? entry.image : fallback.image,
+        };
     };
 
     const formatDisplayUrl = (url) => {
@@ -270,54 +300,41 @@ async function get_sources() {
         sourceContainer.appendChild(section);
     };
 
-    let currentMetadata = currentPageUrl ? createFallbackMetadata(currentPageUrl) : null;
-    let sourcesToRender = otherSources.map((url) => createFallbackMetadata(url)).filter(Boolean);
+    let currentMetadata = cachedCurrentSource
+        ? normalizeEntry(cachedCurrentSource)
+        : (currentPageUrl ? createFallbackMetadata(currentPageUrl) : null);
+    let sourcesToRender = cachedOtherSources.map((entry) => normalizeEntry(entry)).filter(Boolean);
 
     try {
         const response = await getSourceUrls(searchQuery || '', currentPageUrl);
         const payload = response?.resp || {};
-        const metadataMap = new Map();
 
-        if (Array.isArray(payload.sources)) {
-            payload.sources.forEach((entry) => {
-                if (entry && entry.url) {
-                    metadataMap.set(entry.url, entry);
-                }
-            });
-        }
+        const backendSourcesRaw = Array.isArray(payload.sources) ? payload.sources : [];
+        const backendCurrentRaw = payload.current_page && payload.current_page.url ? payload.current_page : null;
 
-        if (payload.current_page && payload.current_page.url) {
-            currentMetadata = payload.current_page;
-        } else if (currentPageUrl && metadataMap.has(currentPageUrl)) {
-            currentMetadata = metadataMap.get(currentPageUrl);
-        } else if (!currentPageUrl) {
+        mergeCachedMetadata([
+            ...backendSourcesRaw,
+            ...(backendCurrentRaw ? [backendCurrentRaw] : []),
+        ]);
+
+        if (backendCurrentRaw) {
+            currentMetadata = normalizeEntry(backendCurrentRaw);
+        } else if (currentPageUrl) {
+            const refreshedCurrent = getCurrentPageEntry();
+            if (refreshedCurrent) {
+                currentMetadata = normalizeEntry(refreshedCurrent);
+            }
+        } else {
             currentMetadata = null;
         }
 
-        const seen = new Set();
-        sourcesToRender = [];
+        const refreshedSources = getCachedSourceEntries(false).map((entry) => normalizeEntry(entry)).filter(Boolean);
+        const backendFallback = backendSourcesRaw.map((entry) => normalizeEntry(entry)).filter(Boolean);
 
-        if (otherSources.length > 0) {
-            otherSources.forEach((url) => {
-                if (!url || seen.has(url)) {
-                    return;
-                }
-                const metadata = metadataMap.get(url) || createFallbackMetadata(url);
-                if (metadata) {
-                    sourcesToRender.push(metadata);
-                    seen.add(url);
-                }
-            });
-        }
-
-        if (sourcesToRender.length === 0 && Array.isArray(payload.sources)) {
-            payload.sources.forEach((entry) => {
-                if (!entry || !entry.url || seen.has(entry.url)) {
-                    return;
-                }
-                sourcesToRender.push(entry);
-                seen.add(entry.url);
-            });
+        if (refreshedSources.length > 0) {
+            sourcesToRender = refreshedSources;
+        } else if (backendFallback.length > 0) {
+            sourcesToRender = backendFallback;
         }
     } catch (error) {
         console.error('Unable to load source previews:', error);

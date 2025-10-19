@@ -1,92 +1,206 @@
-// sourcesCache.js - Manages cached sources from Advanced Ask
+// sourcesCache.js - Manages cached sources from Research mode
 
 let cachedSources = [];
+let cachedMetadata = new Map();
 let lastSearchQuery = '';
 let currentPageUrl = '';
+
+const neutralDomainParts = ['co', 'com', 'org', 'net', 'gov', 'edu'];
+
+function toTitleCase(value) {
+    return value.replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function getSiteNameFromUrl(url) {
+    try {
+        const { hostname } = new URL(url);
+        const trimmed = hostname.replace(/^www\./i, '');
+        const parts = trimmed.split('.');
+        let candidate = parts.length >= 2 ? parts[parts.length - 2] : parts[0];
+        if (neutralDomainParts.includes(candidate) && parts.length >= 3) {
+            candidate = parts[parts.length - 3];
+        }
+        const cleaned = candidate.replace(/[-_]/g, ' ').trim();
+        return cleaned ? toTitleCase(cleaned) : trimmed || 'Source';
+    } catch (error) {
+        return 'Source';
+    }
+}
+
+function formatDisplayUrl(url) {
+    if (!url) {
+        return '';
+    }
+    try {
+        const parsed = new URL(url);
+        let display = `${parsed.hostname}${parsed.pathname || ''}`;
+        if (parsed.search) {
+            display += parsed.search;
+        }
+        display = display.replace(/^www\./i, '');
+        if (display.length > 80) {
+            display = `${display.slice(0, 77)}...`;
+        }
+        return display || url;
+    } catch (error) {
+        return url;
+    }
+}
+
+function createFallbackMetadata(url) {
+    if (!url) {
+        return null;
+    }
+    const displayUrl = formatDisplayUrl(url);
+    return {
+        url,
+        site_name: getSiteNameFromUrl(url),
+        display_url: displayUrl,
+        title: displayUrl,
+        snippet: '',
+        image: null,
+    };
+}
+
+function normalizeMetadata(url, raw = {}) {
+    if (!url) {
+        return null;
+    }
+    const fallback = createFallbackMetadata(url);
+    if (!fallback) {
+        return null;
+    }
+
+    return {
+        url,
+        site_name: raw.site_name || fallback.site_name,
+        display_url: raw.display_url || fallback.display_url,
+        title: raw.title || fallback.title,
+        snippet: raw.snippet !== undefined && raw.snippet !== null ? raw.snippet : fallback.snippet,
+        image: raw.image !== undefined ? raw.image : fallback.image,
+    };
+}
 
 // Initialize with current page URL
 function initializeWithCurrentPage(url) {
     currentPageUrl = url;
-    // Ensure current page is always in the cache
-    if (!cachedSources.includes(url)) {
-        cachedSources = [url, ...cachedSources];
+    cachedSources = url ? [url] : [];
+    const metadata = normalizeMetadata(url);
+    cachedMetadata.clear();
+    if (url && metadata) {
+        cachedMetadata.set(url, metadata);
     }
     console.log('Initialized with current page:', url);
 }
 
-// Store sources from Advanced Ask response
-function setCachedSources(urls, searchQuery = '') {
+// Store sources from Research response
+function setCachedSources(urls, searchQuery = '', metadataList = []) {
     console.log('[Sources Debug] setCachedSources called');
     console.log('[Sources Debug] Input URLs:', urls);
     console.log('[Sources Debug] Current page URL:', currentPageUrl);
 
-    const newUrls = urls || [];
+    const normalizedMetadata = new Map();
+    (metadataList || []).forEach((entry) => {
+        if (entry && entry.url) {
+            const normalized = normalizeMetadata(entry.url, entry);
+            if (normalized) {
+                normalizedMetadata.set(entry.url, normalized);
+            }
+        }
+    });
 
-    // Filter out current page URL from newUrls if it exists
-    const filteredUrls = newUrls.filter(url => url !== currentPageUrl);
+    const inputUrls = Array.isArray(urls) ? urls.filter(Boolean) : [];
+    const filteredUrls = inputUrls.filter((url) => url !== currentPageUrl);
+    const uniqueFilteredUrls = Array.from(new Set(filteredUrls));
 
-    // Always keep current page URL at the beginning
-    if (currentPageUrl) {
-        cachedSources = [currentPageUrl, ...filteredUrls];
-    } else {
-        cachedSources = filteredUrls;
-    }
+    cachedSources = currentPageUrl ? [currentPageUrl, ...uniqueFilteredUrls] : [...uniqueFilteredUrls];
     lastSearchQuery = searchQuery;
 
-    console.log('[Sources Debug] Final cached sources:', cachedSources);
-    console.log('[Sources Debug] Total cached:', cachedSources.length, 'URLs');
+    const allowedUrls = new Set(cachedSources);
+    Array.from(cachedMetadata.keys()).forEach((url) => {
+        if (!allowedUrls.has(url)) {
+            cachedMetadata.delete(url);
+        }
+    });
 
-    // Check for any DuckDuckGo URLs
+    cachedSources.forEach((url) => {
+        const incoming = normalizedMetadata.get(url) || cachedMetadata.get(url) || {};
+        const normalized = normalizeMetadata(url, incoming);
+        if (normalized) {
+            cachedMetadata.set(url, normalized);
+        }
+    });
+
     cachedSources.forEach((url, idx) => {
         if (url.includes('duckduckgo')) {
             console.warn(`[Sources Debug] WARNING: DuckDuckGo URL cached at index ${idx}: ${url}`);
         }
     });
+
+    console.log('[Sources Debug] Final cached sources:', cachedSources);
+    console.log('[Sources Debug] Total cached:', cachedSources.length, 'URLs');
 }
 
-// Get cached sources
-function getCachedSources() {
-    return cachedSources;
+function mergeCachedMetadata(metadataList = []) {
+    (metadataList || []).forEach((entry) => {
+        if (!entry || !entry.url) {
+            return;
+        }
+        if (!cachedSources.includes(entry.url)) {
+            return;
+        }
+        const normalized = normalizeMetadata(entry.url, entry);
+        if (normalized) {
+            cachedMetadata.set(entry.url, normalized);
+        }
+    });
 }
 
-// Check if we have cached sources
-function hasCachedSources() {
-    return cachedSources.length > 0;
+function getCachedSourceEntries(includeCurrentPage = false) {
+    return cachedSources
+        .filter((url) => includeCurrentPage || url !== currentPageUrl)
+        .map((url) => {
+            const metadata = cachedMetadata.get(url) || normalizeMetadata(url);
+            return metadata;
+        })
+        .filter(Boolean);
 }
 
-// Clear cached sources
+function getCurrentPageEntry() {
+    if (!currentPageUrl) {
+        return null;
+    }
+    return cachedMetadata.get(currentPageUrl) || normalizeMetadata(currentPageUrl);
+}
+
+// Clear cached sources but preserve current page metadata
 function clearCachedSources() {
-    // Keep current page URL when clearing
-    if (currentPageUrl) {
+    const currentMetadata = currentPageUrl ? getCurrentPageEntry() : null;
+    if (currentPageUrl && currentMetadata) {
         cachedSources = [currentPageUrl];
+        cachedMetadata = new Map([[currentPageUrl, currentMetadata]]);
     } else {
         cachedSources = [];
+        cachedMetadata.clear();
     }
     lastSearchQuery = '';
 }
 
-// Get last search query
 function getLastSearchQuery() {
     return lastSearchQuery;
 }
 
-// Get current page URL
 function getCurrentPageUrl() {
     return currentPageUrl;
-}
-
-// Get cached sources without current page URL
-function getCachedSourcesWithoutCurrentPage() {
-    return cachedSources.filter(url => url !== currentPageUrl);
 }
 
 export {
     initializeWithCurrentPage,
     setCachedSources,
-    getCachedSources,
-    hasCachedSources,
+    mergeCachedMetadata,
+    getCachedSourceEntries,
+    getCurrentPageEntry,
     clearCachedSources,
     getLastSearchQuery,
     getCurrentPageUrl,
-    getCachedSourcesWithoutCurrentPage
 };
