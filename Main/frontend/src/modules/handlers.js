@@ -1,5 +1,5 @@
 // handlers.js
-import { appendChatElement } from './helpers.js';
+import { appendChatElement, scrollChatToBottom } from './helpers.js';
 import { getChatResponse, getChatResponseStream } from './api.js';
 import { getSelectedModel, selectedModel } from './config.js';
 import { setCachedSources } from './sourcesCache.js';
@@ -134,7 +134,7 @@ function handleChatResponse(question, promptMode = false, useStreaming = true) {
     appendChatElement(responseContainer, 'your_question', question);
 
     // Scroll to show the new question immediately
-    responseContainer.scrollTop = responseContainer.scrollHeight;
+    scrollChatToBottom();
 
     // Placeholder "Loading..." text
     const loadingElement = appendChatElement(
@@ -172,7 +172,7 @@ function handleChatResponse(question, promptMode = false, useStreaming = true) {
                 } else {
                     loadingElement.innerText = `FinGPT: ${fullResponse}`;
                 }
-                responseContainer.scrollTop = responseContainer.scrollHeight;
+                scrollChatToBottom();
             },
             // onComplete callback - called when streaming is done
             (fullResponse, data) => {
@@ -222,7 +222,7 @@ function handleChatResponse(question, promptMode = false, useStreaming = true) {
 
                 // Clear the user textbox
                 document.getElementById('textbox').value = '';
-                responseContainer.scrollTop = responseContainer.scrollHeight;
+                scrollChatToBottom();
             },
             // onError callback
             (error) => {
@@ -285,7 +285,7 @@ function handleChatResponse(question, promptMode = false, useStreaming = true) {
 
                 // Clear the user textbox
                 document.getElementById('textbox').value = '';
-                responseContainer.scrollTop = responseContainer.scrollHeight;
+                scrollChatToBottom();
             })
             .catch(error => {
                 console.error('There was a problem with your fetch operation:', error);
@@ -304,7 +304,7 @@ function handleImageResponse(question, description) {
     responseDiv.innerText = description;
     responseContainer.appendChild(responseDiv);
 
-    responseContainer.scrollTop = responseContainer.scrollHeight;
+    scrollChatToBottom();
 }
 
 export { handleChatResponse, handleImageResponse };
