@@ -134,9 +134,9 @@
 }
 
 .light-mode .source-card-thumbnail--fallback {
-    background: linear-gradient(135deg, rgba(0, 150, 136, 0.2), rgba(0, 150, 136, 0.05));
-    color: #009688;
-    border-color: rgba(0, 150, 136, 0.35);
+    background-color: #225766;
+    color: #ffffff;
+    border-color: rgba(34, 87, 102, 0.35);
 }
 
 .light-mode .source-card-meta {
@@ -152,7 +152,7 @@
 }
 
 .light-mode .source-card-title {
-    color: #00897b;
+    color: #5B9BAD;
 }
 
 .light-mode .source-card-snippet {
