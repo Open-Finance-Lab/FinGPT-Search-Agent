@@ -182,7 +182,8 @@ async function get_sources() {
             display_url: entry.display_url || fallback.display_url,
             title: entry.title || fallback.title,
             snippet: normalizedSnippet || fallback.snippet,
-            icon: entry.icon !== undefined ? entry.icon : fallback.icon,
+            icon: null,
+            provisional: entry.provisional ?? fallback.provisional,
         };
     };
 
@@ -229,41 +230,17 @@ async function get_sources() {
             site_name: siteName,
             display_url: displayUrl,
             title,
-            snippet: null,
             icon: null,
+            provisional: false,
+            snippet: '',
         };
     };
 
     const buildThumbnail = (wrapper, metadata) => {
         const fallbackInitial = (metadata.site_name || metadata.display_url || '?').charAt(0).toUpperCase();
-
-        const applyFallback = () => {
-            wrapper.innerHTML = '';
-            wrapper.classList.add('source-card-thumbnail--fallback');
-            wrapper.textContent = fallbackInitial || '?';
-        };
-
-        const candidateSrc = metadata.icon;
-        if (!candidateSrc) {
-            applyFallback();
-            return;
-        }
-
-        const img = document.createElement('img');
-        img.alt = metadata.title || metadata.display_url || 'Source preview';
-        img.loading = 'lazy';
-        img.decoding = 'async';
-        img.referrerPolicy = 'no-referrer';
-        img.onerror = applyFallback;
-        img.onload = () => {
-            wrapper.classList.remove('source-card-thumbnail--fallback');
-            wrapper.innerHTML = '';
-            wrapper.appendChild(img);
-        };
-
-        // Show fallback character while the image loads
-        applyFallback();
-        img.src = candidateSrc;
+        wrapper.innerHTML = '';
+        wrapper.classList.add('source-card-thumbnail--fallback');
+        wrapper.textContent = fallbackInitial || '?';
     };
 
     const buildSourceCard = (metadata) => {
@@ -277,6 +254,9 @@ async function get_sources() {
         cardLink.href = safeMeta.url;
         cardLink.target = '_blank';
         cardLink.rel = 'noopener noreferrer';
+        if (safeMeta.provisional) {
+            cardLink.classList.add('source-card--provisional');
+        }
 
         const thumbnailWrapper = document.createElement('div');
         thumbnailWrapper.className = 'source-card-thumbnail';
@@ -312,14 +292,13 @@ async function get_sources() {
         titleLink.className = 'source-card-title';
         titleLink.innerText = safeMeta.title || siteName.innerText || displayUrl.innerText;
 
-        const snippet = document.createElement('p');
-        snippet.className = 'source-card-snippet';
-        const snippetSource = typeof safeMeta.snippet === 'string' ? safeMeta.snippet : '';
-        const snippetText = snippetSource.replace(/\s+/g, ' ').trim();
-        snippet.innerText = snippetText ? snippetText : 'Preview unavailable.';
-
         contentWrapper.appendChild(titleLink);
-        contentWrapper.appendChild(snippet);
+        if (safeMeta.provisional) {
+            const statusBadge = document.createElement('span');
+            statusBadge.className = 'source-card-status';
+            statusBadge.innerText = 'Preview';
+            contentWrapper.appendChild(statusBadge);
+        }
 
         cardLink.appendChild(headerWrapper);
         cardLink.appendChild(contentWrapper);

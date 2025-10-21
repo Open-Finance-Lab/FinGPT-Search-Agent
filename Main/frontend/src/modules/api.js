@@ -96,7 +96,13 @@ function getChatResponse(question, selectedModel, promptMode, useRAG, useMCP) {
 }
 
 // Function to get streaming chat response using EventSource
-function getChatResponseStream(question, selectedModel, promptMode, useRAG, useMCP, onChunk, onComplete, onError) {
+function getChatResponseStream(question, selectedModel, promptMode, useRAG, useMCP, callbacks = {}) {
+    const {
+        onChunk,
+        onSources,
+        onComplete,
+        onError
+    } = callbacks;
     const encodedQuestion = encodeURIComponent(question);
     const currentUrl = window.location.href;
     const encodedCurrentUrl = encodeURIComponent(currentUrl);
@@ -111,9 +117,15 @@ function getChatResponseStream(question, selectedModel, promptMode, useRAG, useM
         return getChatResponse(question, selectedModel, promptMode, useRAG, useMCP)
             .then(data => {
                 const modelResponse = data.reply;
-                onComplete(modelResponse, data);
+                if (typeof onComplete === 'function') {
+                    onComplete(modelResponse, data);
+                }
             })
-            .catch(onError);
+            .catch(error => {
+                if (typeof onError === 'function') {
+                    onError(error);
+                }
+            });
     }
 
     // Build SSE URL based on mode
@@ -175,14 +187,18 @@ function getChatResponseStream(question, selectedModel, promptMode, useRAG, useM
             const data = JSON.parse(event.data);
 
             if (data.error) {
-                onError(new Error(data.error));
+                if (typeof onError === 'function') {
+                    onError(new Error(data.error));
+                }
                 eventSource.close();
                 return;
             }
 
             if (data.content) {
                 fullResponse += data.content;
-                onChunk(data.content, fullResponse);
+                if (typeof onChunk === 'function') {
+                    onChunk(data.content, fullResponse);
+                }
             }
 
             // Handle source URLs for research mode
@@ -196,6 +212,12 @@ function getChatResponseStream(question, selectedModel, promptMode, useRAG, useM
             if (data.used_sources && Array.isArray(data.used_sources)) {
                 usedSources = data.used_sources;
                 console.log(`[Research Mode] Received ${usedSources.length} detailed sources`);
+            }
+
+            if (typeof onSources === 'function' && (Array.isArray(data.used_urls) || Array.isArray(data.used_sources))) {
+                const urlsForCallback = Array.isArray(data.used_urls) ? data.used_urls : usedUrls;
+                const sourcesForCallback = Array.isArray(data.used_sources) ? data.used_sources : usedSources;
+                onSources(urlsForCallback, sourcesForCallback);
             }
 
             if (data.done) {
@@ -214,7 +236,9 @@ function getChatResponseStream(question, selectedModel, promptMode, useRAG, useM
 
                 console.log('[Research Mode] Passing to onComplete with used_urls:', completionData.used_urls);
                 console.log('[Research Mode] Passing to onComplete with used_sources:', completionData.used_sources);
-                onComplete(fullResponse, completionData);
+                if (typeof onComplete === 'function') {
+                    onComplete(fullResponse, completionData);
+                }
             }
 
             // Handle R2C stats if present
@@ -236,15 +260,21 @@ function getChatResponseStream(question, selectedModel, promptMode, useRAG, useM
             if (connectionAttempts > maxReconnectAttempts) {
                 console.error('SSE max reconnection attempts reached');
                 eventSource.close();
-                onError(new Error('Connection failed after multiple attempts'));
+                if (typeof onError === 'function') {
+                    onError(new Error('Connection failed after multiple attempts'));
+                }
             }
         } else if (eventSource.readyState === EventSource.CLOSED) {
             console.error('SSE connection closed');
-            onError(new Error('Connection closed unexpectedly'));
+            if (typeof onError === 'function') {
+                onError(new Error('Connection closed unexpectedly'));
+            }
         } else {
             console.error('SSE error:', error);
             eventSource.close();
-            onError(error);
+            if (typeof onError === 'function') {
+                onError(error);
+            }
         }
     };
 
