@@ -722,6 +722,10 @@ def adv_response_stream(request):
                     asyncio.set_event_loop(loop)
                     stream_iter = stream_generator.__aiter__()
 
+                    latest_source_signature: list[tuple[str, str, bool]] = []
+                    latest_sources_payload: list[dict[str, Any]] = []
+                    source_entries: list[dict[str, Any]] = []
+
                     while True:
                         try:
                             text_chunk, entries = loop.run_until_complete(stream_iter.__anext__())
@@ -733,7 +737,28 @@ def adv_response_stream(request):
                             sse_data = f'data: {json.dumps({"content": text_chunk, "done": False})}\n\n'
                             yield sse_data.encode('utf-8')
                         if entries:
-                            source_entries = entries
+                            payload_snapshot = [dict(entry) for entry in entries if entry]
+                            source_entries = payload_snapshot
+                            signature = [
+                                (
+                                    entry.get("url"),
+                                    entry.get("title"),
+                                    bool(entry.get("provisional"))
+                                )
+                                for entry in payload_snapshot if entry.get("url")
+                            ]
+                            if signature != latest_source_signature:
+                                latest_source_signature = signature
+                                latest_sources_payload = payload_snapshot
+                                used_urls = [entry.get("url") for entry in payload_snapshot if entry.get("url")]
+                                update_payload = {
+                                    "content": "",
+                                    "done": False,
+                                    "used_urls": used_urls,
+                                    "used_sources": payload_snapshot
+                                }
+                                sse_data = f'data: {json.dumps(update_payload)}\n\n'
+                                yield sse_data.encode('utf-8')
 
                 finally:
                     if stream_iter and loop:
@@ -750,7 +775,7 @@ def adv_response_stream(request):
                         loop.close()
 
                 final_response = stream_state.get("final_output") or full_response
-                final_entries = stream_state.get("used_sources") or source_entries
+                final_entries = stream_state.get("used_sources") or source_entries or latest_sources_payload
                 final_urls = stream_state.get("used_urls") or [entry.get("url") for entry in (final_entries or []) if entry and entry.get("url")]
 
                 _add_response_to_context(session_id, final_response, use_r2c)
