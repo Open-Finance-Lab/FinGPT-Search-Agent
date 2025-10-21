@@ -43,6 +43,11 @@ DEFAULT_PROMPT = (
     "You are a helpful financial assistant. "
     "You have access to tools that can help you answer questions. "
     "ALWAYS use the available tools when they are relevant to the user's request. "
+    "\n\nMATH: Use $ for inline, $$ for display equations.\n"
+    "CORRECT: $$C = S_0 N(d_1) - K e^{-rT} N(d_2)$$\n"
+    "WRONG: [...] or plain text\n"
+    "CORRECT: where $S_0 = 100$\n"
+    "WRONG: where S0 = 100"
 )
 
 # Enhanced prompt when Playwright tools are enabled
@@ -55,7 +60,12 @@ PLAYWRIGHT_PROMPT = (
     "3. Use click_element and fill_form_field for interactive elements\n"
     "4. Use extract_links to find relevant pages to explore\n"
     "5. Use wait_for_element when pages have dynamic content\n"
-    "Use tools when they help answer the user's question. If you can answer from knowledge, do so."
+    "Use tools when they help answer the user's question. If you can answer from knowledge, do so. "
+    "\n\nMATH: Use $ for inline, $$ for display equations.\n"
+    "CORRECT: $$C = S_0 N(d_1) - K e^{-rT} N(d_2)$$\n"
+    "WRONG: [...] or plain text\n"
+    "CORRECT: where $S_0 = 100$\n"
+    "WRONG: where S0 = 100"
 )
 
 def create_domain_restricted_prompt(domain: str, current_url: str) -> str:
