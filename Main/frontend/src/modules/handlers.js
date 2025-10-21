@@ -438,6 +438,7 @@ function handleChatResponse(question, promptMode = false, useStreaming = true) {
               console.warn(
                 `[Sources Debug] WARNING: DuckDuckGo URL found at index ${idx}: ${url}`
               );
+            }
           });
 
           const metadata = Array.isArray(data.used_sources)
