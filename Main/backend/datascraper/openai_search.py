@@ -8,7 +8,8 @@ import os
 import re
 import logging
 import asyncio
-from typing import List, Dict, Optional, Any, Iterable, AsyncGenerator, Tuple
+import json
+from typing import List, Dict, Optional, Any, Iterable, AsyncGenerator, Tuple, Set
 from urllib.parse import urlparse
 from openai import OpenAI, AsyncOpenAI
 from dotenv import load_dotenv
@@ -138,7 +139,7 @@ def _normalize_citation_entry(entry: Dict[str, Any]) -> Dict[str, Any]:
         return {}
 
     normalized_title = entry.get('title') or _format_display_url(url)
-    snippet = entry.get('snippet') or ''
+    snippet = (entry.get('snippet') or '').strip()
 
     return {
         'url': url,
@@ -146,8 +147,183 @@ def _normalize_citation_entry(entry: Dict[str, Any]) -> Dict[str, Any]:
         'snippet': snippet,
         'site_name': entry.get('site_name') or _get_site_name(url),
         'display_url': entry.get('display_url') or _format_display_url(url),
-        'icon': None
+        'icon': None,
+        'provisional': bool(entry.get('provisional', False))
     }
+
+
+_TOOL_URL_PATTERN = re.compile(r'https?://[^\s<>"\'\]]+', re.IGNORECASE)
+_MAX_PROVISIONAL_SOURCES = 12
+
+
+def _safe_json_loads(value: str) -> Optional[Any]:
+    """
+    Attempt to parse a string as JSON. Returns None if parsing fails.
+    """
+    try:
+        return json.loads(value)
+    except Exception:
+        return None
+
+
+def _collect_sources_from_payload(payload: Any, visited_urls: Set[str], seen_nodes: Set[int]) -> List[Dict[str, Any]]:
+    """
+    Recursively walk payloads emitted by the Responses web_search tool and extract URL candidates.
+    """
+    if payload is None:
+        return []
+
+    node_id = id(payload)
+    if node_id in seen_nodes:
+        return []
+    seen_nodes.add(node_id)
+
+    results: List[Dict[str, Any]] = []
+    if isinstance(payload, str):
+        payload_str = payload.strip()
+        if payload_str.startswith("{") or payload_str.startswith("["):
+            parsed = _safe_json_loads(payload_str)
+            if parsed is not None:
+                results.extend(_collect_sources_from_payload(parsed, visited_urls, seen_nodes))
+        else:
+            for match in _TOOL_URL_PATTERN.findall(payload_str):
+                if len(visited_urls) >= _MAX_PROVISIONAL_SOURCES:
+                    break
+                if match in visited_urls:
+                    continue
+                provisional = _normalize_citation_entry({
+                    "url": match,
+                    "provisional": True
+                })
+                if provisional:
+                    visited_urls.add(match)
+                    results.append(provisional)
+        return results
+
+    if isinstance(payload, list):
+        for item in payload:
+            if len(visited_urls) >= _MAX_PROVISIONAL_SOURCES:
+                break
+            results.extend(_collect_sources_from_payload(item, visited_urls, seen_nodes))
+        return results
+
+    if isinstance(payload, dict):
+        url = payload.get("url") or payload.get("link") or payload.get("href")
+        if url and url not in visited_urls and len(visited_urls) < _MAX_PROVISIONAL_SOURCES:
+            entry = {
+                "url": url,
+                "title": payload.get("title") or payload.get("name") or payload.get("headline") or payload.get("page_title"),
+                "snippet": payload.get("snippet") or payload.get("description") or payload.get("summary") or payload.get("text") or "",
+                "site_name": payload.get("site_name") or payload.get("source") or payload.get("publisher"),
+                "display_url": payload.get("display_url") or payload.get("displayUrl") or payload.get("formattedUrl"),
+                "provisional": True
+            }
+            normalized = _normalize_citation_entry(entry)
+            if normalized:
+                visited_urls.add(url)
+                results.append(normalized)
+
+        candidate_keys = [
+            "results", "items", "value", "web_results", "web_pages", "documents",
+            "data", "webSearchResults", "entries"
+        ]
+        for key in candidate_keys:
+            if key in payload and len(visited_urls) < _MAX_PROVISIONAL_SOURCES:
+                results.extend(_collect_sources_from_payload(payload[key], visited_urls, seen_nodes))
+
+        for value in payload.values():
+            if len(visited_urls) >= _MAX_PROVISIONAL_SOURCES:
+                break
+            results.extend(_collect_sources_from_payload(value, visited_urls, seen_nodes))
+
+        return results
+
+    return results
+
+
+def _gather_text_fragments(payload: Any, seen_nodes: Set[int]) -> List[str]:
+    """
+    Recursively collect textual fragments from tool payloads for buffering.
+    """
+    if payload is None:
+        return []
+
+    node_id = id(payload)
+    if node_id in seen_nodes:
+        return []
+    seen_nodes.add(node_id)
+
+    fragments: List[str] = []
+    if isinstance(payload, str):
+        fragments.append(payload)
+        return fragments
+
+    if isinstance(payload, list):
+        for item in payload:
+            fragments.extend(_gather_text_fragments(item, seen_nodes))
+        return fragments
+
+    if isinstance(payload, dict):
+        for key in ("text", "output_text", "result", "delta"):
+            value = payload.get(key)
+            if isinstance(value, str):
+                fragments.append(value)
+        for value in payload.values():
+            fragments.extend(_gather_text_fragments(value, seen_nodes))
+        return fragments
+
+    return fragments
+
+
+def _extract_sources_from_tool_event(event_type: str, event: Any, buffers: Dict[str, List[str]]) -> List[Dict[str, Any]]:
+    """
+    Parse Responses tool output events to surface provisional sources before citations land.
+    """
+    if not event_type or "tool" not in event_type:
+        return []
+
+    tool_name = getattr(event, "tool_name", None) or getattr(event, "tool_type", None)
+    if not tool_name and "web_search" in event_type:
+        tool_name = "web_search"
+
+    if tool_name and "web_search" not in str(tool_name):
+        return []
+
+    tool_call_id = getattr(event, "tool_call_id", None) or getattr(event, "id", None) or getattr(event, "tool_call", None)
+    buffer_key = str(tool_call_id) if tool_call_id is not None else None
+
+    payloads: List[Any] = []
+    for attr in ("output_json", "output", "delta", "result", "content"):
+        if hasattr(event, attr):
+            value = getattr(event, attr)
+            if value not in (None, "", []):
+                payloads.append(value)
+
+    if event_type.endswith(".delta") and buffer_key:
+        fragment_nodes: Set[int] = set()
+        for payload in payloads:
+            fragments = _gather_text_fragments(payload, fragment_nodes)
+            if fragments:
+                buffers.setdefault(buffer_key, []).extend(fragments)
+        return []
+
+    if buffer_key and buffer_key in buffers:
+        buffered_text = "".join(buffers.pop(buffer_key))
+        if buffered_text:
+            payloads.append(buffered_text)
+
+    collected: List[Dict[str, Any]] = []
+    visited_urls: Set[str] = set()
+    seen_nodes: Set[int] = set()
+
+    for payload in payloads:
+        if len(visited_urls) >= _MAX_PROVISIONAL_SOURCES:
+            break
+        extracted = _collect_sources_from_payload(payload, visited_urls, seen_nodes)
+        if extracted:
+            collected.extend(extracted)
+
+    return collected
 
 
 def prepare_search_prompt(user_query: str, preferred_domains: List[str] = None) -> str:
@@ -259,6 +435,7 @@ async def create_responses_api_search_async(
             input=combined_input,
             tools=[{"type": "web_search"}],
             tool_choice="auto",
+            parallel_tool_calls=True,
             stream=stream
         )
 
@@ -314,37 +491,75 @@ async def create_responses_api_search_async(
 async def _stream_response_chunks(stream_response) -> AsyncGenerator[Tuple[str, List[Dict[str, Any]]], None]:
     """
     Async generator that yields text chunks from streaming Responses API.
-    Also collects source URLs and yields them at the end.
+    Also collects source URLs and yields them incrementally, falling back to a final
+    snapshot if no intermediate events triggered updates.
 
     Yields:
         Tuples of (chunk_text, source_entries)
-        During streaming: (chunk_text, [])
+        During streaming text: (chunk_text, [])
+        On source updates: ("", source_entries) with current ordering
         Final chunk: ("", source_entries)
     """
     full_response = ""
     final_response = None
     source_order: list[str] = []
     source_map: Dict[str, Dict[str, Any]] = {}
+    last_signature: Optional[List[Tuple[str, str, str, bool]]] = None
+    tool_output_buffers: Dict[str, List[str]] = {}
 
-    def upsert_citation(entry: Dict[str, Any]) -> None:
-        normalized = _normalize_citation_entry(entry)
+    def _current_snapshot(force: bool = False) -> Optional[List[Dict[str, Any]]]:
+        nonlocal last_signature
+        ordered = [source_map[url] for url in source_order if url in source_map]
+        signature = [
+            (
+                entry.get("url"),
+                entry.get("title"),
+                entry.get("snippet"),
+                bool(entry.get("provisional"))
+            )
+            for entry in ordered
+        ]
+        if force or signature != last_signature:
+            last_signature = signature
+            return [dict(entry) for entry in ordered]
+        return None
+
+    def upsert_citation(entry: Dict[str, Any], *, provisional: Optional[bool] = None) -> bool:
+        candidate = dict(entry)
+        if provisional is not None:
+            candidate["provisional"] = provisional
+
+        normalized = _normalize_citation_entry(candidate)
         url = normalized.get('url')
         if not url:
-            return
+            return False
+
         if url not in source_map:
             source_map[url] = normalized
             source_order.append(url)
-        else:
-            current = source_map[url]
-            for key, value in normalized.items():
-                if key == 'url':
-                    continue
-                if value and not current.get(key):
-                    current[key] = value
+            return True
+
+        changed = False
+        current = source_map[url]
+        for key, value in normalized.items():
+            if key == 'url':
+                continue
+            if key == 'provisional':
+                desired = bool(value)
+                existing = bool(current.get('provisional'))
+                if desired != existing:
+                    current['provisional'] = desired
+                    changed = True
+                continue
+            if value and value != current.get(key):
+                current[key] = value
+                changed = True
+        return changed
 
     try:
         async for event in stream_response:
-            event_type = getattr(event, "type", None)
+            event_type = getattr(event, "type", "") or ""
+            changed = False
 
             if event_type == "response.output_text.delta":
                 delta = getattr(event, "delta", "")
@@ -352,21 +567,27 @@ async def _stream_response_chunks(stream_response) -> AsyncGenerator[Tuple[str, 
                 if text:
                     full_response += text
                     yield (text, [])
-            elif event_type == "response.refusal.delta":
+                continue
+
+            if event_type == "response.refusal.delta":
                 delta = getattr(event, "delta", "")
                 text = getattr(delta, "text", "") if hasattr(delta, "text") else delta or ""
                 if text:
                     full_response += text
                     yield (text, [])
-            elif event_type in ("response.citation.delta", "response.citation.done"):
+                continue
+
+            if event_type in ("response.citation.delta", "response.citation.done"):
                 citation = getattr(event, "citation", None)
                 if citation:
                     entry = {
                         "url": getattr(citation, "url", None),
                         "title": getattr(citation, "title", None),
                         "snippet": getattr(citation, "snippet", None) or getattr(citation, "text", None),
+                        "site_name": getattr(citation, "site_name", None),
+                        "display_url": getattr(citation, "display_url", None),
                     }
-                    upsert_citation(entry)
+                    changed = upsert_citation(entry, provisional=False)
             elif event_type == "response.error":
                 error_obj = getattr(event, "error", None)
                 message = getattr(error_obj, "message", None) if error_obj else None
@@ -374,19 +595,19 @@ async def _stream_response_chunks(stream_response) -> AsyncGenerator[Tuple[str, 
             elif event_type == "response.completed":
                 final_response = getattr(event, "response", None)
             elif event_type == "response.output_text.done":
-                continue
+                pass
             else:
-                if event_type and event_type.startswith("response.tool"):
-                    output = getattr(event, "output", None)
-                    if isinstance(output, str) and output:
-                        logger.debug(f"Tool output during streaming: {output[:200]}")
-                    elif isinstance(output, list):
-                        for entry in output:
-                            if isinstance(entry, dict):
-                                text = entry.get("output_text") or entry.get("result") or ""
-                                if text:
-                                    logger.debug(f"Tool output during streaming: {text[:200]}")
-                continue
+                if event_type.startswith("response.tool"):
+                    provisional_sources = _extract_sources_from_tool_event(event_type, event, tool_output_buffers)
+                    for provisional_entry in provisional_sources:
+                        changed = upsert_citation(provisional_entry, provisional=True) or changed
+                else:
+                    continue
+
+            if changed:
+                snapshot = _current_snapshot()
+                if snapshot:
+                    yield ("", snapshot)
 
         if not final_response:
             get_final = getattr(stream_response, "get_final_response", None)
@@ -398,19 +619,37 @@ async def _stream_response_chunks(stream_response) -> AsyncGenerator[Tuple[str, 
                 except Exception as final_err:
                     logger.debug(f"Unable to fetch final streamed response: {final_err}")
 
+        if tool_output_buffers:
+            visited_flush: Set[str] = set()
+            flushed = False
+            for fragments in list(tool_output_buffers.values()):
+                buffered_text = "".join(fragments)
+                if not buffered_text:
+                    continue
+                extracted = _collect_sources_from_payload(buffered_text, visited_flush, set())
+                for entry in extracted:
+                    flushed = upsert_citation(entry, provisional=True) or flushed
+            tool_output_buffers.clear()
+            if flushed:
+                snapshot = _current_snapshot()
+                if snapshot:
+                    yield ("", snapshot)
+
         if final_response:
             try:
                 citations = extract_citations_from_response(final_response)
                 for citation in citations:
                     if citation.get('type') != 'url_citation':
                         continue
-                    upsert_citation(citation)
+                    changed = upsert_citation(citation, provisional=False) or changed
             except Exception as citation_err:
                 logger.warning(f"Failed to extract citations from final response: {citation_err}")
 
-        ordered_sources = [source_map[url] for url in source_order if url in source_map]
-        logger.info(f"Streaming completed with {len(ordered_sources)} source URLs")
-        yield ("", ordered_sources)
+        snapshot = _current_snapshot(force=True)
+        if snapshot is None:
+            snapshot = []
+        logger.info(f"Streaming completed with {len(snapshot)} source URLs")
+        yield ("", snapshot)
 
     except Exception as e:
         logger.error(f"Error in streaming response: {e}")
@@ -500,7 +739,8 @@ def format_sources_for_frontend(
             "site_name": raw_entry.get("site_name") or _get_site_name(url),
             "display_url": raw_entry.get("display_url") or _format_display_url(url),
             "snippet": raw_entry.get("snippet") or "",
-            "icon": None  # No icon fetching for performance
+            "icon": None,  # No icon fetching for performance
+            "provisional": bool(raw_entry.get("provisional", False))
         }
 
         if current_url and url == current_url:
@@ -516,7 +756,8 @@ def format_sources_for_frontend(
             "site_name": _get_site_name(current_url),
             "display_url": _format_display_url(current_url),
             "snippet": "",
-            "icon": None
+            "icon": None,
+            "provisional": False
         }
 
     return {
