@@ -229,7 +229,6 @@ async function get_sources() {
             site_name: siteName,
             display_url: displayUrl,
             title,
-            snippet: null,
             icon: null,
         };
     };
@@ -312,14 +311,7 @@ async function get_sources() {
         titleLink.className = 'source-card-title';
         titleLink.innerText = safeMeta.title || siteName.innerText || displayUrl.innerText;
 
-        const snippet = document.createElement('p');
-        snippet.className = 'source-card-snippet';
-        const snippetSource = typeof safeMeta.snippet === 'string' ? safeMeta.snippet : '';
-        const snippetText = snippetSource.replace(/\s+/g, ' ').trim();
-        snippet.innerText = snippetText ? snippetText : 'Preview unavailable.';
-
         contentWrapper.appendChild(titleLink);
-        contentWrapper.appendChild(snippet);
 
         cardLink.appendChild(headerWrapper);
         cardLink.appendChild(contentWrapper);
