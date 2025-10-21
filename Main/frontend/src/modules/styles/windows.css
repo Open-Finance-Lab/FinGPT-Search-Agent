@@ -273,12 +273,30 @@
     border: 1px solid rgba(34, 87, 102, 0.4);
 }
 
+.source-card--provisional {
+    border-style: dashed;
+    border-color: rgba(94, 170, 196, 0.6);
+    opacity: 0.9;
+}
+
 .source-card-content {
     display: flex;
     flex-direction: column;
     gap: 6px;
     flex: 1;
     width: 100%;
+}
+
+.source-card-status {
+    font-size: 11px;
+    font-weight: 600;
+    color: #9ec5d5;
+    background: rgba(94, 170, 196, 0.18);
+    border-radius: 6px;
+    padding: 2px 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    align-self: flex-start;
 }
 
 .source-card-meta {

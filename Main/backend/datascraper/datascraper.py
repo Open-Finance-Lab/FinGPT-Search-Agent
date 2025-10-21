@@ -500,8 +500,14 @@ def _update_used_sources(source_entries: list[dict[str, Any]]) -> None:
     Synchronize module-level caches for used sources.
     """
     global used_source_details, used_urls_ordered
+    # defensive copy so downstream mutations do not leak into cache state
+    sanitized_entries: list[dict[str, Any]] = []
+    for entry in source_entries or []:
+        if not entry:
+            continue
+        sanitized_entries.append(dict(entry))
 
-    used_source_details = source_entries or []
+    used_source_details = sanitized_entries
     used_urls_ordered = [entry.get("url") for entry in used_source_details if entry.get("url")]
 
     used_urls.clear()
@@ -667,7 +673,7 @@ def create_advanced_response_streaming(
                 if text_chunk:
                     aggregated_chunks.append(text_chunk)
                 if source_entries:
-                    latest_entries = source_entries
+                    latest_entries = [dict(entry) for entry in source_entries]
                 yield text_chunk, source_entries
         except Exception as stream_error:
             logging.error(f"[ADVANCED STREAM] Error during streaming: {stream_error}")
