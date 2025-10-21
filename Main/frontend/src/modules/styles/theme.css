@@ -139,6 +139,11 @@
     border-color: rgba(34, 87, 102, 0.35);
 }
 
+.light-mode .source-card--provisional {
+    border-color: rgba(34, 87, 102, 0.45);
+    opacity: 0.95;
+}
+
 .light-mode .source-card-meta {
     color: #4f5b6b;
 }
@@ -157,6 +162,11 @@
 
 .light-mode .source-card-snippet {
     color: #333;
+}
+
+.light-mode .source-card-status {
+    color: #194965;
+    background: rgba(34, 87, 102, 0.22);
 }
 
 /* Source sections in light mode */
