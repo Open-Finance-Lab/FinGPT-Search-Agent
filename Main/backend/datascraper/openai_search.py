@@ -528,7 +528,19 @@ async def create_responses_api_search_async(
             "Instructions: You are a helpful assistant with access to web search. "
             "Always search for current information when answering questions. "
             "Cite your sources inline and provide comprehensive, accurate answers. "
-            "Focus on factual information from reputable sources."
+            "Focus on factual information from reputable sources. "
+            "\n\nIMPORTANT - Mathematical Formatting:\n"
+            "Use LaTeX with $ for inline math and $$ for display equations.\n\n"
+            "Display equations - use $$...$$:\n"
+            "$$C = S_0 N(d_1) - K e^{-rT} N(d_2)$$\n"
+            "$$d_1 = \\frac{\\ln(S_0/K) + (r + \\sigma^2/2)T}{\\sigma\\sqrt{T}}$$\n\n"
+            "Inline math - use $...$:\n"
+            "where $S_0 = 262.76$, $K = 270$, $r = 0.05$, $\\sigma = 0.2974$\n\n"
+            "Do NOT use:\n"
+            "- Square brackets [...] for equations\n"
+            "- Plain text like S0 = 100 or d1 ≈ -0.0976\n"
+            "- Parentheses (S_0) for inline variables\n"
+            "- Unicode symbols like ≈ or · outside of $ delimiters"
         )
 
         # Add timezone and time information if available
