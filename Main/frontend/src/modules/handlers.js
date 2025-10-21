@@ -15,67 +15,44 @@ function renderMarkdown(text) {
   });
 }
 
-function autoFixMathDelimiters(text) {
-  text = text.replace(/\[([^\]]+?\\[a-z]+[^\]]*?)\]/g, (match, content) => {
-    if (
-      content.includes('\\frac') ||
-      content.includes('\\sqrt') ||
-      content.includes('\\ln') ||
-      content.includes('\\approx') ||
-      content.includes('\\sigma') ||
-      content.includes('begin{aligned}')
-    ) {
-      return `$$${content}$$`;
-    }
-    return match;
-  });
-
-  text = text.replace(/;-;/g, ' - ');
-
-  text = text.replace(
-    /\(\\[a-z]+(?:{[^}]*})?\)/g,
-    (match) => '$' + match.slice(1, -1) + '$'
-  );
-  text = text.replace(/\(([a-z])_\{?([0-9]+)\}?\)/g, '$$$1_{$2}$$');
-  text = text.replace(/\(−([a-z])_\{?([0-9]+)\}?\)/g, '$$-$1_{$2}$$');
-
-  text = text.replace(/([A-Z])\s*d_\{?(\d)\}?(?![a-zA-Z])/g, '$$$1(d_{$2})$$');
-  text = text.replace(/([A-Z])\s*\(−d_\{?(\d)\}?\)/g, '$$$1(-d_{$2})$$');
-  text = text.replace(/([A-Z])\s*\(-d_\{?(\d)\}?\)/g, '$$$1(-d_{$2})$$');
-
-  text = text.replace(/([A-Z])\(([^)]+)\)/g, (match, letter, content) => {
-    if (
-      content.includes('d_') ||
-      content.includes('−d') ||
-      content.includes('-d')
-    ) {
-      return `$${letter}(${content})$`;
-    }
-    return match;
-  });
-
-  return text;
-}
-
 function renderMarkdownWithMath(element, text) {
-  const fixedText = autoFixMathDelimiters(text);
-
   const mathBlocks = [];
 
-  let processedText = fixedText.replace(/\$\$([\s\S]+?)\$\$/g, (match) => {
+  // Extract all math blocks to protect them from markdown processing
+  // Order matters: extract display math before inline math to avoid conflicts
+
+  // Extract \[ ... \] (LaTeX display math)
+  let processedText = text.replace(/\\\[([\s\S]+?)\\\]/g, (match) => {
     const index = mathBlocks.length;
     mathBlocks.push(match);
     return `XMATHXBLOCKX${index}XENDX`;
   });
 
+  // Extract $$ ... $$ (display math)
+  processedText = processedText.replace(/\$\$([\s\S]+?)\$\$/g, (match) => {
+    const index = mathBlocks.length;
+    mathBlocks.push(match);
+    return `XMATHXBLOCKX${index}XENDX`;
+  });
+
+  // Extract \( ... \) (LaTeX inline math)
+  processedText = processedText.replace(/\\\(([\s\S]+?)\\\)/g, (match) => {
+    const index = mathBlocks.length;
+    mathBlocks.push(match);
+    return `XMATHXBLOCKX${index}XENDX`;
+  });
+
+  // Extract $ ... $ (inline math)
   processedText = processedText.replace(/\$([^\$\n]+?)\$/g, (match) => {
     const index = mathBlocks.length;
     mathBlocks.push(match);
     return `XMATHXBLOCKX${index}XENDX`;
   });
 
+  // Render markdown
   let html = renderMarkdown(processedText);
 
+  // Restore all math blocks
   mathBlocks.forEach((block, index) => {
     const escapedPlaceholder = `XMATHXBLOCKX${index}XENDX`;
     html = html.replace(new RegExp(escapedPlaceholder, 'g'), block);
@@ -89,6 +66,7 @@ function renderMarkdownWithMath(element, text) {
     link.setAttribute('rel', 'noopener noreferrer');
   });
 
+  // Let KaTeX handle all the math rendering
   renderMathInElement(element, {
     delimiters: [
       { left: '$$', right: '$$', display: true },
