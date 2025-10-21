@@ -60,8 +60,9 @@ function createFallbackMetadata(url) {
         site_name: getSiteNameFromUrl(url),
         display_url: displayUrl,
         title: displayUrl,
-        snippet: '',
         icon: null,
+        provisional: false,
+        snippet: '',
     };
 }
 
@@ -74,14 +75,20 @@ function normalizeMetadata(url, raw = {}) {
         return null;
     }
 
-    return {
+    const snippetSource = typeof raw.snippet === 'string' ? raw.snippet : fallback.snippet;
+    const normalizedSnippet = snippetSource ? snippetSource.replace(/\s+/g, ' ').trim() : '';
+
+    const normalized = {
         url,
         site_name: raw.site_name || fallback.site_name,
         display_url: raw.display_url || fallback.display_url,
         title: raw.title || fallback.title,
-        snippet: raw.snippet !== undefined && raw.snippet !== null ? raw.snippet : fallback.snippet,
-        icon: raw.icon !== undefined ? raw.icon : fallback.icon,
+        icon: null,
+        provisional: raw.provisional ?? fallback.provisional,
+        snippet: normalizedSnippet,
     };
+
+    return normalized;
 }
 
 // Initialize with current page URL
