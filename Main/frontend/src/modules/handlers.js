@@ -1,4 +1,6 @@
 // handlers.js
+import { marked } from 'marked';
+import renderMathInElement from 'katex/dist/contrib/auto-render';
 import { appendChatElement, scrollChatToBottom } from './helpers.js';
 import { getChatResponse, getChatResponseStream } from './api.js';
 import { getSelectedModel, selectedModel } from './config.js';
@@ -125,6 +127,68 @@ function createRatingElement() {
     return ratingContainer;
 }
 
+// Apply Markdown and LaTeX rendering to an existing message bubble
+function renderFormattedResponse(targetElement, rawText) {
+    if (!targetElement) {
+        return;
+    }
+
+    const formattedText = formatMathExpressions(rawText);
+    const markdownHtml = marked.parse(formattedText, {
+        gfm: true,
+        breaks: true,
+        mangle: false,
+        headerIds: false,
+    });
+
+    targetElement.innerHTML = markdownHtml;
+
+    renderMathInElement(targetElement, {
+        delimiters: [
+            { left: '$$', right: '$$', display: true },
+            { left: '$', right: '$', display: false },
+            { left: '\\(', right: '\\)', display: false },
+            { left: '\\[', right: '\\]', display: true },
+        ],
+        output: 'html',
+        throwOnError: false,
+        errorColor: '#cc0000',
+        macros: {
+            '\\Δ': '\\Delta',
+            '\\σ': '\\sigma',
+            '\\ν': '\\nu',
+            '\\ρ': '\\rho',
+            '\\Γ': '\\Gamma',
+            '\\Θ': '\\theta',
+        },
+        trust: true,
+        strict: false,
+    });
+}
+
+// Lightly adapted from popup.js to wrap math expressions with delimiters
+function formatMathExpressions(text) {
+    if (!text) {
+        return text;
+    }
+
+    let processed = text.replace(/(?<!\$)([^\s$])([^$\n]+?)(?<!\$)([^\s$])/g, (match, p1, p2, p3) => {
+        if (/[∂σ²∆ΓΘνρ√]|\b[dN]_[12]\b|\bln\b|\be\^/.test(match)) {
+            return `${p1}$${p2}${p3}$`;
+        }
+        return match;
+    });
+
+    processed = processed.replace(/^\s*([^$\n]+?)\s*$/gm, (match) => {
+        if (/[∂σ²∆ΓΘνρ√=−].*[∂σ²∆ΓΘνρ√=−]/.test(match) && !/\$\$.*\$\$/.test(match)) {
+            return `$$${match}$$`;
+        }
+        return match;
+    });
+
+    return processed;
+}
+
 // Function to handle chat responses (single model)
 function handleChatResponse(question, promptMode = false, useStreaming = true) {
     const startTime = performance.now();
@@ -193,6 +257,7 @@ function handleChatResponse(question, promptMode = false, useStreaming = true) {
 
                     const responseText = `FinGPT: ${fullResponse}`;
                     loadingElement.innerText = responseText;
+                    renderFormattedResponse(loadingElement, responseText);
 
                     // Create action row containing both action buttons and rating
                     const actionRow = document.createElement('div');
@@ -243,6 +308,7 @@ function handleChatResponse(question, promptMode = false, useStreaming = true) {
                 }
 
                 loadingElement.innerText = responseText;
+                renderFormattedResponse(loadingElement, responseText);
 
                 // Create action row containing both action buttons and rating
                 const actionRow = document.createElement('div');
