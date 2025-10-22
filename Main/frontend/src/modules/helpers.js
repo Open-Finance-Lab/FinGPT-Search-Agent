@@ -10,26 +10,98 @@ import {
     mergeCachedMetadata,
 } from './sourcesCache.js';
 
+// Autoscroll state - enabled by default
+let autoScrollEnabled = true;
+let scrollListenersInitialized = false;
+
+const SCROLL_BOTTOM_THRESHOLD = 50;
+
+function getScrollElements() {
+    const scrollContainer = document.getElementById('content');
+    const responseContainer = document.getElementById('respons');
+    return {
+        scrollContainer,
+        responseContainer,
+        targets: [scrollContainer, responseContainer].filter(Boolean),
+    };
+}
+
+function isElementNearBottom(element, threshold = SCROLL_BOTTOM_THRESHOLD) {
+    if (!element) {
+        return true;
+    }
+
+    const distanceFromBottom = element.scrollHeight - element.scrollTop - element.clientHeight;
+    return distanceFromBottom <= threshold;
+}
+
+// Initialize scroll event listeners to detect user scrolling
+function initScrollListeners() {
+    if (scrollListenersInitialized) {
+        return;
+    }
+
+    const { targets } = getScrollElements();
+    if (targets.length === 0) {
+        return;
+    }
+
+    targets.forEach((element) => {
+        // Detect wheel events (user scrolling with mouse wheel)
+        element.addEventListener('wheel', () => {
+            autoScrollEnabled = false;
+        }, { passive: true });
+
+        // Disable autoscroll when user manually scrolls away from the bottom.
+        // Re-enable when they return to the bottom.
+        element.addEventListener('scroll', () => {
+            const isAtBottom = isElementNearBottom(element);
+
+            if (autoScrollEnabled) {
+                if (!isAtBottom) {
+                    autoScrollEnabled = false;
+                }
+                return;
+            }
+
+            if (isAtBottom) {
+                autoScrollEnabled = true;
+            }
+        }, { passive: true });
+    });
+
+    scrollListenersInitialized = true;
+}
+
 // Function to append chat elements
 function appendChatElement(parent, className, text) {
     const element = document.createElement('span');
     element.className = className;
     element.innerText = text;
     parent.appendChild(element);
+
     scrollChatToBottom();
     return element;
 }
 
 // Ensure the chat history stays pinned to the most recent message
 function scrollChatToBottom() {
-    const scrollContainer = document.getElementById('content');
-    const responseContainer = document.getElementById('respons');
-    if (!scrollContainer && !responseContainer) {
+    // Initialize listeners on first call
+    if (!scrollListenersInitialized) {
+        initScrollListeners();
+    }
+
+    // Only autoscroll if enabled
+    if (!autoScrollEnabled) {
+        return;
+    }
+
+    const { scrollContainer, responseContainer, targets } = getScrollElements();
+    if (targets.length === 0) {
         return;
     }
 
     requestAnimationFrame(() => {
-        const targets = [scrollContainer, responseContainer].filter(Boolean);
         targets.forEach((element) => {
             if (typeof element.scrollTo === 'function') {
                 element.scrollTo({ top: element.scrollHeight, behavior: 'auto' });
