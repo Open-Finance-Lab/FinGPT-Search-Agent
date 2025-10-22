@@ -76,6 +76,8 @@ Main/backend/data/preferred_links.json
 
 # claude code local settings
 .claude/settings.local.json
+CLAUDE.md
+AGENTS.md
 
 # uv
 mcp-server/uv.lock
@@ -88,3 +90,5 @@ mcp-server/uv.lock
 /Main/backend/django_config/__pycache__
 /Main/backend/mcp_client/__pycache__
 /Main/backend/api/__pycache__
+
+Main/backend/scripts/buffet_agent_test.py

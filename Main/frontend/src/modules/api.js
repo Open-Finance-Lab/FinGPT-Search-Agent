@@ -38,9 +38,24 @@ function postWebTextToServer(textContent, currentUrl) {
         });
 }
 
+// Function to get user's timezone and current time
+function getUserTimeInfo() {
+    return {
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        currentTime: new Date().toISOString()
+    };
+}
+
 // Function to get chat response from server (now supports MCP mode)
 function getChatResponse(question, selectedModel, promptMode, useRAG, useMCP) {
     const encodedQuestion = encodeURIComponent(question);
+    const currentUrl = window.location.href;
+    const encodedCurrentUrl = encodeURIComponent(currentUrl);
+
+    // Get user's timezone and time
+    const timeInfo = getUserTimeInfo();
+    const encodedTimezone = encodeURIComponent(timeInfo.timezone);
+    const encodedCurrentTime = encodeURIComponent(timeInfo.currentTime);
 
     let endpoint;
     if (useMCP) {
@@ -55,7 +70,10 @@ function getChatResponse(question, selectedModel, promptMode, useRAG, useMCP) {
         `&is_advanced=${promptMode}` +
         `&use_rag=${useRAG}` +
         `&use_r2c=true` +
-        `&session_id=${currentSessionId}`;
+        `&session_id=${currentSessionId}` +
+        `&current_url=${encodedCurrentUrl}` +
+        `&user_timezone=${encodedTimezone}` +
+        `&user_time=${encodedCurrentTime}`;
 
     // Add preferred links if in advanced mode
     if (promptMode) {
@@ -78,36 +96,83 @@ function getChatResponse(question, selectedModel, promptMode, useRAG, useMCP) {
 }
 
 // Function to get streaming chat response using EventSource
-function getChatResponseStream(question, selectedModel, promptMode, useRAG, useMCP, onChunk, onComplete, onError) {
+function getChatResponseStream(question, selectedModel, promptMode, useRAG, useMCP, callbacks = {}) {
+    const {
+        onChunk,
+        onSources,
+        onComplete,
+        onError
+    } = callbacks;
     const encodedQuestion = encodeURIComponent(question);
+    const currentUrl = window.location.href;
+    const encodedCurrentUrl = encodeURIComponent(currentUrl);
 
-    // For now, streaming is only supported for non-MCP, non-advanced mode
-    if (useMCP || promptMode) {
-        // Fallback to regular response for unsupported modes
+    // Get user's timezone and time
+    const timeInfo = getUserTimeInfo();
+    const encodedTimezone = encodeURIComponent(timeInfo.timezone);
+    const encodedCurrentTime = encodeURIComponent(timeInfo.currentTime);
+
+    // MCP mode doesn't support streaming yet
+    if (useMCP) {
         return getChatResponse(question, selectedModel, promptMode, useRAG, useMCP)
             .then(data => {
-                const modelResponse = useMCP ? data.reply : data.resp[selectedModel];
-                onComplete(modelResponse, data);
+                const modelResponse = data.reply;
+                if (typeof onComplete === 'function') {
+                    onComplete(modelResponse, data);
+                }
             })
-            .catch(onError);
+            .catch(error => {
+                if (typeof onError === 'function') {
+                    onError(error);
+                }
+            });
     }
 
-    // Build SSE URL
-    const url = `http://127.0.0.1:8000/get_chat_response_stream/?question=${encodedQuestion}` +
-        `&models=${selectedModel}` +
-        `&use_rag=${useRAG}` +
-        `&use_r2c=true` +
-        `&session_id=${currentSessionId}`;
+    // Build SSE URL based on mode
+    let url;
+    if (promptMode) {
+        // Research mode streaming endpoint
+        url = `http://127.0.0.1:8000/get_adv_response_stream/?question=${encodedQuestion}` +
+            `&models=${selectedModel}` +
+            `&use_rag=${useRAG}` +
+            `&use_r2c=true` +
+            `&session_id=${currentSessionId}` +
+            `&current_url=${encodedCurrentUrl}` +
+            `&user_timezone=${encodedTimezone}` +
+            `&user_time=${encodedCurrentTime}`;
+
+        // Add preferred links for research mode
+        try {
+            const preferredLinks = JSON.parse(localStorage.getItem('preferredLinks') || '[]');
+            if (preferredLinks.length > 0) {
+                url += `&preferred_links=${encodeURIComponent(JSON.stringify(preferredLinks))}`;
+            }
+        } catch (e) {
+            console.error('Error getting preferred links:', e);
+        }
+    } else {
+        // Thinking mode streaming endpoint
+        url = `http://127.0.0.1:8000/get_chat_response_stream/?question=${encodedQuestion}` +
+            `&models=${selectedModel}` +
+            `&use_rag=${useRAG}` +
+            `&use_r2c=true` +
+            `&session_id=${currentSessionId}` +
+            `&current_url=${encodedCurrentUrl}` +
+            `&user_timezone=${encodedTimezone}` +
+            `&user_time=${encodedCurrentTime}`;
+    }
 
     // Create EventSource for SSE with credentials support
     const eventSource = new EventSource(url, { withCredentials: true });
     let fullResponse = '';
     let connectionAttempts = 0;
     const maxReconnectAttempts = 3;
+    let usedUrls = [];  // Store source URLs for research mode
+    let usedSources = [];  // Store detailed source metadata
 
     // Handle connection event
     eventSource.addEventListener('connected', (event) => {
-        console.log('SSE connection established');
+        console.log(`SSE connection established for ${promptMode ? 'research' : 'thinking'} mode`);
         connectionAttempts = 0; // Reset on successful connection
     });
 
@@ -122,19 +187,58 @@ function getChatResponseStream(question, selectedModel, promptMode, useRAG, useM
             const data = JSON.parse(event.data);
 
             if (data.error) {
-                onError(new Error(data.error));
+                if (typeof onError === 'function') {
+                    onError(new Error(data.error));
+                }
                 eventSource.close();
                 return;
             }
 
             if (data.content) {
                 fullResponse += data.content;
-                onChunk(data.content, fullResponse);
+                if (typeof onChunk === 'function') {
+                    onChunk(data.content, fullResponse);
+                }
+            }
+
+            // Handle source URLs for research mode
+            if (data.used_urls && Array.isArray(data.used_urls)) {
+                usedUrls = data.used_urls;
+                console.log(`[Research Mode] Received ${usedUrls.length} source URLs`);
+                console.log('[Research Mode] URLs received:', data.used_urls);
+            }
+
+            // Handle detailed source metadata for research mode
+            if (data.used_sources && Array.isArray(data.used_sources)) {
+                usedSources = data.used_sources;
+                console.log(`[Research Mode] Received ${usedSources.length} detailed sources`);
+            }
+
+            if (typeof onSources === 'function' && (Array.isArray(data.used_urls) || Array.isArray(data.used_sources))) {
+                const urlsForCallback = Array.isArray(data.used_urls) ? data.used_urls : usedUrls;
+                const sourcesForCallback = Array.isArray(data.used_sources) ? data.used_sources : usedSources;
+                onSources(urlsForCallback, sourcesForCallback);
             }
 
             if (data.done) {
                 eventSource.close();
-                onComplete(fullResponse, data);
+                // Debug: Log what we're about to pass to completion
+                console.log('[Research Mode] Stream done. Final usedUrls:', usedUrls);
+                console.log('[Research Mode] data.used_urls:', data.used_urls);
+                console.log('[Research Mode] Final usedSources:', usedSources);
+
+                // Ensure completion callback receives latest source list and metadata
+                const completionData = {
+                    ...data,
+                    used_urls: Array.isArray(data.used_urls) ? data.used_urls : usedUrls,
+                    used_sources: Array.isArray(data.used_sources) ? data.used_sources : usedSources
+                };
+
+                console.log('[Research Mode] Passing to onComplete with used_urls:', completionData.used_urls);
+                console.log('[Research Mode] Passing to onComplete with used_sources:', completionData.used_sources);
+                if (typeof onComplete === 'function') {
+                    onComplete(fullResponse, completionData);
+                }
             }
 
             // Handle R2C stats if present
@@ -156,15 +260,21 @@ function getChatResponseStream(question, selectedModel, promptMode, useRAG, useM
             if (connectionAttempts > maxReconnectAttempts) {
                 console.error('SSE max reconnection attempts reached');
                 eventSource.close();
-                onError(new Error('Connection failed after multiple attempts'));
+                if (typeof onError === 'function') {
+                    onError(new Error('Connection failed after multiple attempts'));
+                }
             }
         } else if (eventSource.readyState === EventSource.CLOSED) {
             console.error('SSE connection closed');
-            onError(new Error('Connection closed unexpectedly'));
+            if (typeof onError === 'function') {
+                onError(new Error('Connection closed unexpectedly'));
+            }
         } else {
             console.error('SSE error:', error);
             eventSource.close();
-            onError(error);
+            if (typeof onError === 'function') {
+                onError(error);
+            }
         }
     };
 
@@ -193,8 +303,21 @@ function clearMessages() {
 }
 
 // Function to get sources
-function getSourceUrls(searchQuery) {
-    return fetch(`http://127.0.0.1:8000/get_source_urls/?query=${String(searchQuery)}`, { method: "GET", credentials: "include" })
+function getSourceUrls(searchQuery, currentUrl) {
+    const params = new URLSearchParams();
+    if (searchQuery) {
+        params.append('query', searchQuery);
+    }
+    if (currentUrl) {
+        params.append('current_url', currentUrl);
+    }
+
+    const queryString = params.toString();
+    const endpoint = queryString
+        ? `http://127.0.0.1:8000/get_source_urls/?${queryString}`
+        : 'http://127.0.0.1:8000/get_source_urls/';
+
+    return fetch(endpoint, { method: "GET", credentials: "include" })
         .then(response => response.json())
         .catch(error => {
             console.error('There was a problem with your fetch operation:', error);
