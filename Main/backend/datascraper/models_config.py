@@ -5,7 +5,7 @@ Central configuration for all supported LLM models.
 
 MODELS_CONFIG = {
     # OpenAI Models
-    "o4-mini": {
+    "FinGPT-Light": {
         "provider": "openai",
         "model_name": "gpt-4o-mini",
         "supports_rag": True,
@@ -40,15 +40,6 @@ MODELS_CONFIG = {
         "supports_advanced": True,
         "max_tokens": 128000,
         "description": "The FinGPT model"
-    },
-    "FinGPT-Light": {
-        "provider": "openai",
-        "model_name": "gpt-5-nano",
-        "supports_rag": True,
-        "supports_mcp": True,
-        "supports_advanced": True,
-        "max_tokens": 400000,
-        "description": "A much faster smaller FinGPT model"
     },
     "Buffet-Agent": {
         "provider": "buffet",
