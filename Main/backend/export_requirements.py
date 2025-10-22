@@ -58,8 +58,8 @@ def main():
             if 'pywin32' in line.lower():
                 continue
             # Replace Django version for Mac/Linux
-            if line.startswith('django==5.1.11'):
-                line = 'Django==4.2.23\n'
+            if line.lower().startswith('django=='):
+                line = 'Django==5.2.6\n'
             filtered_lines.append(line)
         
         # Write filtered requirements

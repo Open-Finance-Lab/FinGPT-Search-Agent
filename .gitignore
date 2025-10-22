@@ -1,7 +1,7 @@
 # environment variables
-chat_interface/backend_modules/.env
-# older ver has env in here
 Main/backend/.env
+# older ver has env in here
+chat_interface/backend_modules/.env
 
 # google cookie
 Main/backend/.google-cookie
@@ -69,19 +69,26 @@ Main/backend/api/questionLog.csv
 Main/backend/django_debug.log
 
 # user preferred links
-Main/backend/preferred_urls.txt
+Main/backend/data/preferred_links.json
 
 # mcp
 /mcp-server/.venv
 
 # claude code local settings
 .claude/settings.local.json
+CLAUDE.md
+AGENTS.md
 
 # uv
 mcp-server/uv.lock
+
+# frontend reference screenshots
+/Main/frontend/reference_screenshots
 
 # additional cache directories
 /Main/backend/datascraper/__pycache__
 /Main/backend/django_config/__pycache__
 /Main/backend/mcp_client/__pycache__
 /Main/backend/api/__pycache__
+
+Main/backend/scripts/buffet_agent_test.py

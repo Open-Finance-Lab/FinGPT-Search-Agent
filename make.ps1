@@ -29,13 +29,57 @@ function Show-Help {
     Write-Host ""
 }
 
+function Ensure-Venv {
+    param(
+        [switch]$Quiet
+    )
+
+    $venvPath = Join-Path -Path $PSScriptRoot -ChildPath 'FinGPTenv'
+    $activateScript = Join-Path -Path $venvPath -ChildPath 'Scripts\Activate.ps1'
+
+    if ($env:VIRTUAL_ENV) {
+        if (-not $Quiet) {
+            Write-Host "Using active virtual environment: $env:VIRTUAL_ENV" -ForegroundColor Green
+        }
+        return $env:VIRTUAL_ENV
+    }
+
+    if (-not (Test-Path $venvPath)) {
+        if (-not $Quiet) {
+            Write-Host "🐍 Creating Python virtual environment (FinGPTenv)..." -ForegroundColor Green
+        }
+        python -m venv $venvPath
+        if ($LASTEXITCODE -ne 0) {
+            throw "Failed to create virtual environment at $venvPath"
+        }
+    }
+
+    if (-not (Test-Path $activateScript)) {
+        throw "Activation script not found at $activateScript"
+    }
+
+    if (-not $Quiet) {
+        Write-Host "🐍 Activating FinGPTenv..." -ForegroundColor Green
+    }
+
+    . $activateScript
+
+    if (-not $Quiet) {
+        Write-Host "OK: Virtual environment active" -ForegroundColor Green
+    }
+
+    return $venvPath
+}
+
 function Install-All {
     Write-Host "🚀 Installing all dependencies..." -ForegroundColor Green
+    Ensure-Venv
     python scripts/install_all.py
 }
 
 function Install-Backend {
     Write-Host "🐍 Installing backend dependencies..." -ForegroundColor Green
+    Ensure-Venv
     Push-Location Main\backend
     poetry install
     poetry run export-requirements
@@ -58,6 +102,7 @@ function Build-Frontend {
 
 function Start-Dev {
     Write-Host "🚀 Starting development servers..." -ForegroundColor Green
+    Ensure-Venv
     python scripts/dev_setup.py
 }
 
@@ -82,6 +127,7 @@ function Clean-Build {
 function Update-Dependencies {
     Write-Host "📦 Updating all dependencies..." -ForegroundColor Green
     
+    Ensure-Venv
     Push-Location Main\backend
     poetry update
     poetry run export-requirements
@@ -94,6 +140,7 @@ function Update-Dependencies {
 
 function Export-Requirements {
     Write-Host "📋 Exporting requirements files..." -ForegroundColor Green
+    Ensure-Venv
     Push-Location Main\backend
     poetry run export-requirements
     Pop-Location
@@ -102,6 +149,7 @@ function Export-Requirements {
 function Run-Tests {
     Write-Host "🧪 Running tests..." -ForegroundColor Green
     
+    Ensure-Venv
     Push-Location Main\backend
     python manage.py test
     Pop-Location
@@ -113,8 +161,9 @@ function Run-Tests {
 
 function Setup-Venv {
     Write-Host "🐍 Setting up virtual environment..." -ForegroundColor Green
-    python -m venv FinGPTenv
-    Write-Host "✅ Virtual environment created. Activate with: FinGPTenv\Scripts\activate" -ForegroundColor Green
+    Ensure-Venv
+    Write-Host "Virtual environment is active in this PowerShell session." -ForegroundColor Green
+    Write-Host "Activate again later with: FinGPTenv\Scripts\Activate.ps1"
 }
 
 function Quick-Start {
@@ -122,7 +171,8 @@ function Quick-Start {
     Setup-Venv
     Write-Host ""
     Write-Host "Next steps:" -ForegroundColor Yellow
-    Write-Host "1. Activate your virtual environment: FinGPTenv\Scripts\activate"
+    Write-Host "1. Keep this PowerShell window open (FinGPTenv is active)."
+    Write-Host "   Need a new shell? Activate with: FinGPTenv\Scripts\Activate.ps1"
     Write-Host "2. Run: .\make.ps1 install"
     Write-Host "3. Add your API key to Main\backend\.env"
     Write-Host "4. Run: .\make.ps1 dev"

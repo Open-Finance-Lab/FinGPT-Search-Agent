@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "fingpt-backend"
-version = "0.5.1"
+version = "0.7.0"
 description = "FinGPT Backend - Financial GPT Assistant"
 authors = ["FinGPT Team"]
 package-mode = false
@@ -11,32 +11,39 @@ beautifulsoup4 = "4.12.3"
 django-request = "1.6.3"
 google = "3.0.0"
 markdown = "3.7"
-numpy = "*"
-openai = "*"
-openai-agents = "*"
+numpy = "^2.2.0"
+openai = "^1.86.0"
+openai-agents = "^0.0.17"
+anthropic = "^0.67.0"
+tiktoken = "^0.11.0"
 requests = "2.32.3"
 python-dotenv = "^1.0.1"
 bs4 = "^0.0.2"
-faiss-cpu = "*"
-django-cors-headers = "*"
-pytest = "*"
-flask = "*"
-mcp = {extras = ["cli"], version = "*"}
-fastmcp = "*"
-django-mcp = "*"
+faiss-cpu = "^1.11.0"
+django-cors-headers = "^4.7.0"
+django-ratelimit = "^4.1.0"
+pytest = "^8.4.0"
+flask = "^3.1.0"
+mcp = {extras = ["cli"], version = "^1.9.0"}
+fastmcp = "^2.8.0"
+django-mcp = "^0.3.0"
+gunicorn = "^21.2.0"
+whitenoise = "^6.6.0"
+playwright = "^1.48.0"
 
 # Platform-specific Django versions
 Django = [
-    {version = "5.1.11", markers = "sys_platform == 'win32'"},
-    {version = "4.2.23", markers = "sys_platform == 'darwin'"},
-    {version = "4.2.23", markers = "sys_platform == 'linux'"}
+    {version = "5.2.6", markers = "sys_platform == 'win32'"},
+    {version = "5.2.6", markers = "sys_platform == 'darwin'"},
+    {version = "5.2.6", markers = "sys_platform == 'linux'"},
+    {version = "5.2.6", markers = "sys_platform != 'win32' and sys_platform != 'darwin' and sys_platform != 'linux'"}
 ]
 
 # Mac-specific dependency
-mammoth = {version = "*", markers = "sys_platform == 'darwin'"}
+mammoth = {version = "^1.9.0", markers = "sys_platform == 'darwin'"}
 
 [tool.poetry.group.docs.dependencies]
-sphinx = "*"
+sphinx = "^8.0.0"
 sphinx-rtd-theme = "3.0.2"
 nbsphinx = "0.9.6"
 nbsphinx-link = "1.3.1"

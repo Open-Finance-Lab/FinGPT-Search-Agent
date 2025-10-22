@@ -4,10 +4,11 @@ import { createPopup } from './components/popup.js';
 import { createHeader } from './components/header.js';
 import { createChatInterface } from './components/chat.js';
 import { createSettingsWindow } from './components/settings_window.js';
+import { createLinkManager } from './components/link_manager.js';
 
 // Function to create UI elements
 function createUI() {
-    let isFixedMode = false;
+    let isFixedMode = true;
     let searchQuery = '';
 
     const isFixedModeRef = { value: isFixedMode }; // Pass-by-reference workaround
@@ -21,7 +22,7 @@ function createUI() {
     settingsIcon.className = "icon";
 
     const positionModeIcon = document.createElement('span');
-    positionModeIcon.innerText = "📌";
+    positionModeIcon.innerText = "⛓️‍💥";
     positionModeIcon.id = "position-mode-icon";
     positionModeIcon.className = "icon";
 
@@ -35,12 +36,21 @@ function createUI() {
             popup.style.position = "absolute";
             popup.style.top = `${rect.top + window.scrollY}px`;
             popup.style.left = `${rect.left + window.scrollX}px`;
+            popup.style.right = "auto"; // Clear right positioning when switching to absolute
             positionModeIcon.innerText = "📌";
 
             const settingsIconRect = settingsIcon.getBoundingClientRect();
             settings_window.style.position = "absolute";
             settings_window.style.top = `${settingsIconRect.bottom + window.scrollY}px`;
-            settings_window.style.left = `${settingsIconRect.left + window.scrollX}px`;
+            settings_window.style.left = `${settingsIconRect.left + window.scrollX - 100}px`;
+
+            // Update sources window position mode
+            const sources_window = document.getElementById('sources_window');
+            if (sources_window) {
+                sources_window.style.position = "absolute";
+                sources_window.style.top = `${rect.top + window.scrollY}px`;
+                sources_window.style.left = `${rect.left - 370 + window.scrollX}px`; // Keep on left (360px width + 10px gap)
+            }
         } else {
             popup.style.position = "fixed";
             popup.style.top = `${rect.top}px`;
@@ -50,7 +60,15 @@ function createUI() {
             const settingsIconRect = settingsIcon.getBoundingClientRect();
             settings_window.style.position = "fixed";
             settings_window.style.top = `${settingsIconRect.bottom}px`;
-            settings_window.style.left = `${settingsIconRect.left}px`;
+            settings_window.style.left = `${settingsIconRect.left - 100}px`;
+
+            // Update sources window position mode
+            const sources_window = document.getElementById('sources_window');
+            if (sources_window) {
+                sources_window.style.position = "fixed";
+                sources_window.style.top = `${rect.top}px`;
+                sources_window.style.left = `${rect.left - 370}px`; // Keep on left (360px width + 10px gap)
+            }
         }
         isFixedModeRef.value = !isFixedModeRef.value;
     };
@@ -108,7 +126,7 @@ function createUI() {
     loadingSpinner.className = "spinner";
     loadingSpinner.style.display = 'none';
 
-    const source_urls = document.createElement('ul');
+    const source_urls = document.createElement('div');
     source_urls.id = "source_urls";
 
     sources_window.appendChild(sourcesHeader);
@@ -128,9 +146,11 @@ function createUI() {
     document.body.appendChild(popup);
 
     // Position + interaction
-    popup.style.position = "absolute";
-    popup.style.top = "10%";
-    popup.style.left = "10%";
+    popup.style.position = "fixed";
+    popup.style.top = "15%";
+    // Position dynamically from the right edge
+    popup.style.right = "2%";
+    popup.style.left = "auto";
     popup.style.width = '450px';
     popup.style.height = '650px';
 
@@ -138,7 +158,10 @@ function createUI() {
     makeDraggableAndResizable(popup, sourceWindowOffsetX, isFixedModeRef.value);
 
     const popupRect = popup.getBoundingClientRect();
-    sources_window.style.left = `${popupRect.right + sourceWindowOffsetX}px`;
+    // Position sources window to the left of the main popup
+    // Ensure sources window doesn't go off-screen
+    const sourcesLeft = Math.max(0, popupRect.left - 370); // 360px width + 10px offset
+    sources_window.style.left = `${sourcesLeft}px`;
     sources_window.style.top = `${popupRect.top}px`;
 
     console.log("initalized");

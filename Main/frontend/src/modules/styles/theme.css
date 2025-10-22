@@ -21,7 +21,6 @@
 }
 
 .light-mode #draggableElement,
-.light-mode #additionalPopup,
 .light-mode #sources_window {
     background-color: #ddd;
     color: black;
@@ -34,22 +33,10 @@
 }
 
 .light-mode #header,
-.light-mode #additionalHeader,
 .light-mode #sources_window_header {
     background-color: #ddd;
 }
 
-.light-mode .mode-button {
-    background-color: #eee;
-    color: black;
-}
-
-.light-mode .active-mode {
-    background-color: #1abc9c;
-    color: white;
-}
-
-.light-mode #buttonContainer button,
 .light-mode .clear-button,
 .light-mode .sources-button,
 .light-mode .rag-button {
@@ -57,18 +44,18 @@
     color: black;
 }
 
-.light-mode #buttonContainer button:hover,
 .light-mode .clear-button:hover,
 .light-mode .sources-button:hover,
 .light-mode .rag-button:hover {
     background-color: #ddd;
 }
 
-.light-mode #respons .your_question,
-.light-mode #respons .agent_response,
-.light-mode #additionalPopup #respons .your_question,
-.light-mode #additionalPopup #respons .agent_response {
+.light-mode #respons .your_question {
     background-color: #eee;
+    color: black;
+}
+
+.light-mode #respons .agent_response {
     color: black;
 }
 
@@ -131,15 +118,69 @@
     color: black;
 }
 
-.light-mode #source_urls li {
-    background-color: #f0f0f0;
-    color: black;
+.light-mode .source-card {
+    background-color: #f3f3f3;
+    color: #111;
+    border-color: #d0d0d0;
 }
 
-.light-mode #source_urls li a {
-    color: black;
+.light-mode .source-card:hover {
+    background-color: #e4e4e4;
 }
 
-.light-mode #source_urls li a:hover {
-    text-decoration: underline;
+.light-mode .source-card-thumbnail {
+    background-color: #ffffff;
+    border-color: #d0d0d0;
+}
+
+.light-mode .source-card-thumbnail--fallback {
+    background-color: #225766;
+    color: #ffffff;
+    border-color: rgba(34, 87, 102, 0.35);
+}
+
+.light-mode .source-card--provisional {
+    border-color: rgba(34, 87, 102, 0.45);
+    opacity: 0.95;
+}
+
+.light-mode .source-card-meta {
+    color: #4f5b6b;
+}
+
+.light-mode .source-card-site {
+    color: #111;
+}
+
+.light-mode .source-card-url {
+    color: #0b6ad0;
+}
+
+.light-mode .source-card-title {
+    color: #5B9BAD;
+}
+
+.light-mode .source-card-snippet {
+    color: #333;
+}
+
+.light-mode .source-card-status {
+    color: #194965;
+    background: rgba(34, 87, 102, 0.22);
+}
+
+/* Source sections in light mode */
+.light-mode .source-section-header {
+    color: #1a1a1a;
+    border-bottom-color: #ccc;
+}
+
+.light-mode .empty-sources {
+    background-color: #e8e8e8;
+    color: #666;
+}
+
+/* Mode selector in light mode */
+.light-mode .mode-label {
+    color: black;
 }
