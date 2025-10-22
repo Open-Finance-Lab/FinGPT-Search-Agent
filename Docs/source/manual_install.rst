@@ -1,6 +1,3 @@
-Manual Backend Setup
-====================
-
 The backend is designed to run via Docker:
 
 .. code-block:: bash
