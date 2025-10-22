@@ -22,6 +22,7 @@ import csv
 import asyncio
 import logging
 import re
+from typing import Any
 from datetime import datetime
 from pathlib import Path
 from django.views.decorators.csrf import csrf_exempt
@@ -134,25 +135,36 @@ def _get_session_id(request):
         # logging.info(f"[R2C DEBUG] Using existing Django session: {request.session.session_key}")
     return request.session.session_key
 
-def _prepare_context_messages(request, question, use_r2c=True):
+def _prepare_context_messages(request, question, use_r2c=True, current_url=None):
     """
     Prepare context messages using R2C or legacy system.
-    
+
     Args:
         request: Django request object
         question: User's question to add
         use_r2c: Whether to use R2C context management
-        
+        current_url: Current webpage URL (optional)
+
     Returns:
         tuple: (legacy_messages, session_id)
     """
     session_id = _get_session_id(request) if use_r2c else None
-    
+
     if use_r2c and session_id:
+        # Update current webpage if URL provided
+        if current_url:
+            r2c_manager.update_current_webpage(session_id, current_url)
+
+        # Update user's timezone and time if provided
+        user_timezone = request.GET.get('user_timezone')
+        user_time = request.GET.get('user_time')
+        if user_timezone or user_time:
+            r2c_manager.update_user_time_info(session_id, user_timezone, user_time)
+
         r2c_manager.add_message(session_id, "user", question)
 
         context_messages = r2c_manager.get_context(session_id)
-        
+
         # R2C already includes system prompt and handles compression
         # Just use the context messages directly
         legacy_messages = context_messages
@@ -174,19 +186,19 @@ def _add_response_to_context(session_id, response, use_r2c=True):
 def _prepare_response_with_stats(responses, session_id, use_r2c=True, single_response_mode=False):
     """
     Prepare JSON response with optional R2C stats.
-    
+
     Args:
         responses: Dictionary of model responses or single response string
         session_id: Session ID for R2C
         use_r2c: Whether R2C is enabled
         single_response_mode: Whether to use 'reply' field for single response
-        
+
     Returns:
         JsonResponse object
     """
     if use_r2c and session_id:
         stats = r2c_manager.get_session_stats(session_id)
-        
+
         if single_response_mode and isinstance(responses, dict) and len(responses) == 1:
             # Single model - return as 'reply' for MCP frontend compatibility
             single_response = next(iter(responses.values()))
@@ -305,14 +317,17 @@ def add_webtext(request):
 
 @ratelimit(key='ip', rate=lambda g, r: settings.API_RATE_LIMIT, method='POST')
 def chat_response(request):
-    """Process chat response from selected models"""
+    """
+    Normal Mode: Help user understand the CURRENT website using Playwright navigation.
+    Agent stays within the current domain and navigates to find information.
+    """
     question = request.GET.get('question', '')
     selected_models = request.GET.get('models', '')
     use_rag = request.GET.get('use_rag', 'false').lower() == 'true'
     current_url = request.GET.get('current_url', '')
-    use_r2c = request.GET.get('use_r2c', 'true').lower() == 'true'  # Default to using R2C
-
-    # logging.info(f"[R2C DEBUG] chat_response - Question: '{question[:50]}...', Models: {selected_models}, use_r2c: {use_r2c}")
+    use_r2c = request.GET.get('use_r2c', 'true').lower() == 'true'
+    user_timezone = request.GET.get('user_timezone')
+    user_time = request.GET.get('user_time')
 
     # Validate and parse models
     if not selected_models:
@@ -322,16 +337,22 @@ def chat_response(request):
     if not models:
         return JsonResponse({'error': 'No valid models specified'}, status=400)
 
+    # Extract domain from current_url for domain-restricted navigation
+    from urllib.parse import urlparse
+    restricted_domain = None
+    if current_url:
+        try:
+            parsed = urlparse(current_url)
+            restricted_domain = parsed.netloc or None
+            if restricted_domain:
+                logging.info(f"[NORMAL MODE] Domain restriction: {restricted_domain}")
+        except Exception as e:
+            logging.warning(f"Failed to parse current_url: {e}")
+
     responses = {}
 
     # Prepare context messages using R2C or legacy system
-    legacy_messages, session_id = _prepare_context_messages(request, question, use_r2c)
-    # logging.info(f"[R2C DEBUG] Prepared {len(legacy_messages)} messages for session {session_id}")
-
-    # Log message contents for debugging
-    # for i, msg in enumerate(legacy_messages[:3]):  # Log first 3 messages
-    #     content_preview = msg.get('content', '')[:100]
-    #     logging.info(f"[R2C DEBUG] Message {i}: role={msg.get('role')}, content_preview='{content_preview}...'")
+    legacy_messages, session_id = _prepare_context_messages(request, question, use_r2c, current_url)
 
     for model in models:
         try:
@@ -339,31 +360,46 @@ def chat_response(request):
                 # Use the RAG pipeline
                 response = ds.create_rag_response(question, legacy_messages, model)
             else:
-                # Use regular response
-                response = ds.create_response(question, legacy_messages, model)
-            
+                # Normal mode always uses agent with Playwright (domain-restricted)
+                response = ds.create_agent_response(
+                    question,
+                    legacy_messages,
+                    model,
+                    use_playwright=True,
+                    restricted_domain=restricted_domain,
+                    current_url=current_url,
+                    user_timezone=user_timezone,
+                    user_time=user_time
+                )
+                logging.info(f"[NORMAL MODE] Using Playwright within {restricted_domain or 'any domain'}")
+
             responses[model] = response
-            
+
             # Add assistant response to R2C manager
             _add_response_to_context(session_id, response, use_r2c)
-                
+
         except Exception as e:
             logging.error(f"Error processing model {model}: {e}")
             responses[model] = f"Error: {str(e)}"
 
     first_model_response = next(iter(responses.values())) if responses else "No response"
-    _log_interaction("chat", current_url, question, first_model_response)
+    _log_interaction("normal_mode", current_url, question, first_model_response)
 
     return _prepare_response_with_stats(responses, session_id, use_r2c)
 
 @ratelimit(key='ip', rate=lambda g, r: settings.API_RATE_LIMIT, method='GET')
 def chat_response_stream(request):
-    """Process streaming chat response from selected models using SSE"""
+    """
+    Normal Mode Streaming: Help user understand the CURRENT website using Playwright navigation.
+    Agent stays within the current domain and navigates to find information.
+    """
     question = request.GET.get('question', '')
     selected_models = request.GET.get('models', '')
     use_rag = request.GET.get('use_rag', 'false').lower() == 'true'
     current_url = request.GET.get('current_url', '')
     use_r2c = request.GET.get('use_r2c', 'true').lower() == 'true'
+    user_timezone = request.GET.get('user_timezone')
+    user_time = request.GET.get('user_time')
 
     # Validate and parse models
     if not selected_models:
@@ -375,8 +411,20 @@ def chat_response_stream(request):
 
     model = models[0]
 
+    # Extract domain from current_url for domain-restricted navigation
+    from urllib.parse import urlparse
+    restricted_domain = None
+    if current_url:
+        try:
+            parsed = urlparse(current_url)
+            restricted_domain = parsed.netloc or None
+            if restricted_domain:
+                logging.info(f"[NORMAL MODE STREAM] Domain restriction: {restricted_domain}")
+        except Exception as e:
+            logging.warning(f"Failed to parse current_url: {e}")
+
     # Prepare context messages using R2C
-    legacy_messages, session_id = _prepare_context_messages(request, question, use_r2c)
+    legacy_messages, session_id = _prepare_context_messages(request, question, use_r2c, current_url)
 
     def event_stream():
         """Generator function for SSE streaming"""
@@ -389,37 +437,83 @@ def chat_response_stream(request):
                 response = ds.create_rag_response(question, legacy_messages, model)
                 sse_data = f'data: {json.dumps({"content": response, "done": True})}\n\n'
                 yield sse_data.encode('utf-8')
+                full_response = response
             else:
-                # Stream response from model
+                # Normal mode always uses agent with Playwright (domain-restricted)
+                logging.info(f"[NORMAL MODE STREAM] Using Playwright within {restricted_domain or 'any domain'}")
+
                 full_response = ""
-                for chunk in ds.create_response(question, legacy_messages, model, stream=True):
-                    full_response += chunk
-                    # Send each chunk as SSE event (encoded as bytes)
-                    sse_data = f'data: {json.dumps({"content": chunk, "done": False})}\n\n'
-                    yield sse_data.encode('utf-8')
+                stream_generator = None
+                stream_state = {"final_output": ""}
+                loop = None
+                stream_iter = None
+
+                try:
+                    stream_generator, stream_state = ds.create_agent_response_stream(
+                        question,
+                        legacy_messages,
+                        model,
+                        use_playwright=True,
+                        restricted_domain=restricted_domain,
+                        current_url=current_url,
+                        user_timezone=user_timezone,
+                        user_time=user_time
+                    )
+
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    stream_iter = stream_generator.__aiter__()
+
+                    while True:
+                        try:
+                            chunk = loop.run_until_complete(stream_iter.__anext__())
+                        except StopAsyncIteration:
+                            break
+
+                        if chunk:
+                            full_response += chunk
+                            sse_payload = {"content": chunk, "done": False}
+                            sse_data = f"data: {json.dumps(sse_payload)}\n\n"
+                            yield sse_data.encode('utf-8')
+
+                finally:
+                    if stream_iter and loop:
+                        try:
+                            loop.run_until_complete(stream_iter.aclose())
+                        except Exception:
+                            pass
+                    if loop:
+                        try:
+                            loop.run_until_complete(loop.shutdown_asyncgens())
+                        except Exception:
+                            pass
+                        asyncio.set_event_loop(None)
+                        loop.close()
+
+                final_response = stream_state.get("final_output") or full_response
+                full_response = final_response
 
                 # Send completion event
                 sse_data = f'data: {json.dumps({"content": "", "done": True})}\n\n'
                 yield sse_data.encode('utf-8')
 
-                # Add complete response to context after streaming
-                _add_response_to_context(session_id, full_response, use_r2c)
+            _add_response_to_context(session_id, full_response, use_r2c)
 
-                # Log interaction
-                _log_interaction("chat_stream", current_url, question, full_response)
+            _log_interaction("normal_mode_stream", current_url, question, full_response)
 
-                # Send R2C stats if enabled
-                if use_r2c and session_id:
-                    stats = r2c_manager.get_session_stats(session_id)
-                    sse_data = f'data: {json.dumps({"r2c_stats": stats})}\n\n'
-                    yield sse_data.encode('utf-8')
+            # Send R2C stats if enabled
+            if use_r2c and session_id:
+                stats = r2c_manager.get_session_stats(session_id)
+                sse_data = f'data: {json.dumps({"r2c_stats": stats})}\n\n'
+                yield sse_data.encode('utf-8')
 
         except Exception as e:
             logging.error(f"Error in streaming response: {e}")
+            import traceback
+            traceback.print_exc()
             sse_data = f'data: {json.dumps({"error": str(e), "done": True})}\n\n'
             yield sse_data.encode('utf-8')
 
-    # Return streaming response with proper SSE headers
     response = StreamingHttpResponse(
         event_stream(),
         content_type='text/event-stream'
@@ -430,67 +524,150 @@ def chat_response_stream(request):
 
 @csrf_exempt
 @ratelimit(key='ip', rate=lambda g, r: settings.API_RATE_LIMIT, method='POST')
-def mcp_chat_response(request):
-    """Process chat response via MCP-enabled Agent"""
+def agent_chat_response(request):
+    """Process chat response via Agent with optional tools (Playwright, etc.)"""
     question = request.GET.get('question', '')
     selected_models = request.GET.get('models', '')
     current_url = request.GET.get('current_url', '')
     use_r2c = request.GET.get('use_r2c', 'true').lower() == 'true'
-    
+    use_playwright = request.GET.get('use_playwright', 'false').lower() == 'true'
+    user_timezone = request.GET.get('user_timezone')
+    user_time = request.GET.get('user_time')
+
     # Validate and parse models
     if not selected_models:
         return JsonResponse({'error': 'No models specified'}, status=400)
-    
+
     models = [model.strip() for model in selected_models.split(',') if model.strip()]
     if not models:
         return JsonResponse({'error': 'No valid models specified'}, status=400)
 
     responses = {}
-    
+
     # Prepare context messages using R2C or legacy system
-    legacy_messages, session_id = _prepare_context_messages(request, question, use_r2c)
+    legacy_messages, session_id = _prepare_context_messages(request, question, use_r2c, current_url)
 
     for model in models:
         try:
-            # Always use the MCP Agent path
-            response = ds.create_mcp_response(
+            # Use the Agent path with tools
+            response = ds.create_agent_response(
                 question,
                 legacy_messages,
-                model
+                model,
+                use_playwright=use_playwright,
+                user_timezone=user_timezone,
+                user_time=user_time
             )
-            # logging.info(f"[MCP DEBUG] Model {model} response: {response}")
+            if use_playwright:
+                logging.info(f"[AGENT DEBUG] Model {model} response with Playwright tools")
             responses[model] = response
 
             _add_response_to_context(session_id, response, use_r2c)
-                
+
         except Exception as e:
-            logging.error(f"Error processing MCP model {model}: {e}")
+            logging.error(f"Error processing agent model {model}: {e}")
             responses[model] = f"Error: {str(e)}"
 
     # Log with a distinct tag allowing filtering later
     first_model_response = next(iter(responses.values())) if responses else "No response"
-    _log_interaction("mcp_chat", current_url, question, first_model_response)
+    _log_interaction("agent_chat", current_url, question, first_model_response)
 
-    # Return response with optional R2C stats, using single response mode for MCP
+    # Return response with optional R2C stats, using single response mode
     return _prepare_response_with_stats(responses, session_id, use_r2c, single_response_mode=True)
 
 @csrf_exempt
 @ratelimit(key='ip', rate=lambda g, r: settings.API_RATE_LIMIT, method='POST')
 def adv_response(request):
-    """Process advanced chat response from selected models"""
+    """
+    Extensive Mode: Search for information ANYWHERE on the web using web_search.
+    Uses OpenAI Responses API with built-in web_search tool (no domain restrictions).
+    """
     question = request.GET.get('question', '')
     selected_models = request.GET.get('models', '')
     use_rag = request.GET.get('use_rag', 'false').lower() == 'true'
     current_url = request.GET.get('current_url', '')
-    use_r2c = request.GET.get('use_r2c', 'true').lower() == 'true'  # Default to using R2C
+    use_r2c = request.GET.get('use_r2c', 'true').lower() == 'true'
     preferred_links_json = request.GET.get('preferred_links', '')
+    user_timezone = request.GET.get('user_timezone')
+    user_time = request.GET.get('user_time')
 
     # Parse preferred links from frontend
     preferred_links = []
     if preferred_links_json:
         try:
             preferred_links = json.loads(preferred_links_json)
-            logging.info(f"Received {len(preferred_links)} preferred links from frontend")
+            logging.info(f"[EXTENSIVE MODE] Received {len(preferred_links)} preferred links")
+        except json.JSONDecodeError:
+            logging.error(f"Failed to parse preferred links JSON: {preferred_links_json}")
+
+    if not selected_models:
+        return JsonResponse({'error': 'No models specified'}, status=400)
+
+    models = [model.strip() for model in selected_models.split(',') if model.strip()]
+    if not models:
+        return JsonResponse({'error': 'No valid models specified'}, status=400)
+
+    responses = {}
+
+    # Prepare context messages using R2C or legacy system
+    legacy_messages, session_id = _prepare_context_messages(request, question, use_r2c, current_url)
+
+    for model in models:
+        try:
+            if use_rag:
+                # Use the RAG pipeline for advanced response
+                response = ds.create_rag_advanced_response(question, legacy_messages, model, preferred_links)
+            else:
+                # Extensive mode uses OpenAI Responses API with web_search (no Playwright for now)
+                # TODO combine Playwright, web_search and even more tools in the future for the ultimate intelligent web search UX
+                logging.info(f"[EXTENSIVE MODE] Using web_search for external research")
+                response = ds.create_advanced_response(question, legacy_messages, model, preferred_links, user_timezone=user_timezone, user_time=user_time)
+
+            responses[model] = response
+
+            _add_response_to_context(session_id, response, use_r2c)
+
+        except Exception as e:
+            logging.error(f"Error processing extensive mode model {model}: {e}")
+            responses[model] = f"Error: {str(e)}"
+
+    first_model_response = next(iter(responses.values())) if responses else "No response"
+    _log_interaction("extensive_mode", current_url, question, first_model_response)
+
+    # Get the used URLs from datascraper
+    used_urls_list = list(ds.used_urls_ordered) if getattr(ds, "used_urls_ordered", None) else list(ds.used_urls)
+    used_sources_list = list(getattr(ds, "used_source_details", []))
+
+    logging.info(f"[EXTENSIVE MODE] Sending {len(used_urls_list)} source URLs to frontend:")
+    for idx, url in enumerate(used_urls_list, 1):
+        logging.info(f"  [{idx}] {url}")
+
+    # Return response with optional R2C stats and used URLs
+    response_data = _prepare_response_with_stats(responses, session_id, use_r2c)
+    response_json = json.loads(response_data.content)
+    response_json['used_urls'] = used_urls_list
+    response_json['used_sources'] = used_sources_list
+    return JsonResponse(response_json)
+
+@csrf_exempt
+@ratelimit(key='ip', rate=lambda g, r: settings.API_RATE_LIMIT, method='POST')
+def adv_response_stream(request):
+    """Process streaming advanced chat response from selected models using SSE"""
+    question = request.GET.get('question', '')
+    selected_models = request.GET.get('models', '')
+    use_rag = request.GET.get('use_rag', 'false').lower() == 'true'
+    current_url = request.GET.get('current_url', '')
+    use_r2c = request.GET.get('use_r2c', 'true').lower() == 'true'
+    preferred_links_json = request.GET.get('preferred_links', '')
+    user_timezone = request.GET.get('user_timezone')
+    user_time = request.GET.get('user_time')
+
+    # Parse preferred links from frontend
+    preferred_links = []
+    if preferred_links_json:
+        try:
+            preferred_links = json.loads(preferred_links_json)
+            logging.info(f"Received {len(preferred_links)} preferred links for streaming")
         except json.JSONDecodeError:
             logging.error(f"Failed to parse preferred links JSON: {preferred_links_json}")
 
@@ -501,63 +678,158 @@ def adv_response(request):
     models = [model.strip() for model in selected_models.split(',') if model.strip()]
     if not models:
         return JsonResponse({'error': 'No valid models specified'}, status=400)
-    
-    responses = {}
-    
-    # Prepare context messages using R2C or legacy system
-    legacy_messages, session_id = _prepare_context_messages(request, question, use_r2c)
-    
-    for model in models:
+
+    model = models[0]
+
+    # Prepare context messages using R2C
+    legacy_messages, session_id = _prepare_context_messages(request, question, use_r2c, current_url)
+
+    def event_stream():
+        """Generator function for SSE streaming"""
         try:
+            # Send initial connection event
+            yield b'event: connected\ndata: {"status": "connected"}\n\n'
+
             if use_rag:
-                # Use the RAG pipeline for advanced response
+                # RAG doesn't support streaming yet, can't be bothered to mock streaming
                 response = ds.create_rag_advanced_response(question, legacy_messages, model, preferred_links)
+                sse_data = f'data: {json.dumps({"content": response, "done": True})}\n\n'
+                yield sse_data.encode('utf-8')
+
+                _add_response_to_context(session_id, response, use_r2c)
             else:
-                # Use regular advanced response with preferred links
-                response = ds.create_advanced_response(question, legacy_messages, model, preferred_links)
+                # Stream response from advanced model
+                full_response = ""
+                source_entries: list[dict[str, Any]] = []
+                stream_generator = None
+                stream_state = {"final_output": "", "used_urls": [], "used_sources": []}
+                loop = None
+                stream_iter = None
 
-            responses[model] = response
+                import asyncio
 
-            # Add assistant response to R2C manager
-            _add_response_to_context(session_id, response, use_r2c)
-                
+                try:
+                    stream_generator, stream_state = ds.create_advanced_response_streaming(
+                        question,
+                        legacy_messages,
+                        model,
+                        preferred_links,
+                        user_timezone=user_timezone,
+                        user_time=user_time
+                    )
+
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    stream_iter = stream_generator.__aiter__()
+
+                    latest_source_signature: list[tuple[str, str, bool]] = []
+                    latest_sources_payload: list[dict[str, Any]] = []
+                    source_entries: list[dict[str, Any]] = []
+
+                    while True:
+                        try:
+                            text_chunk, entries = loop.run_until_complete(stream_iter.__anext__())
+                        except StopAsyncIteration:
+                            break
+
+                        if text_chunk:
+                            full_response += text_chunk
+                            sse_data = f'data: {json.dumps({"content": text_chunk, "done": False})}\n\n'
+                            yield sse_data.encode('utf-8')
+                        if entries:
+                            payload_snapshot = [dict(entry) for entry in entries if entry]
+                            source_entries = payload_snapshot
+                            signature = [
+                                (
+                                    entry.get("url"),
+                                    entry.get("title"),
+                                    bool(entry.get("provisional"))
+                                )
+                                for entry in payload_snapshot if entry.get("url")
+                            ]
+                            if signature != latest_source_signature:
+                                latest_source_signature = signature
+                                latest_sources_payload = payload_snapshot
+                                used_urls = [entry.get("url") for entry in payload_snapshot if entry.get("url")]
+                                update_payload = {
+                                    "content": "",
+                                    "done": False,
+                                    "used_urls": used_urls,
+                                    "used_sources": payload_snapshot
+                                }
+                                sse_data = f'data: {json.dumps(update_payload)}\n\n'
+                                yield sse_data.encode('utf-8')
+
+                finally:
+                    if stream_iter and loop:
+                        try:
+                            loop.run_until_complete(stream_iter.aclose())
+                        except Exception:
+                            pass
+                    if loop:
+                        try:
+                            loop.run_until_complete(loop.shutdown_asyncgens())
+                        except Exception:
+                            pass
+                        asyncio.set_event_loop(None)
+                        loop.close()
+
+                final_response = stream_state.get("final_output") or full_response
+                final_entries = stream_state.get("used_sources") or source_entries or latest_sources_payload
+                final_urls = stream_state.get("used_urls") or [entry.get("url") for entry in (final_entries or []) if entry and entry.get("url")]
+
+                _add_response_to_context(session_id, final_response, use_r2c)
+                _log_interaction("advanced_stream", current_url, question, final_response)
+
+                final_payload = {
+                    "content": "",
+                    "done": True
+                }
+
+                if final_urls:
+                    final_payload["used_urls"] = final_urls
+                if final_entries:
+                    final_payload["used_sources"] = final_entries
+                if use_r2c and session_id:
+                    stats = r2c_manager.get_session_stats(session_id)
+                    final_payload["r2c_stats"] = stats
+
+                sse_data = f'data: {json.dumps(final_payload)}\n\n'
+                yield sse_data.encode('utf-8')
+
         except Exception as e:
-            logging.error(f"Error processing advanced model {model}: {e}")
-            responses[model] = f"Error: {str(e)}"
+            logging.error(f"Error in advanced streaming response: {e}")
+            import traceback
+            traceback.print_exc()
+            sse_data = f'data: {json.dumps({"error": str(e), "done": True})}\n\n'
+            yield sse_data.encode('utf-8')
 
-    first_model_response = next(iter(responses.values())) if responses else "No response"
-    _log_interaction("advanced", current_url, question, first_model_response)
+    # Return streaming response
+    response = StreamingHttpResponse(
+        event_stream(),
+        content_type='text/event-stream'
+    )
+    response['Cache-Control'] = 'no-cache'
+    response['X-Accel-Buffering'] = 'no'  # Disable Nginx buffering
+    return response
 
-    # Get the used URLs from datascraper
-    used_urls_list = list(ds.used_urls)
-
-    # Log the URLs being sent to frontend
-    logging.info(f"Advanced response sending {len(used_urls_list)} URLs to frontend:")
-    for idx, url in enumerate(used_urls_list, 1):
-        logging.info(f"  [{idx}] {url}")
-
-    # Return response with optional R2C stats and used URLs
-    response_data = _prepare_response_with_stats(responses, session_id, use_r2c)
-    response_json = json.loads(response_data.content)
-    response_json['used_urls'] = used_urls_list
-    return JsonResponse(response_json)
 
 @csrf_exempt
 def clear(request):
     """Clear conversation messages but preserve scraped web content"""
     use_r2c = request.GET.get('use_r2c', 'true').lower() == 'true'
-    
+
     # For legacy system, only clear non-web content messages
     if message_list:
         # Keep only the system message and web content
-        preserved_messages = [message_list[0]]  # Keep system message
+        preserved_messages = [message_list[0]]
         for msg in message_list[1:]:
             if "[Web Content from" in msg.get("content", "") or msg.get("content", "").startswith("Yahoo Finance") or msg.get("content", "").startswith("<!DOCTYPE"):
                 preserved_messages.append(msg)
-        
+
         message_list.clear()
         message_list.extend(preserved_messages)
-    
+
     # Clear only conversation in R2C if enabled
     if use_r2c:
         session_id = _get_session_id(request)
@@ -571,18 +843,18 @@ def clear(request):
 
     current_url = request.GET.get('current_url', 'N/A')
     _log_interaction("clear", current_url, "Cleared conversation history")
-    
+
     return JsonResponse({'resp': message})
 
 @csrf_exempt
 def get_sources(request):
     """Get sources for a query"""
     query = request.GET.get('query', '')
-    sources = ds.get_sources(query)
+    current_url = request.GET.get('current_url')
+    sources = ds.get_sources(query, current_url=current_url)
     
     # Log the source request
-    current_url = request.GET.get('current_url', 'N/A')
-    _log_interaction("sources", current_url, f"Source request: {query}")
+    _log_interaction("sources", current_url or 'N/A', f"Source request: {query}")
     
     return JsonResponse({'resp': sources})
 

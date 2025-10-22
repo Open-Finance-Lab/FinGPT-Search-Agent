@@ -1,7 +1,14 @@
 // helpers.js
 import { clearMessages, getSourceUrls, logQuestion } from './api.js';
 import { handleChatResponse, handleImageResponse } from './handlers.js';
-import { getCachedSources, hasCachedSources, clearCachedSources, getCurrentPageUrl, getCachedSourcesWithoutCurrentPage } from './sourcesCache.js';
+import {
+    clearCachedSources,
+    getCurrentPageUrl,
+    getCachedSourceEntries,
+    getCurrentPageEntry,
+    getLastSearchQuery,
+    mergeCachedMetadata,
+} from './sourcesCache.js';
 
 // Function to append chat elements
 function appendChatElement(parent, className, text) {
@@ -9,7 +16,32 @@ function appendChatElement(parent, className, text) {
     element.className = className;
     element.innerText = text;
     parent.appendChild(element);
+    scrollChatToBottom();
     return element;
+}
+
+// Ensure the chat history stays pinned to the most recent message
+function scrollChatToBottom() {
+    const scrollContainer = document.getElementById('content');
+    const responseContainer = document.getElementById('respons');
+    if (!scrollContainer && !responseContainer) {
+        return;
+    }
+
+    requestAnimationFrame(() => {
+        const targets = [scrollContainer, responseContainer].filter(Boolean);
+        targets.forEach((element) => {
+            if (typeof element.scrollTo === 'function') {
+                element.scrollTo({ top: element.scrollHeight, behavior: 'auto' });
+            } else {
+                element.scrollTop = element.scrollHeight;
+            }
+        });
+
+        if (responseContainer && responseContainer.lastElementChild) {
+            responseContainer.lastElementChild.scrollIntoView({ block: 'end', inline: 'nearest' });
+        }
+    });
 }
 
 // Function to clear chat
@@ -17,19 +49,20 @@ function clear() {
     const response = document.getElementById('respons');
     const sourceurls = document.getElementById('source_urls');
 
+    // Clear all messages and button rows from the response container
     response.innerHTML = "";
-    if (sourceurls) {
-        sourceurls.innerHTML = "";
-    }
 
-    // Clear cached sources when clearing conversation
-    clearCachedSources();
+    // Note: We do NOT clear the sources window content because we want to preserve it
+    // The sourceurls div will be rebuilt when the user clicks Sources button again
+
+    // Don't clear cached sources - we want to preserve web context
+    // clearCachedSources(); // Removed to preserve web context
 
     clearMessages()
         .then(data => {
             console.log(data);
-            const clearMsg = appendChatElement(response, 'system_message', 'Search Agent: Conversation cleared. Web content context preserved.');
-            response.scrollTop = response.scrollHeight;
+            const clearMsg = appendChatElement(response, 'system_message', 'FinGPT: Conversation cleared. Web content context preserved.');
+            scrollChatToBottom();
         })
         .catch(error => {
             console.error('There was a problem clearing messages:', error);
@@ -77,112 +110,286 @@ function submit_question(mode) {
         return;
     }
 
-    if (mode === 'Normal') {
-        // Normal mode - equivalent to old "Ask" button
+    if (mode === 'Thinking') {
+        // Thinking mode - equivalent to old "Ask" button
         handleChatResponse(question, false);
-        logQuestion(question, 'Normal');
-    } else if (mode === 'Extensive') {
-        // Extensive mode - equivalent to old "Advanced Ask" button
+        logQuestion(question, 'Thinking');
+    } else if (mode === 'Research') {
+        // Research mode - equivalent to old "Advanced Ask" button
         // Clear previous cached sources before making new advanced request
         clearCachedSources();
         handleChatResponse(question, true);
-        logQuestion(question, 'Extensive');
+        logQuestion(question, 'Research');
     }
 
     document.getElementById('textbox').value = '';
 }
 
 // Function to get sources
-function get_sources(searchQuery) {
+async function get_sources() {
     const sources_window = document.getElementById('sources_window');
     const loadingSpinner = document.getElementById('loading_spinner');
-    const source_urls = document.getElementById('source_urls');
+    const sourceContainer = document.getElementById('source_urls');
 
-    console.log('[Sources Debug] get_sources called with query:', searchQuery);
     sources_window.style.display = 'block';
+    loadingSpinner.style.display = 'block';
+    sourceContainer.style.display = 'none';
+    sourceContainer.innerHTML = '';
 
-    // Hide spinner and show source URLs container
-    loadingSpinner.style.display = 'none';
-    source_urls.style.display = 'block';
-
-    // Get current page and other sources
     const currentPageUrl = getCurrentPageUrl();
-    const otherSources = getCachedSourcesWithoutCurrentPage();
+    const searchQuery = getLastSearchQuery();
+    const cachedOtherSources = getCachedSourceEntries(false);
+    const cachedCurrentSource = getCurrentPageEntry();
 
-    console.log('[Sources Debug] Current page URL:', currentPageUrl);
-    console.log('[Sources Debug] Other sources:', otherSources);
+    console.log('[Sources Debug] Loading sources for query:', searchQuery);
+    console.log('[Sources Debug] Cached sources (excluding current page):', cachedOtherSources);
 
-    // Clear and rebuild the source URLs display
-    source_urls.innerHTML = '';
+    const neutralDomainParts = ['co', 'com', 'org', 'net', 'gov', 'edu'];
 
-    // ALWAYS create "Current active webpage" section
-    const currentPageSection = document.createElement('div');
-    currentPageSection.className = 'source-section';
+    const toTitleCase = (value) => value.replace(/\b\w/g, (letter) => letter.toUpperCase());
 
-    const currentPageHeader = document.createElement('div');
-    currentPageHeader.className = 'source-section-header';
-    currentPageHeader.innerText = 'Current active webpage';
-    currentPageSection.appendChild(currentPageHeader);
-
-    const currentPageContent = document.createElement('ul');
-    currentPageContent.className = 'source-section-content';
-
-    if (currentPageUrl) {
-        const link = document.createElement('a');
-        link.href = currentPageUrl;
-        link.innerText = currentPageUrl;
-        link.target = "_blank";
-
-        const listItem = document.createElement('li');
-        listItem.appendChild(link);
-        currentPageContent.appendChild(listItem);
-    } else {
-        const emptyMsg = document.createElement('div');
-        emptyMsg.className = 'empty-sources';
-        emptyMsg.innerText = 'No current webpage detected';
-        currentPageContent.appendChild(emptyMsg);
-    }
-
-    currentPageSection.appendChild(currentPageContent);
-    source_urls.appendChild(currentPageSection);
-
-    // ALWAYS create "Sources used" section
-    const sourcesSection = document.createElement('div');
-    sourcesSection.className = 'source-section';
-
-    const sourcesHeader = document.createElement('div');
-    sourcesHeader.className = 'source-section-header';
-    sourcesHeader.innerText = 'Sources used';
-    sourcesSection.appendChild(sourcesHeader);
-
-    const sourcesContent = document.createElement('ul');
-    sourcesContent.className = 'source-section-content';
-
-    if (otherSources.length > 0) {
-        otherSources.forEach((url, idx) => {
-            console.log(`[Sources Debug] Displaying source URL ${idx + 1}: ${url}`);
-            if (url.includes('duckduckgo')) {
-                console.warn(`[Sources Debug] WARNING: DuckDuckGo URL being displayed at index ${idx}: ${url}`);
+    const getSiteNameFromUrl = (url) => {
+        try {
+            const { hostname } = new URL(url);
+            const trimmed = hostname.replace(/^www\./i, '');
+            const parts = trimmed.split('.');
+            let candidate = parts.length >= 2 ? parts[parts.length - 2] : parts[0];
+            if (neutralDomainParts.includes(candidate) && parts.length >= 3) {
+                candidate = parts[parts.length - 3];
             }
+            const cleaned = candidate.replace(/[-_]/g, ' ').trim();
+            return cleaned ? toTitleCase(cleaned) : trimmed;
+        } catch (error) {
+            return 'Source';
+        }
+    };
 
-            const link = document.createElement('a');
-            link.href = url;
-            link.innerText = url;
-            link.target = "_blank";
+    const normalizeEntry = (entry) => {
+        if (!entry || !entry.url) {
+            return null;
+        }
+        const fallback = createFallbackMetadata(entry.url);
+        if (!fallback) {
+            return null;
+        }
+        const snippetSource = typeof entry.snippet === 'string' ? entry.snippet : fallback.snippet;
+        const normalizedSnippet = snippetSource ? snippetSource.replace(/\s+/g, ' ').trim() : '';
 
-            const listItem = document.createElement('li');
-            listItem.appendChild(link);
-            sourcesContent.appendChild(listItem);
-        });
-    } else {
-        const emptyMsg = document.createElement('div');
-        emptyMsg.className = 'empty-sources';
-        emptyMsg.innerText = 'Sources used for agent responses when using Advanced Ask is displayed here.';
-        sourcesContent.appendChild(emptyMsg);
+        return {
+            ...fallback,
+            ...entry,
+            site_name: entry.site_name || fallback.site_name,
+            display_url: entry.display_url || fallback.display_url,
+            title: entry.title || fallback.title,
+            snippet: normalizedSnippet || fallback.snippet,
+            icon: null,
+            provisional: entry.provisional ?? fallback.provisional,
+        };
+    };
+
+    const formatDisplayUrl = (url) => {
+        if (!url) {
+            return '';
+        }
+
+        const MAX_DISPLAY_URL_LENGTH = 30;
+        let display = url;
+        try {
+            const parsed = new URL(url);
+            display = `${parsed.hostname}${parsed.pathname}${parsed.search || ''}`;
+        } catch (error) {
+            // Leave display as url when it cannot be parsed
+        }
+
+        display = String(display).replace(/^www\./i, '');
+
+        if (display.length > MAX_DISPLAY_URL_LENGTH) {
+            const truncatedLength = Math.max(0, MAX_DISPLAY_URL_LENGTH - 3);
+            display = `${display.slice(0, truncatedLength)}...`;
+        }
+
+        return display;
+    };
+
+    const createFallbackMetadata = (entry) => {
+        if (!entry) {
+            return null;
+        }
+
+        const url = typeof entry === 'string' ? entry : entry.url || '';
+        if (!url) {
+            return null;
+        }
+
+        const displayUrl = formatDisplayUrl(url);
+        const siteName = getSiteNameFromUrl(url);
+        const title = siteName || displayUrl;
+
+        return {
+            url,
+            site_name: siteName,
+            display_url: displayUrl,
+            title,
+            icon: null,
+            provisional: false,
+            snippet: '',
+        };
+    };
+
+    const buildThumbnail = (wrapper, metadata) => {
+        const fallbackInitial = (metadata.site_name || metadata.display_url || '?').charAt(0).toUpperCase();
+        wrapper.innerHTML = '';
+        wrapper.classList.add('source-card-thumbnail--fallback');
+        wrapper.textContent = fallbackInitial || '?';
+    };
+
+    const buildSourceCard = (metadata) => {
+        const safeMeta = metadata || {};
+        if (!safeMeta.url) {
+            return null;
+        }
+
+        const cardLink = document.createElement('a');
+        cardLink.className = 'source-card';
+        cardLink.href = safeMeta.url;
+        cardLink.target = '_blank';
+        cardLink.rel = 'noopener noreferrer';
+        if (safeMeta.provisional) {
+            cardLink.classList.add('source-card--provisional');
+        }
+
+        const thumbnailWrapper = document.createElement('div');
+        thumbnailWrapper.className = 'source-card-thumbnail';
+        buildThumbnail(thumbnailWrapper, safeMeta);
+
+        const headerWrapper = document.createElement('div');
+        headerWrapper.className = 'source-card-header';
+
+        const siteName = document.createElement('span');
+        siteName.className = 'source-card-site';
+        siteName.innerText = safeMeta.site_name || getSiteNameFromUrl(safeMeta.url);
+
+        const displayUrl = document.createElement('span');
+        displayUrl.className = 'source-card-url';
+        const formattedDisplayUrl = formatDisplayUrl(safeMeta.url || safeMeta.display_url);
+        displayUrl.innerText = formattedDisplayUrl;
+        if (safeMeta.url || safeMeta.display_url) {
+            displayUrl.title = safeMeta.url || safeMeta.display_url;
+        }
+
+        const metaWrapper = document.createElement('div');
+        metaWrapper.className = 'source-card-meta';
+        metaWrapper.appendChild(siteName);
+        metaWrapper.appendChild(displayUrl);
+
+        headerWrapper.appendChild(thumbnailWrapper);
+        headerWrapper.appendChild(metaWrapper);
+
+        const contentWrapper = document.createElement('div');
+        contentWrapper.className = 'source-card-content';
+
+        const titleLink = document.createElement('span');
+        titleLink.className = 'source-card-title';
+        titleLink.innerText = safeMeta.title || siteName.innerText || displayUrl.innerText;
+
+        contentWrapper.appendChild(titleLink);
+        if (safeMeta.provisional) {
+            const statusBadge = document.createElement('span');
+            statusBadge.className = 'source-card-status';
+            statusBadge.innerText = 'Preview';
+            contentWrapper.appendChild(statusBadge);
+        }
+
+        cardLink.appendChild(headerWrapper);
+        cardLink.appendChild(contentWrapper);
+        cardLink.setAttribute('aria-label', `${siteName.innerText}: ${titleLink.innerText}`);
+        return cardLink;
+    };
+
+    const appendSection = (title, items, emptyMessage) => {
+        const section = document.createElement('div');
+        section.className = 'source-section';
+
+        const header = document.createElement('div');
+        header.className = 'source-section-header';
+        header.innerText = title;
+        section.appendChild(header);
+
+        const content = document.createElement('div');
+        content.className = 'source-section-content';
+
+        if (items.length === 0) {
+            const empty = document.createElement('div');
+            empty.className = 'empty-sources';
+            empty.innerText = emptyMessage;
+            content.appendChild(empty);
+        } else {
+            items.forEach((metadata) => {
+                const card = buildSourceCard(metadata);
+                if (card) {
+                    content.appendChild(card);
+                }
+            });
+        }
+
+        section.appendChild(content);
+        sourceContainer.appendChild(section);
+    };
+
+    let currentMetadata = cachedCurrentSource
+        ? normalizeEntry(cachedCurrentSource)
+        : (currentPageUrl ? createFallbackMetadata(currentPageUrl) : null);
+    let sourcesToRender = cachedOtherSources.map((entry) => normalizeEntry(entry)).filter(Boolean);
+
+    try {
+        const response = await getSourceUrls(searchQuery || '', currentPageUrl);
+        const payload = response?.resp || {};
+
+        const backendSourcesRaw = Array.isArray(payload.sources) ? payload.sources : [];
+        const backendCurrentRaw = payload.current_page && payload.current_page.url ? payload.current_page : null;
+
+        mergeCachedMetadata([
+            ...backendSourcesRaw,
+            ...(backendCurrentRaw ? [backendCurrentRaw] : []),
+        ]);
+
+        if (backendCurrentRaw) {
+            currentMetadata = normalizeEntry(backendCurrentRaw);
+        } else if (currentPageUrl) {
+            const refreshedCurrent = getCurrentPageEntry();
+            if (refreshedCurrent) {
+                currentMetadata = normalizeEntry(refreshedCurrent);
+            }
+        } else {
+            currentMetadata = null;
+        }
+
+        const refreshedSources = getCachedSourceEntries(false).map((entry) => normalizeEntry(entry)).filter(Boolean);
+        const backendFallback = backendSourcesRaw.map((entry) => normalizeEntry(entry)).filter(Boolean);
+
+        if (refreshedSources.length > 0) {
+            sourcesToRender = refreshedSources;
+        } else if (backendFallback.length > 0) {
+            sourcesToRender = backendFallback;
+        }
+    } catch (error) {
+        console.error('Unable to load source previews:', error);
+    } finally {
+        loadingSpinner.style.display = 'none';
+        sourceContainer.style.display = 'flex';
     }
 
-    sourcesSection.appendChild(sourcesContent);
-    source_urls.appendChild(sourcesSection);
+    appendSection(
+        'Current active webpage',
+        currentMetadata ? [currentMetadata] : [],
+        'No current webpage detected'
+    );
+
+    appendSection(
+        'Sources used',
+        sourcesToRender,
+        'Sources used for agent responses when using Research mode will appear here.'
+    );
 }
 
 // Removed old preferred links functions - now handled by link_manager.js component
@@ -228,10 +435,14 @@ function makeDraggableAndResizable(element, sourceWindowOffsetX = 10, isFixedMod
         element.style.left = `${newX}px`;
         element.style.top = `${newY}px`;
 
-        // Move sources window with main popup
+        // Move sources window with main popup (now on the left side)
         const sourcesWindow = document.getElementById('sources_window');
-        sourcesWindow.style.left = `${newX + element.offsetWidth + sourceWindowOffsetX}px`;
-        sourcesWindow.style.top = `${newY}px`;
+        if (sourcesWindow) {
+            const measuredWidth = sourcesWindow.offsetWidth || 360;
+            const sourcesLeft = Math.max(0, newX - (measuredWidth + sourceWindowOffsetX));
+            sourcesWindow.style.left = `${sourcesLeft}px`;
+            sourcesWindow.style.top = `${newY}px`;
+        }
     }
 
     function resizeElement(e) {
@@ -245,9 +456,12 @@ function makeDraggableAndResizable(element, sourceWindowOffsetX = 10, isFixedMod
             element.style.height = `${newHeight}px`;
         }
 
-        // Move sources window with main popup
         const sourcesWindow = document.getElementById('sources_window');
-        sourcesWindow.style.left = `${element.offsetLeft + element.offsetWidth + sourceWindowOffsetX}px`;
+        if (sourcesWindow) {
+            const measuredWidth = sourcesWindow.offsetWidth || 360;
+            const sourcesLeft = Math.max(0, element.offsetLeft - (measuredWidth + sourceWindowOffsetX));
+            sourcesWindow.style.left = `${sourcesLeft}px`;
+        }
     }
 
     function closeDragOrResizeElement() {
@@ -259,5 +473,13 @@ function makeDraggableAndResizable(element, sourceWindowOffsetX = 10, isFixedMod
     }
 }
 
-export { appendChatElement, clear, get_chat_response, get_adv_chat_response, submit_question, get_sources,
-    makeDraggableAndResizable };
+export {
+    appendChatElement,
+    clear,
+    get_chat_response,
+    get_adv_chat_response,
+    submit_question,
+    get_sources,
+    makeDraggableAndResizable,
+    scrollChatToBottom,
+};

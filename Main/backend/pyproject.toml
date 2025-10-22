@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "fingpt-backend"
-version = "0.6.0"
+version = "0.7.0"
 description = "FinGPT Backend - Financial GPT Assistant"
 authors = ["FinGPT Team"]
 package-mode = false
@@ -29,6 +29,7 @@ fastmcp = "^2.8.0"
 django-mcp = "^0.3.0"
 gunicorn = "^23.0.0"
 whitenoise = "^6.6.0"
+playwright = "^1.48.0"
 
 # Platform-specific Django versions
 Django = [

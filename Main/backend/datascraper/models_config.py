@@ -5,7 +5,7 @@ Central configuration for all supported LLM models.
 
 MODELS_CONFIG = {
     # OpenAI Models
-    "o4-mini": {
+    "FinGPT-Light": {
         "provider": "openai",
         "model_name": "gpt-4o-mini",
         "supports_rag": True,
@@ -41,14 +41,15 @@ MODELS_CONFIG = {
         "max_tokens": 128000,
         "description": "The FinGPT model"
     },
-    "FinGPT-Light": {
-        "provider": "openai",
-        "model_name": "gpt-5-nano",
+    "Buffet-Agent": {
+        "provider": "buffet",
+        "model_name": "Buffet-Agent",  # Display only: actual calls use the custom endpoint
+        "endpoint_url": "https://l7d6yqg7nzbkumx8.us-east-1.aws.endpoints.huggingface.cloud",
         "supports_rag": True,
         "supports_mcp": True,
         "supports_advanced": True,
         "max_tokens": 400000,
-        "description": "A much faster smaller FinGPT model"
+        "description": "The power of the Warren, in the palm of my hands"
     },
 
     # DeepSeek Models
@@ -101,6 +102,11 @@ PROVIDER_CONFIGS = {
         "base_url": None,  # Uses default Anthropic URL
         "env_key": "ANTHROPIC_API_KEY",
         "client_class": "Anthropic"
+    },
+    "buffet": {
+        "base_url": "https://l7d6yqg7nzbkumx8.us-east-1.aws.endpoints.huggingface.cloud",
+        "env_key": "BUFFET_AGENT_API_KEY",
+        "client_class": None  # Custom HTTP client implemented in datascraper
     }
 }
 
