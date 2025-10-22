@@ -143,10 +143,16 @@ frontend/
 
 **Build Commands:**
 ```bash
-npm run build:css      # Build CSS only
-npm run build          # Build with Webpack
-npm run check          # Verify build artifacts
-npm run build:full     # Complete build pipeline
+bun run build:css      # Build CSS only
+bun run build          # Build with Webpack
+bun run check          # Verify build artifacts
+bun run build:full     # Complete build pipeline
+```
+
+**Note:** Bun must be installed and available in PATH. If not in PATH, source your shell configuration:
+```bash
+source ~/.bashrc  # Linux/WSL
+source ~/.zshrc   # macOS with zsh
 ```
 
 ---
@@ -217,6 +223,7 @@ make html
 - **numpy** – Numerical operations for importance scoring
 
 ### Frontend Stack
+- **Bun** – Fast JavaScript runtime and package manager
 - **Webpack 5** – Module bundler
 - **Babel** – JavaScript transpiler
 - **KaTeX** – Mathematical notation rendering
@@ -247,9 +254,23 @@ python manage.py runserver
 ### Frontend Development
 ```bash
 cd Main/frontend
-npm install                         # Install dependencies
-npm run build:full                  # Complete build
+
+# Install Bun if not already installed
+curl -fsSL https://bun.sh/install | bash
+
+# Install dependencies with Bun
+bun install
+
+# Complete build
+bun run build:full
 ```
+
+**Package Management with Bun:**
+- `bun install` – Install dependencies (creates `bun.lock`)
+- `bun install --frozen-lockfile` – Install with frozen lockfile (CI/CD)
+- `bun add <package>` – Add new dependency
+- `bun remove <package>` – Remove dependency
+- `bun update` – Update dependencies
 
 ---
 
