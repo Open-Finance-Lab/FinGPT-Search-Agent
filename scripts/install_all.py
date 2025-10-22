@@ -307,6 +307,7 @@ DEEPSEEK_API_KEY=your-deepseek-api-key-here
         if not in_venv:
             print("\nWARNING: Please activate the virtual environment and run this script again")
             print("   to continue with the installation.")
+            print("   Tip: run '.\\make.ps1 install' in PowerShell to auto-create and activate FinGPTenv.")
             return 0
             
         if not self.install_poetry():

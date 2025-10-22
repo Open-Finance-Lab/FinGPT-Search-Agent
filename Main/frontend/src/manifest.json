@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "FinGPT",
-  "version": "0.5.1",
-  "description": "A demo to initialize the extension for FinGPT. This is the locally deployed, dual model display version.",
+  "name": "Agentic FinSearch",
+  "version": "0.7.0",
+  "description": "A demo for the extension for Agentic FinSearch. Frontend-only, backend needs to be locally deployed.",
   "icons": {
     "16": "assets/16x16_icon.png",
     "32": "assets/32x32_icon.png"
@@ -28,15 +28,14 @@
     }
   ],
   "permissions": [
-    "activeTab",
-    "storage"
+
   ],
   "host_permissions": [
     "http://127.0.0.1:8000/*"
   ],
   "web_accessible_resources": [
     {
-      "resources": [ "fonts/*.woff", "fonts/*.woff2" ],
+      "resources": [ "fonts/*.woff", "fonts/*.woff2", "assets/*.png" ],
       "matches": [ "<all_urls>" ]
     }
   ]

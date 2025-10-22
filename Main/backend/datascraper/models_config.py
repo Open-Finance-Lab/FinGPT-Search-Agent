@@ -5,7 +5,7 @@ Central configuration for all supported LLM models.
 
 MODELS_CONFIG = {
     # OpenAI Models
-    "o4-mini": {
+    "FinGPT-Light": {
         "provider": "openai",
         "model_name": "gpt-4o-mini",
         "supports_rag": True,
@@ -14,57 +14,76 @@ MODELS_CONFIG = {
         "max_tokens": 128000,
         "description": "GPT-4o Mini - Fast and efficient"
     },
-    "gpt-4.5-preview": {
-        "provider": "openai", 
-        "model_name": "gpt-4-turbo-preview",
-        "supports_rag": True,
-        "supports_mcp": False,
-        "supports_advanced": True,
-        "max_tokens": 128000,
-        "description": "GPT-4 Turbo Preview - Advanced reasoning"
-    },
-    "o1-pro": {
+    # "o1-pro": {
+    #     "provider": "openai",
+    #     "model_name": "o1-pro",
+    #     "supports_rag": True,
+    #     "supports_mcp": True,
+    #     "supports_advanced": True,
+    #     "max_tokens": 128000,
+    #     "description": "O1 Pro - Advanced model with enhanced deep reasoning"
+    # },
+    # "gpt-5-chat": {
+    #     "provider": "openai",
+    #     "model_name": "gpt-5-chat-latest",
+    #     "supports_rag": True,
+    #     "supports_mcp": True,
+    #     "supports_advanced": True,
+    #     "max_tokens": 128000,
+    #     "description": "GPT-5 Chat Latest - Latest generation model"
+    # },
+    "FinGPT": {
         "provider": "openai",
-        "model_name": "o1-pro",
+        "model_name": "gpt-5-chat-latest",
         "supports_rag": True,
         "supports_mcp": True,
         "supports_advanced": True,
         "max_tokens": 128000,
-        "description": "O1 Pro - Advanced model with enhanced capabilities"
+        "description": "The FinGPT model"
     },
-    
+    "Buffet-Agent": {
+        "provider": "buffet",
+        "model_name": "Buffet-Agent",  # Display only: actual calls use the custom endpoint
+        "endpoint_url": "https://l7d6yqg7nzbkumx8.us-east-1.aws.endpoints.huggingface.cloud",
+        "supports_rag": True,
+        "supports_mcp": True,
+        "supports_advanced": True,
+        "max_tokens": 400000,
+        "description": "The power of the Warren, in the palm of my hands"
+    },
+
     # DeepSeek Models
-    "deepseek-reasoner": {
-        "provider": "deepseek",
-        "model_name": "deepseek-reasoner",
-        "supports_rag": True,
-        "supports_mcp": True,
-        "supports_advanced": True,
-        "max_tokens": 128000,
-        "description": "DeepSeek R1 - Advanced reasoning model",
-        "temperature_range": [0.5, 0.7],
-        "recommended_temperature": 0.6
-    },
-    
+    # "deepseek-reasoner": {
+    #     "provider": "deepseek",
+    #     "model_name": "deepseek-reasoner",
+    #     "supports_rag": True,
+    #     "supports_mcp": True,
+    #     "supports_advanced": True,
+    #     "max_tokens": 128000,
+    #     "description": "DeepSeek R1 - Advanced reasoning model",
+    #     "temperature_range": [0.5, 0.7],
+    #     "recommended_temperature": 0.6
+    # },
+
     # Anthropic Claude Models
-    "claude-3.5-sonnet": {
-        "provider": "anthropic",
-        "model_name": "claude-3-5-sonnet-latest",
-        "supports_rag": True,
-        "supports_mcp": True,
-        "supports_advanced": True,
-        "max_tokens": 200000,
-        "description": "Claude 3.5 Sonnet - Previous generation balanced model"
-    },
-    "claude-4-sonnet": {
-        "provider": "anthropic",
-        "model_name": "claude-sonnet-4-20250514",
-        "supports_rag": True,
-        "supports_mcp": True,
-        "supports_advanced": True,
-        "max_tokens": 200000,
-        "description": "Claude 4 Sonnet - Latest generation model"
-    }
+    # "claude-4-sonnet": {
+    #     "provider": "anthropic",
+    #     "model_name": "claude-sonnet-4-20250514",
+    #     "supports_rag": True,
+    #     "supports_mcp": True,
+    #     "supports_advanced": True,
+    #     "max_tokens": 200000,
+    #     "description": "Claude 4 Sonnet - Latest generation model"
+    # },
+    # "claude-haiku-3.5": {
+    #     "provider": "anthropic",
+    #     "model_name": "claude-3-5-haiku-20241022",
+    #     "supports_rag": True,
+    #     "supports_mcp": True,
+    #     "supports_advanced": True,
+    #     "max_tokens": 200000,
+    #     "description": "Claude 3.5 Haiku - Fast and efficient"
+    # }
 }
 
 # Provider configurations
@@ -83,6 +102,11 @@ PROVIDER_CONFIGS = {
         "base_url": None,  # Uses default Anthropic URL
         "env_key": "ANTHROPIC_API_KEY",
         "client_class": "Anthropic"
+    },
+    "buffet": {
+        "base_url": "https://l7d6yqg7nzbkumx8.us-east-1.aws.endpoints.huggingface.cloud",
+        "env_key": "BUFFET_AGENT_API_KEY",
+        "client_class": None  # Custom HTTP client implemented in datascraper
     }
 }
 
