@@ -58,14 +58,15 @@ Configuration Issues
     "url": "http://127.0.0.1:9000/sse"
     - Won't work if MCP deployed separately
     - Must use environment variable
-11. Wildcarded Dependencies (pyproject.toml:14-28) ✅ FIXED
-    - All dependencies now pinned with major versions using caret (^) notation
-    - Added: gunicorn ^21.2.0, whitenoise ^6.6.0
-    - numpy ^2.2.0, openai ^1.86.0, anthropic ^0.67.0, etc.
-12. SQLite in Production [Currently no database setup]
-    - Current: SQLite (128KB, single-file database)
-    - Problem: No concurrent write support, file locking issues
-    - Must migrate to PostgreSQL/MySQL for multi-user access
+11. Dependencies Management ✅ FIXED - MIGRATED TO UV
+    - Migrated from Poetry to uv for faster, more reliable dependency management
+    - All dependencies pinned with proper version constraints
+    - Lock file (uv.lock) ensures reproducible builds
+    - Added: gunicorn >=21.2.0, whitenoise >=6.6.0
+    - numpy >=2.2.0, openai >=1.86.0, anthropic >=0.67.0, etc.
+12. Database Backend (intentionally removed)
+    - Sessions use signed cookies instead of a database
+    - Keep the service stateless unless future persistence requirements appear
 
   ---
 🟡 NON-CRITICAL ISSUES (Important for production quality)
@@ -80,10 +81,9 @@ Production Infrastructure
     - Gunicorn added to dependencies (^21.2.0)
     - Procfile created for platform deployment
     - gunicorn.conf.py with optimized production settings
-    - runtime.txt specifies Python 3.10
-15. No Database Connection Pooling [Currently not needed]
-    - No dj-database-url or connection pool configuration
-    - Will need for PostgreSQL deployment
+    - runtime.txt specifies Python 3.12
+15. Database Connection Pooling [Not applicable]
+    - No database driver or connection pool is required for the current stateless design
 
 API Architecture
 
@@ -181,7 +181,7 @@ All **8 critical security issues** have been addressed:
 **Fixes:**
 - Added Gunicorn to dependencies (`gunicorn ^21.2.0`)
 - Created `Procfile` for platform deployment (Railway/Render/Heroku)
-- Created `runtime.txt` specifying Python 3.10.12
+    - Created `runtime.txt` specifying Python 3.12.2
 - Created `gunicorn.conf.py` with production-optimized settings:
   - Auto-scaled workers (CPU × 2 + 1)
   - 120s timeout for long-running AI/RAG operations
@@ -312,7 +312,7 @@ DJANGO_LOG_LEVEL=DEBUG
 **Fix:**
 - Removed `os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"` from code
 - Added documentation comment explaining where to set it if needed
-- Added to `.env.example` as optional variable
+- Added to `Main/backend/.env.example` as optional variable
 - This should now be set in deployment environment if Intel MKL conflicts occur
 
 **If needed, set in deployment environment:**
@@ -326,7 +326,7 @@ KMP_DUPLICATE_LIB_OK=TRUE
 ## Files Modified
 
 ### New Files Created
-- `.env.example` - Template for environment variables
+- `Main/backend/.env.example` - Template for environment variables
 - `django_config/settings_prod.py` - Production settings with security hardening
 - `DEPLOYMENT_GUIDE.md` - This file
 - `Procfile` - Platform deployment configuration (Railway/Render/Heroku)
@@ -342,7 +342,7 @@ KMP_DUPLICATE_LIB_OK=TRUE
 - `datascraper/cdm_rag.py` - Removed hardcoded KMP_DUPLICATE_LIB_OK environment variable
 - `mcp_client/agent.py` - MCP server URL now configurable via environment
 - `.env` - Updated with new Django configuration variables
-- `.env.example` - Added API_RATE_LIMIT and KMP_DUPLICATE_LIB_OK documentation
+- `Main/backend/.env.example` - Added API_RATE_LIMIT and KMP_DUPLICATE_LIB_OK documentation
 - `pyproject.toml` - All dependencies pinned with major versions, added gunicorn, whitenoise, and django-ratelimit
 
 ---
@@ -414,21 +414,31 @@ SECURE_SSL_REDIRECT=True
 
 ### Step 3: Install Production Dependencies
 
-Production dependencies are already configured in `pyproject.toml`:
+Production dependencies are managed using **uv** (fast Python package manager):
 
-```toml
-gunicorn = "^21.2.0"          # WSGI server
-whitenoise = "^6.6.0"         # Static file serving
-playwright = "^1.49.0"        # Browser automation
+```bash
+# Install uv if not already installed
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Install dependencies from lock file (recommended for production)
+uv sync --python 3.12 --frozen --no-dev
+
+# Alternative: install selected dependency groups
+uv sync --python 3.12 --group docs --frozen --no-dev
 ```
 
-All other dependencies are also pinned with major versions for stability.
+Key production dependencies in `pyproject.toml`:
+- `gunicorn >=21.2.0` - WSGI server
+- `whitenoise >=6.6.0` - Static file serving
+- `playwright >=1.48.0` - Browser automation
+
+All dependencies are locked in `uv.lock` for reproducible builds.
 
 **IMPORTANT: Install Chromium browser for Playwright**
 
 ```bash
 # After installing Python dependencies
-playwright install chromium
+uv run playwright install chromium
 
 # Linux: Install system dependencies
 playwright install-deps chromium  # Ubuntu/Debian/CentOS
@@ -437,7 +447,17 @@ playwright install-deps chromium  # Ubuntu/Debian/CentOS
 **For Docker deployments:**
 ```dockerfile
 # Add to your Dockerfile
-RUN pip install playwright && playwright install --with-deps chromium
+# Install uv
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Copy project files
+COPY pyproject.toml uv.lock ./
+
+# Install dependencies with uv
+RUN uv sync --python 3.12 --frozen --no-dev
+
+# Install Chromium for Playwright
+RUN uv run playwright install --with-deps chromium
 ```
 
 **Without Chromium**, Normal Mode (current webpage navigation) will fail with browser errors.
@@ -489,8 +509,13 @@ gunicorn django_config.wsgi:application --bind 0.0.0.0:8000 --workers 2 --timeou
 
 ### Render
 
-1. **Build Command**: `pip install -r Requirements/requirements_mac.txt`
-   *(gunicorn and whitenoise are already in requirements)*
+1. **Build Command**:
+   ```bash
+   # Install uv and dependencies
+   curl -LsSf https://astral.sh/uv/install.sh | sh && \
+   export PATH="$HOME/.local/bin:$PATH" && \
+   uv sync --frozen --no-dev
+   ```
 
 2. **Start Command**: Use the Procfile or manually set:
    ```
@@ -621,7 +646,7 @@ web: gunicorn django_config.wsgi:application --bind 0.0.0.0:$PORT --workers 2 --
 ### `runtime.txt`
 Specifies Python version for platform deployment:
 ```
-python-3.10.12
+python-3.12.2
 ```
 
 ### `gunicorn.conf.py`
@@ -650,7 +675,7 @@ These were not in the critical issues but are recommended for production:
 3. **Logging**: Configure structured logging with log aggregation
 4. **Health Checks**: Add `/health` endpoint for monitoring
 5. **API Documentation**: Generate OpenAPI/Swagger docs
-6. **Database**: Add database support if persistent data storage is needed later
+6. **Stateless Persistence**: Revisit database support only if persistent storage becomes a requirement
 
 ---
 
@@ -698,9 +723,9 @@ For deployment issues:
 ### 📦 Deployment Assets
 
 - `Procfile` - Platform auto-deployment
-- `runtime.txt` - Python 3.10.12
+- `runtime.txt` - Python 3.12.2
 - `gunicorn.conf.py` - Production WSGI configuration
-- `.env.example` - Environment variable template
+- `Main/backend/.env.example` - Environment variable template
 - `settings_prod.py` - Production settings
 
 ### 🚀 Ready for Deployment

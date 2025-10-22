@@ -1,0 +1,47 @@
+# FinGPT Docker Compose Configuration
+# Quick start: docker compose up
+
+services:
+  api:
+    build: ./Main/backend
+
+    ports:
+      - "8000:8000"
+
+    env_file:
+      - ./Main/backend/.env  # API keys and configuration
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+    restart: unless-stopped
+
+    # Optional: Mount for live development (read-only for safety)
+    # volumes:
+    #   - ./Main/backend/api:/app/api:ro
+    #   - ./Main/backend/datascraper:/app/datascraper:ro
+    #   - ./Main/backend/mcp_client:/app/mcp_client:ro
+
+    networks:
+      - fingpt_network
+
+  frontend:
+    # Frontend extension build service (optional, for development)
+    # Uncomment to build extension alongside backend
+    # build: ./Main/frontend
+    # command: bun run watch
+    # volumes:
+    #   - ./Main/frontend/src:/app/src:ro
+    #   - ./Main/frontend/dist:/app/dist:rw
+    # networks:
+    #   - fingpt_network
+    profiles:
+      - dev  # Only runs with: docker compose --profile dev up
+
+networks:
+  fingpt_network:
+    driver: bridge
