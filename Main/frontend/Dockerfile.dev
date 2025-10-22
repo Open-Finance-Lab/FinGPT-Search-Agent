@@ -1,0 +1,22 @@
+# Development Dockerfile for FinGPT Frontend
+FROM oven/bun:1.1-slim
+
+WORKDIR /app
+
+# Copy package files
+COPY package.json bun.lock* ./
+
+# Install dependencies
+RUN bun install
+
+# Copy source files
+COPY . .
+
+# Build CSS first
+RUN bun run build:css
+
+# Expose port (if needed for dev server)
+EXPOSE 3000
+
+# Default command for development
+CMD ["bun", "run", "watch"]

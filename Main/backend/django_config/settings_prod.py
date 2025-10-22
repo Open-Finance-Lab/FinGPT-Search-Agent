@@ -9,6 +9,8 @@ Or when running with gunicorn:
     gunicorn django_config.wsgi:application --env DJANGO_SETTINGS_MODULE=django_config.settings_prod
 """
 
+from django.core.exceptions import ImproperlyConfigured
+
 from .settings import *
 
 # Production-specific overrides

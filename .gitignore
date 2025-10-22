@@ -15,9 +15,11 @@ FinGPT_Demo.iml
 Main/frontend/node_modules/
 Main/backend/node_modules/
 
-# npm packages
-Main/frontend/package-lock.json
+# npm packages (legacy - now using bun for frontend)
 Main/backend/package-lock.json
+
+# bun (keep bun.lock for reproducible builds)
+# Main/frontend/bun.lock should be committed
 
 # Python cache files
 __pycache__/

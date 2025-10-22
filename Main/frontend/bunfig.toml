@@ -1,0 +1,19 @@
+# Bun configuration for FinGPT Frontend Extension
+
+[install]
+# Frozen lockfile for reproducible builds (CI/CD should fail if lockfile changes)
+frozen = false  # Set to true in CI/CD
+# Production mode - skip devDependencies in production builds
+production = false
+# Auto-install peer dependencies
+auto = true
+# Use exact versions
+exact = false
+
+[install.cache]
+# Enable global cache for faster installs
+disable = false
+
+[run]
+# Prefer bun runtime over node
+bun = true
