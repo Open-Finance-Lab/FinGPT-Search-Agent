@@ -12,11 +12,8 @@ fingpt_rcos/
 │   ├── backend/               # Django backend with RAG and R2C context management
 │   └── frontend/              # Browser extension (Webpack-bundled JS)
 ├── mcp-server/                # Model Context Protocol server
-├── scripts/                   # Project-wide installation and setup scripts
-├── Requirements/              # Pinned Python dependencies
 ├── Docs/                      # Sphinx documentation
-├── Makefile                   # Build automation for development
-└── pyproject.toml             # Project metadata and dependencies
+└── docker-compose.yml         # One-command deployment (backend)
 ```
 
 ---
@@ -55,8 +52,6 @@ backend/
 │   └── agent.py                # MCP client functionality
 ├── data/                       # Application data storage
 │   └── preferred_links.json   # JSON storage for preferred data sources
-├── scripts/                    # Backend utility scripts
-│   └── export_requirements.py # Exports dependencies from pyproject.toml to requirements.txt
 ├── manage.py                   # Django CLI helper
 ├── pyproject.toml              # Python dependencies and project metadata
 ├── manage_deps.py              # Dependency management utilities
@@ -65,7 +60,7 @@ backend/
 ├── Procfile                    # Heroku deployment configuration
 ├── runtime.txt                 # Python version specification for deployment
 ├── package.json                # npm scripts for auxiliary tooling
-├── .env.example                # Environment variable template
+├── Main/backend/.env.example   # Backend environment variable template
 ├── DEPLOYMENT_GUIDE.md         # Deployment and production configuration guide
 ├── PLAYWRIGHT_INTEGRATION.md   # Playwright browser automation setup and usage
 └── MCP_INSTALLATION.md         # MCP server setup guide
@@ -178,19 +173,26 @@ python server.py
 
 ## 5. Additional Components
 
-### 5.1 Project-Wide Scripts (`scripts/`)
+### 5.1 Docker Compose Quick Start
 
-| Script           | Purpose                                            |
-|------------------|----------------------------------------------------|
-| `install_all.py` | Automated installation for all project components  |
-| `dev_setup.py`   | Development environment setup                      |
+All backend services can be launched with a single command:
 
-### 5.2 Python Dependencies (`Requirements/`)
+```bash
+docker compose up
+```
 
-| File                   | Purpose                                    |
-|------------------------|--------------------------------------------|
-| `requirements_mac.txt` | Pinned dependencies for macOS              |
-| `requirements_win.txt` | Pinned dependencies for Windows            |
+The compose file builds the backend image from `Main/backend/Dockerfile` using `uv` for dependency management. Provide configuration in `Main/backend/.env` (copy from `Main/backend/.env.example`).
+
+### 5.2 Managing Dependencies with `uv`
+
+If you prefer to work outside Docker:
+
+```bash
+cd Main/backend
+uv sync --python 3.12 --frozen          # Install dependencies from uv.lock
+uv run playwright install chromium      # One-time browser install for Playwright tooling
+uv run python manage.py runserver
+```
 
 ### 5.3 Documentation (`Docs/`)
 
@@ -216,7 +218,7 @@ make html
 - **OpenAI API** – LLM integration
 - **DeepSeek API** – Alternative LLM provider
 - **Anthropic API** – Claude integration
-- **Playwright** – Browser automation (requires Chromium: `playwright install chromium`)
+- **Playwright** – Browser automation (requires Chromium: `uv run playwright install chromium`)
 - **FAISS** – Vector similarity search
 - **BeautifulSoup4** – Web scraping
 - **tiktoken** – Token counting for R2C context management
@@ -244,11 +246,14 @@ make html
 ```bash
 cd Main/backend
 
+# Ensure dependencies are installed for Python 3.12
+uv sync --python 3.12 --frozen
+
 # Install Chromium for Playwright (required for Normal Mode)
-playwright install chromium
+uv run playwright install chromium
 
 # Start development server
-python manage.py runserver
+uv run python manage.py runserver
 ```
 
 ### Frontend Development
@@ -295,12 +300,12 @@ bun run build:full
 
 ## 9. Environment Configuration
 
-### Required API Keys (in `.env`)
+### Required API Keys (in `Main/backend/.env`)
 - `OPENAI_API_KEY` – OpenAI API key
 - `DEEPSEEK_API_KEY` – DeepSeek API key
 - `ANTHROPIC_API_KEY` – Anthropic API key
 
-See `Main/backend/.env.example` for full configuration template.
+See `Main/backend/.env.example` for the full configuration template.
 
 ---
 
