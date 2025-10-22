@@ -65,7 +65,7 @@ message_list = [
 
 # R2C
 r2c_manager = R2CContextManager(
-    max_tokens=20000,
+    max_tokens=50000,
     compression_ratio=0.5,
     rho=0.5,
     gamma=1.0
