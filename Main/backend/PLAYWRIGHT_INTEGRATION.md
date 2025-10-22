@@ -133,12 +133,10 @@ Playwright requires Chromium browser to be installed. The browser is NOT include
 cd Main/backend
 
 # Install Python dependencies (if not already done)
-poetry install
-# or
-pip install playwright
+uv sync --python 3.12 --frozen
 
 # REQUIRED: Install Chromium browser
-playwright install chromium
+uv run playwright install chromium
 ```
 
 ### Troubleshooting Installation
@@ -147,12 +145,12 @@ playwright install chromium
 
 This means Chromium is not installed. Run:
 ```bash
-playwright install chromium
+uv run playwright install chromium
 ```
 
 **Error: "Browser closed" or "Target page, context or browser has been closed"**
 
-1. Ensure Chromium is installed: `playwright install chromium`
+1. Ensure Chromium is installed: `uv run playwright install chromium`
 2. Check system dependencies (Linux only):
    ```bash
    # Ubuntu/Debian
@@ -177,7 +175,7 @@ playwright install chromium
 
 ```bash
 # Check if Chromium is installed
-playwright install chromium --dry-run
+uv run playwright install chromium --dry-run
 
 # Should output: "Browser is already installed"
 ```
