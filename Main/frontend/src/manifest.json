@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Agentic FinSearch",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "A demo for the extension for Agentic FinSearch. Frontend-only, backend needs to be locally deployed.",
   "icons": {
     "16": "assets/16x16_icon.png",
