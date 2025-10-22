@@ -13,12 +13,29 @@ services:
 
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health/"]
-      interval: 30s
+      interval: 2m
       timeout: 10s
       retries: 3
-      start_period: 40s
+      start_period: 1m
 
     restart: unless-stopped
+
+    develop:
+      watch:
+        - action: sync
+          path: ./Main/backend
+          target: /app
+          ignore:
+            - .venv/
+            - node_modules/
+            - __pycache__/
+            - "*.log"
+            - embeddings.pkl
+            - fine_tuning_data.pkl
+        - action: rebuild
+          path: ./Main/backend/pyproject.toml
+        - action: rebuild
+          path: ./Main/backend/uv.lock
 
     # Optional: Mount for live development (read-only for safety)
     # volumes:
