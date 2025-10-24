@@ -3,7 +3,7 @@
 
 # ==========================================
 # Stage 1: UV installer (cached separately)
-FROM python:3.12-slim as uv-installer
+FROM python:3.12-slim AS uv-installer
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
@@ -16,7 +16,7 @@ ENV PATH="/root/.local/bin:$PATH"
 
 # ==========================================
 # Stage 2: Dependencies builder
-FROM python:3.12-slim as builder
+FROM python:3.12-slim AS builder
 
 # Copy uv from previous stage
 COPY --from=uv-installer /root/.local /root/.local
@@ -35,7 +35,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 # ==========================================
 # Stage 3: Playwright installer (separate for caching)
-FROM python:3.12-slim as playwright-installer
+FROM python:3.12-slim AS playwright-installer
 
 # Install minimal Playwright dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
