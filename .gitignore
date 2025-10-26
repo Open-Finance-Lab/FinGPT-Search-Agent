@@ -94,3 +94,4 @@ mcp-server/uv.lock
 /Main/backend/api/__pycache__
 
 Main/backend/scripts/buffet_agent_test.py
+/mcpTest
