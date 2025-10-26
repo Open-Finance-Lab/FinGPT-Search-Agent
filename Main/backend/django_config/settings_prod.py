@@ -27,6 +27,10 @@ SECURE_BROWSER_XSS_FILTER = True
 SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = 'DENY'
 
+# Make Django trust TLS headers from the reverse proxy (Caddy)
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+USE_X_FORWARDED_HOST = True
+
 # CORS - must be explicitly configured in production
 # Get from environment variable or fail
 cors_origins_env = os.getenv('CORS_ALLOWED_ORIGINS')
