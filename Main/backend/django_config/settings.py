@@ -29,7 +29,7 @@ load_dotenv(env_path)
 SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'django-insecure-8ok2ltjd3k&+mfz0s78m&^ei26)my3&m(5#5ko9+i=kyz_l2j@')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.getenv('DJANGO_DEBUG', 'True').lower() in ('true', '1', 't')
+DEBUG = os.getenv('DJANGO_DEBUG', 'True').strip().lower() in ('true', '1', 't')
 
 # Parse ALLOWED_HOSTS from environment variable (comma-separated)
 ALLOWED_HOSTS = os.getenv('DJANGO_ALLOWED_HOSTS', '*').split(',')
@@ -135,11 +135,11 @@ CORS_ALLOW_CREDENTIALS = True
 
 # Session cookie settings to work with browser extensions
 SESSION_COOKIE_SAMESITE = 'None'  # Required for cross-origin requests from extensions
-SESSION_COOKIE_SECURE = os.getenv('SESSION_COOKIE_SECURE', 'False').lower() in ('true', '1', 't')
+SESSION_COOKIE_SECURE = os.getenv('SESSION_COOKIE_SECURE', 'False').strip().lower() in ('true', '1', 't')
 SESSION_COOKIE_HTTPONLY = True  # Prevent JavaScript access to session cookie
 
 # CSRF settings
-CSRF_COOKIE_SECURE = os.getenv('CSRF_COOKIE_SECURE', 'False').lower() in ('true', '1', 't')
+CSRF_COOKIE_SECURE = os.getenv('CSRF_COOKIE_SECURE', 'False').strip().lower() in ('true', '1', 't')
 CSRF_COOKIE_HTTPONLY = False  # Must be False for JavaScript to read CSRF token
 # Parse trusted origins from environment
 csrf_origins_env = os.getenv('CORS_ALLOWED_ORIGINS', '')
@@ -149,10 +149,10 @@ if csrf_origins_env:
 # HTTPS Security Headers
 # Only enable in production (when DEBUG=False)
 if not DEBUG:
-    SECURE_SSL_REDIRECT = os.getenv('SECURE_SSL_REDIRECT', 'True').lower() in ('true', '1', 't')
+    SECURE_SSL_REDIRECT = os.getenv('SECURE_SSL_REDIRECT', 'True').strip().lower() in ('true', '1', 't')
     SECURE_HSTS_SECONDS = int(os.getenv('SECURE_HSTS_SECONDS', '31536000'))  # 1 year
-    SECURE_HSTS_INCLUDE_SUBDOMAINS = os.getenv('SECURE_HSTS_INCLUDE_SUBDOMAINS', 'True').lower() in ('true', '1', 't')
-    SECURE_HSTS_PRELOAD = os.getenv('SECURE_HSTS_PRELOAD', 'True').lower() in ('true', '1', 't')
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = os.getenv('SECURE_HSTS_INCLUDE_SUBDOMAINS', 'True').strip().lower() in ('true', '1', 't')
+    SECURE_HSTS_PRELOAD = os.getenv('SECURE_HSTS_PRELOAD', 'True').strip().lower() in ('true', '1', 't')
     SECURE_BROWSER_XSS_FILTER = True
     SECURE_CONTENT_TYPE_NOSNIFF = True
     X_FRAME_OPTIONS = 'DENY'
