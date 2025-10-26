@@ -1,5 +1,6 @@
 // settings_window.js
 import { availableModels, selectedModel, getSelectedModel, setSelectedModel, fetchAvailableModels, getAvailableModels, getModelDetails } from '../config.js';
+import { buildBackendUrl } from '../backendConfig.js';
 //import { loadPreferredLinks, createAddLinkButton } from '../helpers.js';
 import { createLinkManager } from './link_manager.js';
 
@@ -253,7 +254,7 @@ function createSettingsWindow(isFixedModeRef, settingsIcon, positionModeIcon) {
             formData.append('json_data', jsonBlob, 'data.json');
 
             // Making the POST request to Flask
-            fetch('http://127.0.0.1:8000/api/folder_path', {
+            fetch(buildBackendUrl('/api/folder_path'), {
                 method: 'POST',
                 body: formData
             })

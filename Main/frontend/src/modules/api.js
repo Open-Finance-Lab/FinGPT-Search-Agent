@@ -1,5 +1,7 @@
 // api.js
 
+import { buildBackendUrl } from './backendConfig.js';
+
 // Session ID management
 let currentSessionId = null;
 
@@ -9,7 +11,7 @@ function setSessionId(sessionId) {
 
 // Function to POST JSON to the server endpoint
 function postWebTextToServer(textContent, currentUrl) {
-    return fetch("http://127.0.0.1:8000/input_webtext/", {
+    return fetch(buildBackendUrl('/input_webtext/'), {
         method: "POST",
         credentials: "include",
         headers: {
@@ -65,7 +67,7 @@ function getChatResponse(question, selectedModel, promptMode, useRAG, useMCP) {
     }
 
     // Get preferred links from localStorage for advanced mode
-    let url = `http://127.0.0.1:8000/${endpoint}/?question=${encodedQuestion}` +
+    let url = `${buildBackendUrl(`/${endpoint}/`)}?question=${encodedQuestion}` +
         `&models=${selectedModel}` +
         `&is_advanced=${promptMode}` +
         `&use_rag=${useRAG}` +
@@ -132,7 +134,8 @@ function getChatResponseStream(question, selectedModel, promptMode, useRAG, useM
     let url;
     if (promptMode) {
         // Research mode streaming endpoint
-        url = `http://127.0.0.1:8000/get_adv_response_stream/?question=${encodedQuestion}` +
+        url = `${buildBackendUrl('/get_adv_response_stream/')}` +
+            `?question=${encodedQuestion}` +
             `&models=${selectedModel}` +
             `&use_rag=${useRAG}` +
             `&use_r2c=true` +
@@ -152,7 +155,8 @@ function getChatResponseStream(question, selectedModel, promptMode, useRAG, useM
         }
     } else {
         // Thinking mode streaming endpoint
-        url = `http://127.0.0.1:8000/get_chat_response_stream/?question=${encodedQuestion}` +
+        url = `${buildBackendUrl('/get_chat_response_stream/')}` +
+            `?question=${encodedQuestion}` +
             `&models=${selectedModel}` +
             `&use_rag=${useRAG}` +
             `&use_r2c=true` +
@@ -289,7 +293,7 @@ function getChatResponseStream(question, selectedModel, promptMode, useRAG, useM
 
 // Function to clear messages
 function clearMessages() {
-    return fetch(`http://127.0.0.1:8000/clear_messages/?use_r2c=true&session_id=${currentSessionId}`, { method: "POST", credentials: "include" })
+    return fetch(`${buildBackendUrl('/clear_messages/')}?use_r2c=true&session_id=${currentSessionId}`, { method: "POST", credentials: "include" })
         .then(response => {
             if (!response.ok) {
                 throw new Error('Network response was not ok');
@@ -313,11 +317,10 @@ function getSourceUrls(searchQuery, currentUrl) {
     }
 
     const queryString = params.toString();
-    const endpoint = queryString
-        ? `http://127.0.0.1:8000/get_source_urls/?${queryString}`
-        : 'http://127.0.0.1:8000/get_source_urls/';
+    const baseEndpoint = buildBackendUrl('/get_source_urls/');
+    const requestUrl = queryString ? `${baseEndpoint}?${queryString}` : baseEndpoint;
 
-    return fetch(endpoint, { method: "GET", credentials: "include" })
+    return fetch(requestUrl, { method: "GET", credentials: "include" })
         .then(response => response.json())
         .catch(error => {
             console.error('There was a problem with your fetch operation:', error);
@@ -329,10 +332,9 @@ function getSourceUrls(searchQuery, currentUrl) {
 function logQuestion(question, button) {
     const currentUrl = window.location.href;
 
-    return fetch(
-        `http://127.0.0.1:8000/log_question/?question=${encodeURIComponent(question)}&button=${encodeURIComponent(button)}&current_url=${encodeURIComponent(currentUrl)}`,
-        { method: "GET", credentials: "include" }
-    )
+    const requestUrl = `${buildBackendUrl('/log_question/')}?question=${encodeURIComponent(question)}&button=${encodeURIComponent(button)}&current_url=${encodeURIComponent(currentUrl)}`;
+
+    return fetch(requestUrl, { method: "GET", credentials: "include" })
         .then(response => response.json())
         .then(data => {
             if (data.status !== 'success') {
@@ -351,7 +353,7 @@ function syncPreferredLinks() {
     try {
         const preferredLinks = JSON.parse(localStorage.getItem('preferredLinks') || '[]');
         if (preferredLinks.length > 0) {
-            return fetch('http://127.0.0.1:8000/api/sync_preferred_urls/', {
+            return fetch(buildBackendUrl('/api/sync_preferred_urls/'), {
                 method: 'POST',
                 credentials: 'include',
                 headers: {
