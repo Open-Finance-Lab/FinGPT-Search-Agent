@@ -72,7 +72,6 @@ Main/backend/api/questionLog.csv
 Main/backend/django_debug.log
 
 # user preferred links
-Main/backend/data/preferred_links.json
 
 # mcp
 /mcp-server/.venv
