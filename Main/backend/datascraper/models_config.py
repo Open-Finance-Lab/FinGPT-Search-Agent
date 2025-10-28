@@ -12,7 +12,7 @@ MODELS_CONFIG = {
         "supports_mcp": True,
         "supports_advanced": True,
         "max_tokens": 128000,
-        "description": "GPT-4o Mini - Fast and efficient"
+        "description": "Fast and efficient light-weight model"
     },
     # "o1-pro": {
     #     "provider": "openai",

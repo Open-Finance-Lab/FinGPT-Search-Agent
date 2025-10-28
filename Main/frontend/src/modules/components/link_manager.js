@@ -32,11 +32,13 @@ export function createLinkManager() {
         }
     }
 
-    function savePreferredLinks(links) {
+    function savePreferredLinks(links, { sync = true } = {}) {
         try {
             localStorage.setItem('preferredLinks', JSON.stringify(links));
-            // Sync with backend
-            syncWithBackend(links);
+            if (sync) {
+                // Sync with backend
+                syncWithBackend(links);
+            }
         } catch (e) {
             console.error('Error saving preferred links:', e);
         }
@@ -61,6 +63,14 @@ export function createLinkManager() {
                 console.error('Error syncing with backend:', error);
             });
         }
+    }
+
+    function ensureInputWrapper() {
+        let inputWrapper = linkList.querySelector('.link-input:not([data-link-url])');
+        if (!inputWrapper) {
+            inputWrapper = createLinkInput();
+        }
+        return inputWrapper;
     }
 
     function createLinkInput() {
@@ -102,6 +112,8 @@ export function createLinkManager() {
                 }
             }
         });
+
+        return wrapper;
     }
 
     function addLink(value, wrapper, skipSave = false) {
@@ -135,6 +147,51 @@ export function createLinkManager() {
         return links;
     }
 
+    function populateLinks(links) {
+        const inputWrapper = ensureInputWrapper();
+        linkList.querySelectorAll('[data-link-url]').forEach(wrapper => wrapper.remove());
+        links.forEach(link => {
+            const wrapper = document.createElement('div');
+            wrapper.className = 'link-input';
+            linkList.insertBefore(wrapper, inputWrapper);
+            addLink(link, wrapper, true); // Skip save since we're rendering state
+        });
+    }
+
+    function hydrateFromBackend() {
+        if (typeof fetch === 'undefined') {
+            return;
+        }
+
+        fetch(buildBackendUrl('/api/get_preferred_urls/'), {
+            method: 'GET',
+            credentials: 'include'
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`Failed to load preferred links: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            const urls = Array.isArray(data.urls) ? data.urls : [];
+            if (urls.length === 0) {
+                return;
+            }
+
+            const storedLinks = loadPreferredLinks();
+            if (storedLinks.length > 0) {
+                return; // Respect user-customized links in local storage
+            }
+
+            savePreferredLinks(urls, { sync: false });
+            populateLinks(urls);
+        })
+        .catch(error => {
+            console.error('Error fetching preferred links from backend:', error);
+        });
+    }
+
     // Modal logic
     modal.querySelector('.confirm-btn').addEventListener('click', () => {
         if (linkToDelete) {
@@ -161,15 +218,10 @@ export function createLinkManager() {
 
     // Initialize - Load existing links first
     const existingLinks = loadPreferredLinks();
-    existingLinks.forEach(link => {
-        const wrapper = document.createElement('div');
-        wrapper.className = 'link-input';
-        linkList.appendChild(wrapper);
-        addLink(link, wrapper, true); // Skip save since we're loading
-    });
-
-    // Add the input field at the end
-    createLinkInput();
+    populateLinks(existingLinks);
+    if (existingLinks.length === 0) {
+        hydrateFromBackend();
+    }
 
     // Return both the link list and the modal
     const container = document.createElement('div');
