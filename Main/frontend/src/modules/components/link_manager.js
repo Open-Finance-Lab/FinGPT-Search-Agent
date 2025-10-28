@@ -1,3 +1,5 @@
+import { buildBackendUrl } from '../backendConfig.js';
+
 export function createLinkManager() {
     // Container for the whole link manager
     const linkList = document.createElement('div');
@@ -43,7 +45,7 @@ export function createLinkManager() {
     function syncWithBackend(links) {
         // Optional: Sync with backend if available
         if (typeof fetch !== 'undefined') {
-            fetch('http://127.0.0.1:8000/api/sync_preferred_urls/', {
+            fetch(buildBackendUrl('/api/sync_preferred_urls/'), {
                 method: 'POST',
                 credentials: 'include',
                 headers: {

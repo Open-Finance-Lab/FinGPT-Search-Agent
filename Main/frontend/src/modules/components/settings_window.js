@@ -1,5 +1,6 @@
 // settings_window.js
 import { availableModels, selectedModel, getSelectedModel, setSelectedModel, fetchAvailableModels, getAvailableModels, getModelDetails } from '../config.js';
+import { buildBackendUrl } from '../backendConfig.js';
 //import { loadPreferredLinks, createAddLinkButton } from '../helpers.js';
 import { createLinkManager } from './link_manager.js';
 
@@ -164,6 +165,8 @@ function createSettingsWindow(isFixedModeRef, settingsIcon, positionModeIcon) {
 
 
     // —– MCP Mode Toggle —–
+    // MCP Mode toggle temporarily disabled
+    /*
     const mcpLabel = document.createElement('label');
     mcpLabel.className = 'settings-checkbox-label';
     mcpLabel.innerText = "MCP Mode";
@@ -172,11 +175,14 @@ function createSettingsWindow(isFixedModeRef, settingsIcon, positionModeIcon) {
     mcpSwitch.id = "mcpModeSwitch";
     mcpSwitch.style.transform = 'translate(4px, -2px)';
     mcpLabel.appendChild(mcpSwitch);
+    */
 
 
 
 
     // RAG Section
+    // RAG settings temporarily disabled
+    /*
     const ragSectionContainer = document.createElement('div');
     ragSectionContainer.id = 'rag-section-container';
 
@@ -253,7 +259,7 @@ function createSettingsWindow(isFixedModeRef, settingsIcon, positionModeIcon) {
             formData.append('json_data', jsonBlob, 'data.json');
 
             // Making the POST request to Flask
-            fetch('http://127.0.0.1:8000/api/folder_path', {
+            fetch(buildBackendUrl('/api/folder_path'), {
                 method: 'POST',
                 body: formData
             })
@@ -364,10 +370,11 @@ function createSettingsWindow(isFixedModeRef, settingsIcon, positionModeIcon) {
         ragContent.style.display = isHidden ? "block" : "none";
         ragToggleIcon.innerText = isHidden ? "⯅" : "⯆";
     };
+    */
 
     // Append elements to settings window
-    settings_window.appendChild(mcpLabel);
-    settings_window.appendChild(ragSectionContainer);
+    // settings_window.appendChild(mcpLabel);
+    // settings_window.appendChild(ragSectionContainer);
     
     settingsIcon.onclick = function (event) {
         event.stopPropagation();

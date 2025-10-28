@@ -1,0 +1,37 @@
+# Example Caddyfile for FinGPT backend behind a Podman pod proxy
+#
+# Replace `fingpt.example.com` with your real domain and update the email
+# so Caddy can request Let's Encrypt certificates automatically.
+#
+# This file is mounted into the Caddy container at /etc/caddy/Caddyfile.
+
+{
+    email admin@example.com
+    # Remove the line below if you want HTTP requests to redirect to HTTPS automatically.
+    auto_https disable_redirects
+}
+
+fingpt.example.com {
+    encode zstd gzip
+
+    # Forward all traffic to the backend container within the same pod.
+    reverse_proxy fingpt-api:8000 {
+        header_up X-Forwarded-Proto {scheme}
+        header_up X-Forwarded-Host {host}
+    }
+
+    # Allow health checks to pass straight through without caching.
+    @healthcheck path /health/
+    handle @healthcheck {
+        reverse_proxy fingpt-api:8000
+    }
+
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+    }
+
+    log {
+        output stdout
+        format console
+    }
+}
