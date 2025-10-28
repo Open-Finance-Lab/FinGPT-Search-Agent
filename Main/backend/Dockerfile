@@ -104,12 +104,18 @@ ENV PATH="/app/.venv/bin:$PATH" \
 # Copy application code (changes frequently, so last)
 COPY --chown=fingpt:fingpt . .
 
+# Normalize line endings and ensure entrypoint is executable
+RUN sed -i 's/\r$//' /app/entrypoint.sh && chmod +x /app/entrypoint.sh
+
 # Create necessary directories
 RUN mkdir -p /app/staticfiles /app/media /app/logs \
     && chown -R fingpt:fingpt /app
 
 # Switch to non-root user
 USER fingpt
+
+# Entrypoint handles optional collectstatic before launching Gunicorn
+ENTRYPOINT ["/app/entrypoint.sh"]
 
 # Expose port
 EXPOSE 8000

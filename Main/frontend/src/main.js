@@ -3,6 +3,7 @@ import { postWebTextToServer, setSessionId } from './modules/api.js';
 import { createUI } from './modules/ui.js';
 import { fetchAvailableModels } from './modules/config.js';
 import { initializeWithCurrentPage } from './modules/sourcesCache.js';
+import { getBackendBaseUrl } from './modules/backendConfig.js';
 
 // Generate a unique session ID for this page load
 const sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -23,7 +24,7 @@ fetchAvailableModels().then(() => {
     console.log("Models fetched from backend");
 }).catch(error => {
     console.error("CRITICAL: Failed to fetch models from backend:", error);
-    alert(`Failed to connect to Agentic FinSearch backend: ${error.message}\n\nPlease ensure the backend server is running on http://localhost:8000`);
+    alert(`Failed to connect to Agentic FinSearch backend: ${error.message}\n\nPlease ensure the backend server at ${getBackendBaseUrl()} is reachable.`);
 });
 
 // POST JSON to the server endpoint
