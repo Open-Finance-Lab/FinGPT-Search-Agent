@@ -295,10 +295,12 @@ function handleChatResponse(question, promptMode = false, useStreaming = true) {
   );
 
   // Read the RAG checkbox state
-  const useRAG = document.getElementById('ragSwitch').checked;
+  const ragSwitchEl = document.getElementById('ragSwitch');
+  const useRAG = ragSwitchEl ? !!ragSwitchEl.checked : false;
 
   // Read the MCP mode toggle
-  const useMCP = document.getElementById('mcpModeSwitch').checked;
+  const mcpSwitchEl = document.getElementById('mcpModeSwitch');
+  const useMCP = mcpSwitchEl ? !!mcpSwitchEl.checked : false;
 
   const selectedModel = getSelectedModel();
 

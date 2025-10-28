@@ -43,12 +43,18 @@ class PreferredLinksManager:
 
     def _init_storage(self):
         """Initialize the storage file with default structure."""
+        default_links = [
+            "https://finance.yahoo.com",
+            "https://www.sec.gov/search-filings",
+            "https://bloomberg.com",
+        ]
+
         default_data = {
             "version": "1.0",
-            "preferred_links": [],
+            "preferred_links": default_links,
             "metadata": {
                 "last_updated": None,
-                "total_links": 0
+                "total_links": len(default_links)
             }
         }
         self._write_data(default_data)
