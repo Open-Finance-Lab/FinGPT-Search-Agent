@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Agentic FinSearch",
-  "version": "0.7.0",
-  "description": "A demo for the extension for Agentic FinSearch. Frontend-only, backend needs to be locally deployed.",
+  "version": "0.8.0",
+  "description": "Agentic FinSearch companion extension. Defaults to the hosted backend at agenticfinsearch.org, with optional local backend support.",
   "icons": {
     "16": "assets/16x16_icon.png",
     "32": "assets/32x32_icon.png"
@@ -31,7 +31,10 @@
 
   ],
   "host_permissions": [
-    "http://127.0.0.1:8000/*"
+    "https://agenticfinsearch.org/*",
+    "https://www.agenticfinsearch.org/*",
+    "http://127.0.0.1:8000/*",
+    "http://localhost:8000/*"
   ],
   "web_accessible_resources": [
     {
