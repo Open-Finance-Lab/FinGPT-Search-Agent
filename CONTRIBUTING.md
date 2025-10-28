@@ -104,7 +104,7 @@ A contribution is considered complete when ALL of the following criteria are met
 - [ ] Code integrates cleanly with existing codebase
 - [ ] No merge conflicts
 - [ ] Dependencies documented in appropriate requirements files
-- [ ] Environment variables documented in `.env.example`
+- [ ] Environment variables documented in `Main/backend/.env.example`
 
 ### Review Readiness
 - [ ] Self-reviewed before submitting PR

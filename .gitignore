@@ -1,5 +1,6 @@
 # environment variables
 Main/backend/.env
+Main/backend/.env.production
 # older ver has env in here
 chat_interface/backend_modules/.env
 
@@ -15,9 +16,11 @@ FinGPT_Demo.iml
 Main/frontend/node_modules/
 Main/backend/node_modules/
 
-# npm packages
-Main/frontend/package-lock.json
+# npm packages (legacy - now using bun for frontend)
 Main/backend/package-lock.json
+
+# bun (keep bun.lock for reproducible builds)
+# Main/frontend/bun.lock should be committed
 
 # Python cache files
 __pycache__/
@@ -73,6 +76,7 @@ Main/backend/data/preferred_links.json
 
 # mcp
 /mcp-server/.venv
+/mcpTest
 
 # claude code local settings
 .claude/settings.local.json
@@ -91,4 +95,9 @@ mcp-server/uv.lock
 /Main/backend/mcp_client/__pycache__
 /Main/backend/api/__pycache__
 
+# scripts
 Main/backend/scripts/buffet_agent_test.py
+
+# docker build file
+fingpt-api.tar
+

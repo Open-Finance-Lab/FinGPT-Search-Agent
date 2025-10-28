@@ -1,6 +1,9 @@
 const path = require('path');
 const CopyPlugin = require('copy-webpack-plugin');
 const webpack = require('webpack');
+const TerserPlugin = require('terser-webpack-plugin');
+
+const isBun = Boolean(process.versions && process.versions.bun);
 
 module.exports = {
     entry: './src/main.js',
@@ -44,6 +47,12 @@ module.exports = {
         extensions: ['.js'],
     },
     optimization: {
+        minimize: true,
+        minimizer: [
+            new TerserPlugin({
+                parallel: !isBun, // Bun lacks Worker stdout/stderr/resourceLimits support
+            }),
+        ],
         splitChunks: {
             chunks: 'all',
             cacheGroups: {
