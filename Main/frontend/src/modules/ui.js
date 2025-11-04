@@ -6,6 +6,8 @@ import { createChatInterface } from './components/chat.js';
 import { createSettingsWindow } from './components/settings_window.js';
 import { createLinkManager } from './components/link_manager.js';
 
+const DEFAULT_POPUP_HEIGHT = '520px';
+
 // Function to create UI elements
 function createUI() {
     let isFixedMode = true;
@@ -74,7 +76,7 @@ function createUI() {
     };
 
     // Header
-    const header = createHeader(popup, settings_window, settingsIcon, positionModeIcon, isFixedModeRef);
+    const header = createHeader(popup, settings_window, settingsIcon, positionModeIcon, isFixedModeRef, DEFAULT_POPUP_HEIGHT);
 
     // Intro
     const intro = document.createElement('div');
@@ -141,6 +143,18 @@ function createUI() {
     popup.appendChild(inputContainer);
     popup.appendChild(buttonContainer);
 
+    const resizeHandleBottomRight = document.createElement('div');
+    resizeHandleBottomRight.className = 'resize-handle resize-handle--bottom-right';
+    resizeHandleBottomRight.dataset.resizeHandle = 'bottom-right';
+    resizeHandleBottomRight.setAttribute('aria-hidden', 'true');
+    const resizeHandleBottomLeft = document.createElement('div');
+    resizeHandleBottomLeft.className = 'resize-handle resize-handle--bottom-left';
+    resizeHandleBottomLeft.dataset.resizeHandle = 'bottom-left';
+    resizeHandleBottomLeft.setAttribute('aria-hidden', 'true');
+
+    popup.appendChild(resizeHandleBottomRight);
+    popup.appendChild(resizeHandleBottomLeft);
+
     document.body.appendChild(sources_window);
     document.body.appendChild(settings_window);
     document.body.appendChild(popup);
@@ -152,10 +166,10 @@ function createUI() {
     popup.style.right = "2%";
     popup.style.left = "auto";
     popup.style.width = '450px';
-    popup.style.height = '650px';
+    popup.style.height = DEFAULT_POPUP_HEIGHT;
 
     const sourceWindowOffsetX = 10;
-    makeDraggableAndResizable(popup, sourceWindowOffsetX, isFixedModeRef.value);
+    makeDraggableAndResizable(popup, sourceWindowOffsetX);
 
     const popupRect = popup.getBoundingClientRect();
     // Position sources window to the left of the main popup

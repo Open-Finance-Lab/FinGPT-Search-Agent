@@ -3,7 +3,7 @@
     text-align: center;
     position: fixed;
     width: 450px;
-    height: 650px;
+    height: 520px;
     background-color: #333;
     border-radius: 15px;
     box-shadow: 5px 0px 10px black;
@@ -12,11 +12,55 @@
     color: white;
     display: flex;
     flex-direction: column;
-    padding: 20px;
-    resize: both;
-    min-width: 250px;
-    min-height: 80px;
+    padding: 20px 20px 24px;
+    min-width: 360px;
+    min-height: 420px;
     user-select: text;
+}
+
+#draggableElement .resize-handle {
+    position: absolute;
+    width: 18px;
+    height: 18px;
+    bottom: 16px;
+    border-radius: 6px;
+    background-color: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: auto;
+    user-select: none;
+    touch-action: none;
+    z-index: 5;
+}
+
+#draggableElement .resize-handle::after {
+    content: '';
+    width: 8px;
+    height: 8px;
+    display: block;
+    border: 2px solid transparent;
+}
+
+#draggableElement .resize-handle--bottom-right {
+    right: 12px;
+    cursor: se-resize;
+}
+
+#draggableElement .resize-handle--bottom-right::after {
+    border-right-color: rgba(255, 255, 255, 0.45);
+    border-bottom-color: rgba(255, 255, 255, 0.45);
+}
+
+#draggableElement .resize-handle--bottom-left {
+    left: 12px;
+    cursor: sw-resize;
+}
+
+#draggableElement .resize-handle--bottom-left::after {
+    border-left-color: rgba(255, 255, 255, 0.45);
+    border-bottom-color: rgba(255, 255, 255, 0.45);
 }
 
 /* Custom Scrollbar */
@@ -99,3 +143,6 @@
     display: none;
 }
 
+.minimized .resize-handle {
+    display: none;
+}
