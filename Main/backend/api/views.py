@@ -39,6 +39,8 @@ from agents import Runner
 from datascraper.r2c_context_manager import R2CContextManager
 from datascraper.models_config import MODELS_CONFIG
 
+from backend.scripts.mongo_client import save_conversation
+
 # Constants
 QUESTION_LOG_PATH = os.path.join(os.path.dirname(__file__), 'questionLog.csv')
 
@@ -985,6 +987,20 @@ def folder_path(request):
             return JsonResponse({'error': str(e)}, status=500)
     else:
         return JsonResponse({'error': 'Only POST requests allowed'}, status=405)
+
+@csrf_exempt
+def save_conversation_view(request):
+    if request.method != "POST":
+        return HttpResponseNotAllowed(["POST"])
+    try:
+        payload = json.loads(request.body.decode("utf-8") if isinstance(request.body, bytes) else request.body)
+    except Exception:
+        return HttpResponseBadRequest("Invalid JSON")
+    try:
+        inserted_id = save_conversation(payload)
+    except Exception as e:
+        return JsonResponse({"ok": False, "error": str(e)}, status=500)
+    return JsonResponse({"ok": True, "id": inserted_id})
 
 def health(request):
     """

@@ -372,6 +372,20 @@ function syncPreferredLinks() {
     return Promise.resolve();
 }
 
+export async function saveConversationToServer(conversation) {
+  try {
+    const res = await fetch('/api/conversations/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(conversation)
+    });
+    return await res.json();
+  } catch (err) {
+    console.error("Failed to save conversation:", err);
+    return { ok: false, error: err.message };
+  }
+}
+
 export {
     postWebTextToServer,
     getChatResponse,
