@@ -1,5 +1,6 @@
 // header.js
-function createHeader(popup, settings_window, settingsIcon, positionModeIcon, isFixedModeRef) {
+function createHeader(popup, settings_window, settingsIcon, positionModeIcon, isFixedModeRef, defaultHeight) {
+    const expandedHeight = defaultHeight ?? '520px';
     const header = document.createElement('div');
     header.id = "header";
     header.className = "draggable";
@@ -16,7 +17,7 @@ function createHeader(popup, settings_window, settingsIcon, positionModeIcon, is
     minimizeIcon.onclick = function () {
         if (popup.classList.contains('minimized')) {
             popup.classList.remove('minimized');
-            popup.style.height = '600px';
+            popup.style.height = expandedHeight;
         } else {
             popup.classList.add('minimized');
             popup.style.height = '60px';
