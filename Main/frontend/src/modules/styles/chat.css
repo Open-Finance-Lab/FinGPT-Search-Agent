@@ -63,7 +63,7 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  margin-top: 20px;
+  margin-top: 12px;
 }
 
 /* Textbox */
@@ -89,6 +89,7 @@
   justify-content: flex-start;
   align-items: center;
   margin-top: 10px;
+  margin-bottom: 18px;
   width: 100%;
 }
 
@@ -272,6 +273,7 @@
   display: flex;
   justify-content: space-between;
   margin-top: 10px;
+  margin-bottom: 4px;
 }
 
 /* Response Action Row (contains action buttons and rating) */
