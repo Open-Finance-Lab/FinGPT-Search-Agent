@@ -6,10 +6,10 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "build:css": "bun build-css.js",
-    "build": "bun webpack",
+    "build": "bunx webpack",
     "check": "bun check-dist.js",
-    "build:full": "bun build-css.js && bun webpack && bun check-dist.js",
-    "watch": "bun webpack --watch --config webpack.config.js"
+    "build:full": "bun build-css.js && bunx webpack && bun check-dist.js",
+    "watch": "bunx webpack --watch --config webpack.config.js"
   },
   "keywords": [],
   "author": "",
