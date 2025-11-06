@@ -7,6 +7,7 @@ import { createSettingsWindow } from './components/settings_window.js';
 import { createLinkManager } from './components/link_manager.js';
 
 const DEFAULT_POPUP_HEIGHT = '520px';
+const DEFAULT_POPUP_WIDTH = '690px';
 
 // Function to create UI elements
 function createUI() {
@@ -165,7 +166,7 @@ function createUI() {
     // Position dynamically from the right edge
     popup.style.right = "2%";
     popup.style.left = "auto";
-    popup.style.width = '450px';
+    popup.style.width = DEFAULT_POPUP_WIDTH;
     popup.style.height = DEFAULT_POPUP_HEIGHT;
 
     const sourceWindowOffsetX = 10;
