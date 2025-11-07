@@ -142,18 +142,6 @@ function clear() {
         });
 }
 
-function collectConversationFromDOM() {
-    const response = document.getElementById('respons');
-    if (!response) return [];
-    const nodes = Array.from(response.children);
-    return nodes.map(node => {
-        const role = node.className && node.className.includes('assistant') ? 'assistant'
-                    : node.className && node.className.includes('user') ? 'user'
-                    : 'system';
-        return { role, text: node.innerText || '', timestamp: Date.now() };
-    });
-}
-
 // Ask button click
 function get_chat_response() {
     const question = document.getElementById('textbox').value;
@@ -163,13 +151,6 @@ function get_chat_response() {
         logQuestion(question, 'Ask');
         document.getElementById('textbox').value = '';
         
-        const conversationPayload = {
-            messages: collectConversationFromDOM(),
-            metadata: { model: window.currentModel || null, source: 'web' }
-        };
-        saveConversationToServer(conversationPayload).then(resp => {
-            if (!resp.ok) console.warn('Save failed', resp);
-        }).catch(err => console.error('Save conversation error', err));
     } else {
         alert("Please enter a question.");
     }

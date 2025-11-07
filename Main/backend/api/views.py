@@ -278,17 +278,28 @@ def _log_interaction(button_clicked, current_url, question, response=None):
 
 def _save_conversation_to_db(session_id, question, response_text, metadata=None):
     """
-    Quick synchronous save to Mongo for testing. Non-fatal on error.
+    Builds the payload to save the conversation to MongoDB
     """
     try:
+
+        mode = None
+        if isinstance(metadata, dict):
+            mode = metadata.get("mode")
+        elif isinstance(metadata, str):
+            mode = metadata
+
+        meta = {
+            "mode": mode or "unknown",
+            "created_at": datetime.utcnow().isoformat()
+        }
+
         payload = {
             "session_id": session_id,
             "messages": [
                 {"role": "user", "text": question, "timestamp": datetime.utcnow().isoformat()},
-                {"role": "assistant", "text": response_text, "timestamp": datetime.utcnow().isoformat()}
+                {"role": "FinGPT", "text": response_text, "timestamp": datetime.utcnow().isoformat()}
             ],
-            "metadata": metadata or {},
-            "created_at": datetime.utcnow().isoformat()
+            "metadata": meta
         }
         inserted_id = save_conversation(payload)
         logging.info(f"[MONGO] saved conversation id={inserted_id} session={session_id}")
@@ -407,7 +418,7 @@ def chat_response(request):
     _log_interaction("normal_mode", current_url, question, first_model_response)
 
     try:
-        _save_conversation_to_db(session_id, question, first_model_response, metadata={"mode":"normal", "models": models})
+        _save_conversation_to_db(session_id, question, first_model_response, metadata={"mode":"thinking", "models": models})
     except Exception:
         pass
 
@@ -528,7 +539,7 @@ def chat_response_stream(request):
             _log_interaction("normal_mode_stream", current_url, question, full_response)
 
             try:
-                _save_conversation_to_db(session_id, question, full_response, metadata={"mode":"stream", "model": model})
+                _save_conversation_to_db(session_id, question, full_response, metadata={"mode":"thinking", "model": model})
             except Exception:
                 pass
 
@@ -604,7 +615,7 @@ def agent_chat_response(request):
     _log_interaction("agent_chat", current_url, question, first_model_response)
 
     try:
-        _save_conversation_to_db(session_id, question, first_model_response, metadata={"mode":"agent", "models": models})
+        _save_conversation_to_db(session_id, question, first_model_response, metadata={"mode":"thinking", "models": models})
     except Exception:
         pass
 
@@ -671,7 +682,7 @@ def adv_response(request):
     _log_interaction("extensive_mode", current_url, question, first_model_response)
 
     try:
-        _save_conversation_to_db(session_id, question, first_model_response, metadata={"mode":"extensive", "models": models})
+        _save_conversation_to_db(session_id, question, first_model_response, metadata={"mode":"research", "models": models})
     except Exception:
         pass
 
@@ -823,11 +834,11 @@ def adv_response_stream(request):
                 _log_interaction("advanced_stream", current_url, question, final_response)
 
                 try:
-                    _save_conversation_to_db(session_id, question, final_response, metadata={"mode":"advanced_stream", "model": model})
+                    _save_conversation_to_db(session_id, question, final_response, metadata={"mode":"research", "model": model})
                 except Exception:
                     pass
 
-                    
+
                 final_payload = {
                     "content": "",
                     "done": True

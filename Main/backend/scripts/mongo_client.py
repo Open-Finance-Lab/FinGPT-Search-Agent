@@ -22,7 +22,6 @@ def _get_db():
 def save_conversation(doc: dict) -> str:
     db = _get_db()
     doc_copy = dict(doc)
-    doc_copy.setdefault("created_at", datetime.utcnow())
     result = db[MONGO_COLLECTION].insert_one(doc_copy)
     return str(result.inserted_id)
 
