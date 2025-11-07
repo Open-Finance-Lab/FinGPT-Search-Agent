@@ -20,6 +20,8 @@ jobs:
     permissions:
       contents: read
       packages: write
+    env:
+      HAS_DEPLOY_CREDS: ${{ and(ne(secrets.DEPLOY_SSH_KEY, ''), ne(secrets.GHCR_READ_TOKEN, '')) }}
 
     steps:
       - name: Checkout repository
@@ -75,7 +77,7 @@ jobs:
           docker push ${{ steps.meta.outputs.latest_tag }}
 
       - name: Deploy to Fedora droplet
-        if: ${{ secrets.DEPLOY_SSH_KEY != '' && secrets.GHCR_READ_TOKEN != '' }}
+        if: ${{ env.HAS_DEPLOY_CREDS == 'true' }}
         uses: appleboy/ssh-action@v0.1.10
         env:
           REMOTE_IMAGE: ${{ steps.meta.outputs.main_tag }}
