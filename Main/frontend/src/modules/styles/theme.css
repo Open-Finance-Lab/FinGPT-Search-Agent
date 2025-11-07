@@ -59,6 +59,29 @@
     color: black;
 }
 
+.light-mode .agent-loading-card {
+    border-color: rgba(0, 0, 0, 0.08);
+    background: rgba(255, 255, 255, 0.85);
+}
+
+.light-mode .agent-loading-card--error {
+    border-color: rgba(214, 48, 49, 0.5);
+    background: rgba(214, 48, 49, 0.15);
+}
+
+.light-mode .loading-card-title {
+    color: #1f4b99;
+}
+
+.light-mode .loading-card-current-label {
+    color: #111;
+}
+
+.light-mode .loading-card-current-detail,
+.light-mode .loading-card-history-item .history-detail {
+    color: #0b6ad0;
+}
+
 .light-mode .source-item {
     background-color: #f0f0f0;
 }

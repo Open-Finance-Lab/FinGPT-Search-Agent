@@ -132,8 +132,17 @@ def _get_session_id(request):
         # logging.info(f"[R2C DEBUG] Created new Django session: {request.session.session_key}")
     else:
         pass
-        # logging.info(f"[R2C DEBUG] Using existing Django session: {request.session.session_key}")
+            # logging.info(f"[R2C DEBUG] Using existing Django session: {request.session.session_key}")
     return request.session.session_key
+
+def _build_status_frame(label: str, detail: str | None = None, url: str | None = None):
+    """Create an SSE frame containing only status data."""
+    status_payload = {"status": {"label": label}}
+    if detail:
+        status_payload["status"]["detail"] = detail
+    if url:
+        status_payload["status"]["url"] = url
+    return f'data: {json.dumps(status_payload)}\n\n'.encode('utf-8')
 
 def _prepare_context_messages(request, question, use_r2c=True, current_url=None):
     """
@@ -431,22 +440,31 @@ def chat_response_stream(request):
         try:
             # Send initial connection event (as bytes for WSGI compatibility)
             yield b'event: connected\ndata: {"status": "connected"}\n\n'
+            detail = restricted_domain or (current_url or "current site")
+            yield _build_status_frame("Preparing context", str(detail))
 
             if use_rag:
                 # RAG doesn't support streaming yet, return full response
+                yield _build_status_frame("Retrieving knowledge base")
                 response = ds.create_rag_response(question, legacy_messages, model)
+                yield _build_status_frame("Drafting answer")
                 sse_data = f'data: {json.dumps({"content": response, "done": True})}\n\n'
                 yield sse_data.encode('utf-8')
                 full_response = response
             else:
                 # Normal mode always uses agent with Playwright (domain-restricted)
                 logging.info(f"[NORMAL MODE STREAM] Using Playwright within {restricted_domain or 'any domain'}")
+                if restricted_domain:
+                    yield _build_status_frame("Navigating site", restricted_domain)
+                else:
+                    yield _build_status_frame("Navigating current page")
 
                 full_response = ""
                 stream_generator = None
                 stream_state = {"final_output": ""}
                 loop = None
                 stream_iter = None
+                drafting_status_sent = False
 
                 try:
                     stream_generator, stream_state = ds.create_agent_response_stream(
@@ -472,6 +490,9 @@ def chat_response_stream(request):
 
                         if chunk:
                             full_response += chunk
+                            if not drafting_status_sent:
+                                drafting_status_sent = True
+                                yield _build_status_frame("Drafting answer")
                             sse_payload = {"content": chunk, "done": False}
                             sse_data = f"data: {json.dumps(sse_payload)}\n\n"
                             yield sse_data.encode('utf-8')
@@ -494,6 +515,7 @@ def chat_response_stream(request):
                 full_response = final_response
 
                 # Send completion event
+                yield _build_status_frame("Finalizing response")
                 sse_data = f'data: {json.dumps({"content": "", "done": True})}\n\n'
                 yield sse_data.encode('utf-8')
 
@@ -689,10 +711,13 @@ def adv_response_stream(request):
         try:
             # Send initial connection event
             yield b'event: connected\ndata: {"status": "connected"}\n\n'
+            yield _build_status_frame("Preparing context", "Research mode")
 
             if use_rag:
                 # RAG doesn't support streaming yet, can't be bothered to mock streaming
+                yield _build_status_frame("Retrieving knowledge base")
                 response = ds.create_rag_advanced_response(question, legacy_messages, model, preferred_links)
+                yield _build_status_frame("Drafting answer")
                 sse_data = f'data: {json.dumps({"content": response, "done": True})}\n\n'
                 yield sse_data.encode('utf-8')
 
@@ -705,8 +730,18 @@ def adv_response_stream(request):
                 stream_state = {"final_output": "", "used_urls": [], "used_sources": []}
                 loop = None
                 stream_iter = None
+                drafting_status_sent = False
 
                 import asyncio
+
+                def format_source_detail(entry: dict[str, Any] | None):
+                    if not entry:
+                        return None
+                    site = entry.get("site_name")
+                    display = entry.get("display_url") or entry.get("url")
+                    if site and display:
+                        return f"{site} · {display}"
+                    return site or display
 
                 try:
                     stream_generator, stream_state = ds.create_advanced_response_streaming(
@@ -717,6 +752,7 @@ def adv_response_stream(request):
                         user_timezone=user_timezone,
                         user_time=user_time
                     )
+                    yield _build_status_frame("Searching the web")
 
                     loop = asyncio.new_event_loop()
                     asyncio.set_event_loop(loop)
@@ -734,6 +770,9 @@ def adv_response_stream(request):
 
                         if text_chunk:
                             full_response += text_chunk
+                            if not drafting_status_sent:
+                                drafting_status_sent = True
+                                yield _build_status_frame("Drafting answer")
                             sse_data = f'data: {json.dumps({"content": text_chunk, "done": False})}\n\n'
                             yield sse_data.encode('utf-8')
                         if entries:
@@ -748,6 +787,9 @@ def adv_response_stream(request):
                                 for entry in payload_snapshot if entry.get("url")
                             ]
                             if signature != latest_source_signature:
+                                detail = format_source_detail(payload_snapshot[0] if payload_snapshot else None)
+                                if detail:
+                                    yield _build_status_frame("Reading source", detail, payload_snapshot[0].get("url"))
                                 latest_source_signature = signature
                                 latest_sources_payload = payload_snapshot
                                 used_urls = [entry.get("url") for entry in payload_snapshot if entry.get("url")]
@@ -786,6 +828,7 @@ def adv_response_stream(request):
                     "done": True
                 }
 
+                yield _build_status_frame("Finalizing response")
                 if final_urls:
                     final_payload["used_urls"] = final_urls
                 if final_entries:

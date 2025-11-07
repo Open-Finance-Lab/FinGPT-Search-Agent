@@ -103,7 +103,8 @@ function getChatResponseStream(question, selectedModel, promptMode, useRAG, useM
         onChunk,
         onSources,
         onComplete,
-        onError
+        onError,
+        onStatus,
     } = callbacks;
     const encodedQuestion = encodeURIComponent(question);
     const currentUrl = window.location.href;
@@ -203,6 +204,10 @@ function getChatResponseStream(question, selectedModel, promptMode, useRAG, useM
                 if (typeof onChunk === 'function') {
                     onChunk(data.content, fullResponse);
                 }
+            }
+
+            if (data.status && typeof onStatus === 'function') {
+                onStatus(data.status);
             }
 
             // Handle source URLs for research mode
