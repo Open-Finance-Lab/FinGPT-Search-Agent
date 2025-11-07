@@ -81,6 +81,127 @@ function renderMarkdownWithMath(element, text) {
   });
 }
 
+function createLoadingCard(responseContainer) {
+  const card = document.createElement('div');
+  card.className = 'agent_response agent-loading-card';
+
+  const title = document.createElement('div');
+  title.className = 'loading-card-title';
+  title.innerText = 'FinGPT is working';
+
+  const currentWrapper = document.createElement('div');
+  currentWrapper.className = 'loading-card-current';
+
+  const currentLabel = document.createElement('div');
+  currentLabel.className = 'loading-card-current-label';
+  currentWrapper.appendChild(currentLabel);
+
+  const currentDetail = document.createElement('div');
+  currentDetail.className = 'loading-card-current-detail';
+  currentWrapper.appendChild(currentDetail);
+
+  const historyList = document.createElement('ul');
+  historyList.className = 'loading-card-history';
+
+  card.appendChild(title);
+  card.appendChild(currentWrapper);
+  card.appendChild(historyList);
+  responseContainer.appendChild(card);
+
+  const MAX_HISTORY = 4;
+  let currentStatus = null;
+  let isActive = true;
+
+  const normalize = (status = {}) => ({
+    label: status.label || '',
+    detail: status.detail || '',
+    url: status.url || '',
+  });
+
+  const appendHistory = (status) => {
+    if (!status || !status.label) {
+      return;
+    }
+    const item = document.createElement('li');
+    item.className = 'loading-card-history-item';
+
+    const labelSpan = document.createElement('span');
+    labelSpan.className = 'history-label';
+    labelSpan.innerText = status.label;
+    item.appendChild(labelSpan);
+
+    if (status.detail) {
+      const detailSpan = document.createElement('span');
+      detailSpan.className = 'history-detail';
+      detailSpan.innerText = status.detail;
+      item.appendChild(detailSpan);
+    }
+
+    historyList.insertBefore(item, historyList.firstChild);
+    while (historyList.children.length > MAX_HISTORY) {
+      historyList.removeChild(historyList.lastChild);
+    }
+  };
+
+  const updateStatus = (status) => {
+    if (!isActive) {
+      return;
+    }
+    const next = normalize(status);
+    if (!next.label) {
+      return;
+    }
+    if (
+      currentStatus &&
+      currentStatus.label === next.label &&
+      currentStatus.detail === next.detail
+    ) {
+      return;
+    }
+    if (currentStatus) {
+      appendHistory(currentStatus);
+    }
+    currentStatus = next;
+    currentLabel.innerText = next.label;
+    if (next.detail) {
+      currentDetail.innerText = next.detail;
+      currentDetail.style.display = 'block';
+    } else {
+      currentDetail.innerText = '';
+      currentDetail.style.display = 'none';
+    }
+  };
+
+  const complete = () => {
+    if (!isActive) {
+      return;
+    }
+    currentStatus = null;
+    isActive = false;
+    if (card.parentNode) {
+      card.parentNode.removeChild(card);
+    }
+  };
+
+  const fail = (message) => {
+    if (!isActive) {
+      return;
+    }
+    card.classList.add('agent-loading-card--error');
+    currentLabel.innerText = 'Issue detected';
+    currentDetail.innerText = message || 'Unable to finish this request.';
+    currentDetail.style.display = 'block';
+    historyList.innerHTML = '';
+  };
+
+  return {
+    element: card,
+    updateStatus,
+    complete,
+    fail,
+  };
+}
+
 // Function to create action buttons (copy and retry)
 function createActionButtons(
   responseText,
@@ -287,12 +408,14 @@ function handleChatResponse(question, promptMode = false, useStreaming = true) {
   // Scroll to show the new question immediately
   scrollChatToBottom();
 
-  // Placeholder "Loading..." text
-  const loadingElement = appendChatElement(
-    responseContainer,
-    'agent_response',
-    `FinGPT: Loading...`
-  );
+  const loadingCard = createLoadingCard(responseContainer);
+  loadingCard.updateStatus({
+    label: 'Preparing context',
+    detail: promptMode ? 'Research mode' : 'Thinking mode',
+  });
+
+  const responseElement = appendChatElement(responseContainer, 'agent_response', '');
+  responseElement.style.display = 'none';
 
   // Read the RAG checkbox state
   const ragSwitchEl = document.getElementById('ragSwitch');
@@ -306,10 +429,23 @@ function handleChatResponse(question, promptMode = false, useStreaming = true) {
 
   // Check if streaming is available (not for MCP or RAG modes)
   const canStream = useStreaming && !useMCP && !useRAG;
+  if (!canStream) {
+    loadingCard.updateStatus({
+      label: 'Processing request',
+      detail: useMCP ? 'MCP mode' : useRAG ? 'RAG mode' : 'Standard pipeline',
+    });
+  }
 
   if (canStream) {
     // Use streaming response
     let isFirstChunk = true;
+    let loadingDismissed = false;
+    const dismissLoading = () => {
+      if (!loadingDismissed) {
+        loadingDismissed = true;
+        loadingCard.complete();
+      }
+    };
 
     getChatResponseStream(
       question,
@@ -321,11 +457,13 @@ function handleChatResponse(question, promptMode = false, useStreaming = true) {
         // onChunk callback - called for each chunk of text
         onChunk: (chunk, fullResponse) => {
           if (isFirstChunk) {
-            renderMarkdownWithMath(loadingElement, fullResponse);
             isFirstChunk = false;
-          } else {
-            renderMarkdownWithMath(loadingElement, fullResponse);
+            dismissLoading();
           }
+          if (responseElement.style.display === 'none') {
+            responseElement.style.display = 'block';
+          }
+          renderMarkdownWithMath(responseElement, fullResponse);
           scrollChatToBottom();
         },
         // onComplete callback - called when streaming is done
@@ -337,7 +475,10 @@ function handleChatResponse(question, promptMode = false, useStreaming = true) {
           console.log('[Debug] promptMode:', promptMode);
 
           const responseText = `FinGPT: ${fullResponse}`;
-          renderMarkdownWithMath(loadingElement, fullResponse);
+          if (responseElement.style.display === 'none') {
+            responseElement.style.display = 'block';
+          }
+          renderMarkdownWithMath(responseElement, fullResponse);
 
           // Create action row containing both action buttons and rating
           const actionRow = document.createElement('div');
@@ -418,11 +559,17 @@ function handleChatResponse(question, promptMode = false, useStreaming = true) {
           // Clear the user textbox
           document.getElementById('textbox').value = '';
           scrollChatToBottom();
+          dismissLoading();
         },
         // onError callback
         onError: (error) => {
           console.error('Streaming error:', error);
-          loadingElement.innerHTML = `<strong>FinGPT:</strong> Failed to load response (streaming error).`;
+          responseElement.style.display = 'block';
+          responseElement.innerHTML = `<strong>FinGPT:</strong> Failed to load response (streaming error).`;
+          loadingCard.fail('Streaming error');
+        },
+        onStatus: (status) => {
+          loadingCard.updateStatus(status);
         },
       }
     );
@@ -449,7 +596,8 @@ function handleChatResponse(question, promptMode = false, useStreaming = true) {
           responseText = `FinGPT: ${modelResponse}`;
         }
 
-        renderMarkdownWithMath(loadingElement, modelResponse);
+        responseElement.style.display = 'block';
+        renderMarkdownWithMath(responseElement, modelResponse);
 
         // Create action row containing both action buttons and rating
         const actionRow = document.createElement('div');
@@ -490,19 +638,22 @@ function handleChatResponse(question, promptMode = false, useStreaming = true) {
             : [];
           setCachedSources(data.used_urls, question, metadata);
           console.log(
-            '[Sources Debug] Cached',
-            data.used_urls.length,
-            'source URLs from Advanced Ask'
-          );
+          '[Sources Debug] Cached',
+          data.used_urls.length,
+          'source URLs from Advanced Ask'
+        );
         }
 
         // Clear the user textbox
         document.getElementById('textbox').value = '';
         scrollChatToBottom();
+        loadingCard.complete();
       })
       .catch((error) => {
         console.error('There was a problem with your fetch operation:', error);
-        loadingElement.innerHTML = `<strong>FinGPT:</strong> Failed to load response.`;
+        responseElement.style.display = 'block';
+        responseElement.innerHTML = `<strong>FinGPT:</strong> Failed to load response.`;
+        loadingCard.fail('Network error');
       });
   }
 }
