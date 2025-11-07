@@ -75,6 +75,19 @@ BUFFETT_INSTRUCTION = (
     "the context provided is the most up-to-date information."
 )
 
+# Shared prefixes for context management metadata
+SYSTEM_PREFIX = "[SYSTEM MESSAGE]: "
+USER_PREFIXES = ("[USER MESSAGE]: ", "[USER QUESTION]: ")
+ASSISTANT_PREFIXES = ("[ASSISTANT MESSAGE]: ", "[ASSISTANT RESPONSE]: ")
+
+
+def _strip_any_prefix(content: str, prefixes: tuple[str, ...]) -> tuple[bool, str]:
+    """Return (matched, stripped_content) when removing the first matching prefix."""
+    for prefix in prefixes:
+        if content.startswith(prefix):
+            return True, content[len(prefix):]
+    return False, content
+
 # A module-level set to keep track of used URLs
 used_urls: set[str] = set()
 used_source_details: list[dict[str, Any]] = []
@@ -147,21 +160,26 @@ def _prepare_messages(message_list: list[dict], user_input: str, model: str = No
         content = msg.get("content", "")
 
         # Parse headers to determine actual role
-        if content.startswith("[SYSTEM MESSAGE]: "):
-            actual_content = content.replace("[SYSTEM MESSAGE]: ", "")
+        if content.startswith(SYSTEM_PREFIX):
+            actual_content = content.replace(SYSTEM_PREFIX, "", 1)
             if not system_message:
                 system_message = actual_content
             else:
                 system_message = f"{system_message} {actual_content}"
-        elif content.startswith("[USER MESSAGE]: "):
-            actual_content = content.replace("[USER MESSAGE]: ", "")
+            continue
+
+        matched, actual_content = _strip_any_prefix(content, USER_PREFIXES)
+        if matched:
             msgs.append({"role": "user", "content": actual_content})
-        elif content.startswith("[ASSISTANT MESSAGE]: "):
-            actual_content = content.replace("[ASSISTANT MESSAGE]: ", "")
+            continue
+
+        matched, actual_content = _strip_any_prefix(content, ASSISTANT_PREFIXES)
+        if matched:
             msgs.append({"role": "assistant", "content": actual_content})
-        else:
-            # Legacy format or web content - treat as user message
-            msgs.append({"role": "user", "content": content})
+            continue
+
+        # Legacy format or web content - treat as user message
+        msgs.append({"role": "user", "content": content})
 
     # Determine which instruction to use based on the model
     instruction = INSTRUCTION
@@ -173,9 +191,11 @@ def _prepare_messages(message_list: list[dict], user_input: str, model: str = No
 
     # Add system message at the beginning
     if system_message:
-        msgs.insert(0, {"role": "system", "content": f"{system_message} {instruction}"})
+        instruction_payload = f"{system_message} {instruction}".strip()
     else:
-        msgs.insert(0, {"role": "system", "content": instruction})
+        instruction_payload = instruction
+
+    msgs.insert(0, {"role": "user", "content": f"{SYSTEM_PREFIX}{instruction_payload}"})
 
     # Add current user input
     msgs.append({"role": "user", "content": user_input})
@@ -777,18 +797,23 @@ async def _create_agent_response_async(user_input: str, message_list: list[dict]
         content = msg.get("content", "")
 
         # Parse headers to determine actual role
-        if content.startswith("[SYSTEM MESSAGE]: "):
-            actual_content = content.replace("[SYSTEM MESSAGE]: ", "")
+        if content.startswith(SYSTEM_PREFIX):
+            actual_content = content.replace(SYSTEM_PREFIX, "", 1)
             context += f"System: {actual_content}\n"
-        elif content.startswith("[USER MESSAGE]: "):
-            actual_content = content.replace("[USER MESSAGE]: ", "")
+            continue
+
+        matched, actual_content = _strip_any_prefix(content, USER_PREFIXES)
+        if matched:
             context += f"User: {actual_content}\n"
-        elif content.startswith("[ASSISTANT MESSAGE]: "):
-            actual_content = content.replace("[ASSISTANT MESSAGE]: ", "")
+            continue
+
+        matched, actual_content = _strip_any_prefix(content, ASSISTANT_PREFIXES)
+        if matched:
             context += f"Assistant: {actual_content}\n"
-        else:
-            # Legacy format or web content - treat as user message
-            context += f"User: {content}\n"
+            continue
+
+        # Legacy format or web content - treat as user message
+        context += f"User: {content}\n"
 
     full_prompt = f"{context}User: {user_input}"
 
@@ -852,17 +877,22 @@ def create_agent_response_stream(
         context = ""
         for msg in message_list:
             content = msg.get("content", "")
-            if content.startswith("[SYSTEM MESSAGE]: "):
-                actual_content = content.replace("[SYSTEM MESSAGE]: ", "")
+            if content.startswith(SYSTEM_PREFIX):
+                actual_content = content.replace(SYSTEM_PREFIX, "", 1)
                 context += f"System: {actual_content}\n"
-            elif content.startswith("[USER MESSAGE]: "):
-                actual_content = content.replace("[USER MESSAGE]: ", "")
+                continue
+
+            matched, actual_content = _strip_any_prefix(content, USER_PREFIXES)
+            if matched:
                 context += f"User: {actual_content}\n"
-            elif content.startswith("[ASSISTANT MESSAGE]: "):
-                actual_content = content.replace("[ASSISTANT MESSAGE]: ", "")
+                continue
+
+            matched, actual_content = _strip_any_prefix(content, ASSISTANT_PREFIXES)
+            if matched:
                 context += f"Assistant: {actual_content}\n"
-            else:
-                context += f"User: {content}\n"
+                continue
+
+            context += f"User: {content}\n"
 
         full_prompt = f"{context}User: {user_input}"
         aggregated_chunks: list[str] = []
