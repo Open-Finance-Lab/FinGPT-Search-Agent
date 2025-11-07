@@ -3,83 +3,7 @@ import { appendChatElement, scrollChatToBottom } from './helpers.js';
 import { getChatResponse, getChatResponseStream } from './api.js';
 import { getSelectedModel, selectedModel } from './config.js';
 import { setCachedSources } from './sourcesCache.js';
-import { marked } from 'marked';
-import renderMathInElement from 'katex/dist/contrib/auto-render';
-
-function renderMarkdown(text) {
-  return marked.parse(text, {
-    gfm: true,
-    breaks: true,
-    mangle: false,
-    headerIds: false,
-  });
-}
-
-function renderMarkdownWithMath(element, text) {
-  const mathBlocks = [];
-
-  // Extract all math blocks to protect them from markdown processing
-  // Order matters: extract display math before inline math to avoid conflicts
-
-  // Extract \[ ... \] (LaTeX display math)
-  let processedText = text.replace(/\\\[([\s\S]+?)\\\]/g, (match) => {
-    const index = mathBlocks.length;
-    mathBlocks.push(match);
-    return `XMATHXBLOCKX${index}XENDX`;
-  });
-
-  // Extract $$ ... $$ (display math)
-  processedText = processedText.replace(/\$\$([\s\S]+?)\$\$/g, (match) => {
-    const index = mathBlocks.length;
-    mathBlocks.push(match);
-    return `XMATHXBLOCKX${index}XENDX`;
-  });
-
-  // Extract \( ... \) (LaTeX inline math)
-  processedText = processedText.replace(/\\\(([\s\S]+?)\\\)/g, (match) => {
-    const index = mathBlocks.length;
-    mathBlocks.push(match);
-    return `XMATHXBLOCKX${index}XENDX`;
-  });
-
-  // Extract $ ... $ (inline math)
-  processedText = processedText.replace(/\$([^\$\n]+?)\$/g, (match) => {
-    const index = mathBlocks.length;
-    mathBlocks.push(match);
-    return `XMATHXBLOCKX${index}XENDX`;
-  });
-
-  // Render markdown
-  let html = renderMarkdown(processedText);
-
-  // Restore all math blocks
-  mathBlocks.forEach((block, index) => {
-    const escapedPlaceholder = `XMATHXBLOCKX${index}XENDX`;
-    html = html.replace(new RegExp(escapedPlaceholder, 'g'), block);
-  });
-
-  element.innerHTML = `<strong>FinGPT:</strong> ${html}`;
-
-  const links = element.querySelectorAll('a');
-  links.forEach((link) => {
-    link.setAttribute('target', '_blank');
-    link.setAttribute('rel', 'noopener noreferrer');
-  });
-
-  // Let KaTeX handle all the math rendering
-  renderMathInElement(element, {
-    delimiters: [
-      { left: '$$', right: '$$', display: true },
-      { left: '$', right: '$', display: false },
-      { left: '\\[', right: '\\]', display: true },
-      { left: '\\(', right: '\\)', display: false },
-    ],
-    throwOnError: false,
-    errorColor: '#cc0000',
-    strict: false,
-    trust: true,
-  });
-}
+import { renderMarkdownContent, renderStreamingPreview } from './markdownRenderer.js';
 
 function createLoadingCard(responseContainer) {
   const card = document.createElement('div');
@@ -335,68 +259,6 @@ function createRatingElement() {
   return ratingContainer;
 }
 
-// Apply Markdown and LaTeX rendering to an existing message bubble
-function renderFormattedResponse(targetElement, rawText) {
-    if (!targetElement) {
-        return;
-    }
-
-    const formattedText = formatMathExpressions(rawText);
-    const markdownHtml = marked.parse(formattedText, {
-        gfm: true,
-        breaks: true,
-        mangle: false,
-        headerIds: false,
-    });
-
-    targetElement.innerHTML = markdownHtml;
-
-    renderMathInElement(targetElement, {
-        delimiters: [
-            { left: '$$', right: '$$', display: true },
-            { left: '$', right: '$', display: false },
-            { left: '\\(', right: '\\)', display: false },
-            { left: '\\[', right: '\\]', display: true },
-        ],
-        output: 'html',
-        throwOnError: false,
-        errorColor: '#cc0000',
-        macros: {
-            '\\Δ': '\\Delta',
-            '\\σ': '\\sigma',
-            '\\ν': '\\nu',
-            '\\ρ': '\\rho',
-            '\\Γ': '\\Gamma',
-            '\\Θ': '\\theta',
-        },
-        trust: true,
-        strict: false,
-    });
-}
-
-// Lightly adapted from popup.js to wrap math expressions with delimiters
-function formatMathExpressions(text) {
-    if (!text) {
-        return text;
-    }
-
-    let processed = text.replace(/(?<!\$)([^\s$])([^$\n]+?)(?<!\$)([^\s$])/g, (match, p1, p2, p3) => {
-        if (/[∂σ²∆ΓΘνρ√]|\b[dN]_[12]\b|\bln\b|\be\^/.test(match)) {
-            return `${p1}$${p2}${p3}$`;
-        }
-        return match;
-    });
-
-    processed = processed.replace(/^\s*([^$\n]+?)\s*$/gm, (match) => {
-        if (/[∂σ²∆ΓΘνρ√=−].*[∂σ²∆ΓΘνρ√=−]/.test(match) && !/\$\$.*\$\$/.test(match)) {
-            return `$$${match}$$`;
-        }
-        return match;
-    });
-
-    return processed;
-}
-
 // Function to handle chat responses (single model)
 function handleChatResponse(question, promptMode = false, useStreaming = true) {
   const startTime = performance.now();
@@ -455,7 +317,7 @@ function handleChatResponse(question, promptMode = false, useStreaming = true) {
       useMCP,
       {
         // onChunk callback - called for each chunk of text
-        onChunk: (chunk, fullResponse) => {
+        onChunk: (_chunk, fullResponse) => {
           if (isFirstChunk) {
             isFirstChunk = false;
             dismissLoading();
@@ -463,7 +325,7 @@ function handleChatResponse(question, promptMode = false, useStreaming = true) {
           if (responseElement.style.display === 'none') {
             responseElement.style.display = 'block';
           }
-          renderMarkdownWithMath(responseElement, fullResponse);
+          renderStreamingPreview(responseElement, fullResponse);
           scrollChatToBottom();
         },
         // onComplete callback - called when streaming is done
@@ -478,7 +340,7 @@ function handleChatResponse(question, promptMode = false, useStreaming = true) {
           if (responseElement.style.display === 'none') {
             responseElement.style.display = 'block';
           }
-          renderMarkdownWithMath(responseElement, fullResponse);
+          renderMarkdownContent(responseElement, fullResponse);
 
           // Create action row containing both action buttons and rating
           const actionRow = document.createElement('div');
@@ -597,7 +459,7 @@ function handleChatResponse(question, promptMode = false, useStreaming = true) {
         }
 
         responseElement.style.display = 'block';
-        renderMarkdownWithMath(responseElement, modelResponse);
+        renderMarkdownContent(responseElement, modelResponse);
 
         // Create action row containing both action buttons and rating
         const actionRow = document.createElement('div');
