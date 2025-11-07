@@ -20,8 +20,9 @@
         "https://www.cnbc.com/*"
       ],
       "js": [
-        "vendors.js",
-        "katex.js",
+        "vendor/marked.min.js",
+        "vendor/katex.min.js",
+        "vendor/katex-auto-render.min.js",
         "main.js"
       ],
       "css": [
