@@ -20,8 +20,6 @@ jobs:
     permissions:
       contents: read
       packages: write
-    env:
-      HAS_DEPLOY_CREDS: ${{ and(ne(secrets.DEPLOY_SSH_KEY, ''), ne(secrets.GHCR_READ_TOKEN, '')) }}
 
     steps:
       - name: Checkout repository
@@ -76,8 +74,21 @@ jobs:
           docker push ${{ steps.meta.outputs.main_tag }}
           docker push ${{ steps.meta.outputs.latest_tag }}
 
+      - name: Determine deploy eligibility
+        id: deploy-gate
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          GHCR_READ_TOKEN: ${{ secrets.GHCR_READ_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [[ -n "${DEPLOY_SSH_KEY:-}" && -n "${GHCR_READ_TOKEN:-}" ]]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Deploy to Fedora droplet
-        if: ${{ env.HAS_DEPLOY_CREDS == 'true' }}
+        if: ${{ steps.deploy-gate.outputs.enabled == 'true' }}
         uses: appleboy/ssh-action@v0.1.10
         env:
           REMOTE_IMAGE: ${{ steps.meta.outputs.main_tag }}
