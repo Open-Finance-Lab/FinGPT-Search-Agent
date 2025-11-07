@@ -23,17 +23,19 @@ load_dotenv(backend_dir / '.env')
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-# Initialize OpenAI client
+# Initialize OpenAI client lazily to allow imports without secrets (e.g., CI)
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+
 if not OPENAI_API_KEY:
-    raise ValueError("OPENAI_API_KEY not found in environment variables")
+    logger.warning("OPENAI_API_KEY missing; OpenAI-backed features will be unavailable until configured.")
+    sync_client = None
+    async_client = None
+else:
+    sync_client = OpenAI(api_key=OPENAI_API_KEY)
+    async_client = AsyncOpenAI(api_key=OPENAI_API_KEY)
 
 # Feature flag for using Responses API (can be controlled via env var)
 USE_RESPONSES_API = os.getenv("USE_OPENAI_RESPONSES_API", "true").lower() == "true"
-
-# Initialize clients
-sync_client = OpenAI(api_key=OPENAI_API_KEY)
-async_client = AsyncOpenAI(api_key=OPENAI_API_KEY)
 
 
 def _get_site_name(url: str) -> str:
@@ -378,6 +380,9 @@ async def create_responses_api_search_async(
         If stream=False: Tuple of (response_text, list_of_source_entries)
         If stream=True: Async generator yielding (chunk_text, source_entries) tuples
     """
+    if async_client is None:
+        raise RuntimeError("OPENAI_API_KEY is not configured; cannot execute OpenAI search.")
+
     try:
         # Extract domains from preferred links
         preferred_domains = []
@@ -679,6 +684,9 @@ def create_responses_api_search(
     """
     Sync wrapper for create_responses_api_search_async.
     """
+    if async_client is None:
+        raise RuntimeError("OPENAI_API_KEY is not configured; cannot execute OpenAI search.")
+
     try:
         loop = asyncio.get_event_loop()
         if loop.is_running():
