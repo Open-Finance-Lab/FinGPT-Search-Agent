@@ -36,5 +36,5 @@ urlpatterns = [
     path('log_question/', views.log_question, name='log_question'),
     path('api/get_r2c_stats/', views.get_r2c_stats, name='get_r2c_stats'),
     path('api/get_available_models/', views.get_available_models, name='get_available_models'),
-    path('api/conversations/', api_views.save_conversation_view, name="save_conversation"),
+    path('api/conversations/', views.save_conversation_view, name="save_conversation"),
 ]

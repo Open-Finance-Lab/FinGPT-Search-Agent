@@ -39,7 +39,7 @@ from agents import Runner
 from datascraper.r2c_context_manager import R2CContextManager
 from datascraper.models_config import MODELS_CONFIG
 
-from backend.scripts.mongo_client import save_conversation
+from scripts.mongo_client import save_conversation
 
 # Constants
 QUESTION_LOG_PATH = os.path.join(os.path.dirname(__file__), 'questionLog.csv')
@@ -276,6 +276,25 @@ def _log_interaction(button_clicked, current_url, question, response=None):
             writer = csv.writer(log_file)
             writer.writerow([button_clicked, current_url, question, date_str, time_str, response_preview])
 
+def _save_conversation_to_db(session_id, question, response_text, metadata=None):
+    """
+    Quick synchronous save to Mongo for testing. Non-fatal on error.
+    """
+    try:
+        payload = {
+            "session_id": session_id,
+            "messages": [
+                {"role": "user", "text": question, "timestamp": datetime.utcnow().isoformat()},
+                {"role": "assistant", "text": response_text, "timestamp": datetime.utcnow().isoformat()}
+            ],
+            "metadata": metadata or {},
+            "created_at": datetime.utcnow().isoformat()
+        }
+        inserted_id = save_conversation(payload)
+        logging.info(f"[MONGO] saved conversation id={inserted_id} session={session_id}")
+    except Exception as e:
+        logging.warning(f"[MONGO] failed to save conversation: {e}")
+
 # View to handle appending the text from FRONT-END SCRAPER to the message list
 @csrf_exempt
 @ratelimit(key='ip', rate=lambda g, r: settings.API_RATE_LIMIT, method='POST')
@@ -386,6 +405,11 @@ def chat_response(request):
 
     first_model_response = next(iter(responses.values())) if responses else "No response"
     _log_interaction("normal_mode", current_url, question, first_model_response)
+
+    try:
+        _save_conversation_to_db(session_id, question, first_model_response, metadata={"mode":"normal", "models": models})
+    except Exception:
+        pass
 
     return _prepare_response_with_stats(responses, session_id, use_r2c)
 
@@ -503,6 +527,11 @@ def chat_response_stream(request):
 
             _log_interaction("normal_mode_stream", current_url, question, full_response)
 
+            try:
+                _save_conversation_to_db(session_id, question, full_response, metadata={"mode":"stream", "model": model})
+            except Exception:
+                pass
+
             # Send R2C stats if enabled
             if use_r2c and session_id:
                 stats = r2c_manager.get_session_stats(session_id)
@@ -574,6 +603,11 @@ def agent_chat_response(request):
     first_model_response = next(iter(responses.values())) if responses else "No response"
     _log_interaction("agent_chat", current_url, question, first_model_response)
 
+    try:
+        _save_conversation_to_db(session_id, question, first_model_response, metadata={"mode":"agent", "models": models})
+    except Exception:
+        pass
+
     # Return response with optional R2C stats, using single response mode
     return _prepare_response_with_stats(responses, session_id, use_r2c, single_response_mode=True)
 
@@ -635,6 +669,11 @@ def adv_response(request):
 
     first_model_response = next(iter(responses.values())) if responses else "No response"
     _log_interaction("extensive_mode", current_url, question, first_model_response)
+
+    try:
+        _save_conversation_to_db(session_id, question, first_model_response, metadata={"mode":"extensive", "models": models})
+    except Exception:
+        pass
 
     # Get the used URLs from datascraper
     used_urls_list = list(ds.used_urls_ordered) if getattr(ds, "used_urls_ordered", None) else list(ds.used_urls)
@@ -783,6 +822,12 @@ def adv_response_stream(request):
                 _add_response_to_context(session_id, final_response, use_r2c)
                 _log_interaction("advanced_stream", current_url, question, final_response)
 
+                try:
+                    _save_conversation_to_db(session_id, question, final_response, metadata={"mode":"advanced_stream", "model": model})
+                except Exception:
+                    pass
+
+                    
                 final_payload = {
                     "content": "",
                     "done": True
@@ -1001,6 +1046,7 @@ def save_conversation_view(request):
     except Exception as e:
         return JsonResponse({"ok": False, "error": str(e)}, status=500)
     return JsonResponse({"ok": True, "id": inserted_id})
+
 
 def health(request):
     """
