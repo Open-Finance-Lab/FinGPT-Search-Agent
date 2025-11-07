@@ -86,7 +86,7 @@ AGENTS.md
 mcp-server/uv.lock
 
 # frontend reference screenshots
-/Main/frontend/reference_screenshots
+/Main/frontend/UI_References
 
 # additional cache directories
 /Main/backend/datascraper/__pycache__
