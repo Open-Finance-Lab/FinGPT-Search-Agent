@@ -1,0 +1,96 @@
+name: Backend CI and Deploy
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  BACKEND_DIR: Main/backend
+  PYTHON_VERSION: "3.12"
+  REGISTRY: ghcr.io
+  DROPLET_HOST: agenticfinsearch.org
+  DROPLET_USER: deploy
+  SYSTEMD_UNIT: fingpt-api
+
+jobs:
+  test-build-publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up uv and Python
+        uses: astral-sh/setup-uv@v3
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Sync backend dependencies
+        working-directory: ${{ env.BACKEND_DIR }}
+        run: uv sync --frozen --python ${{ env.PYTHON_VERSION }}
+
+      - name: Run Django system checks
+        working-directory: ${{ env.BACKEND_DIR }}
+        run: uv run python manage.py check
+
+      - name: Run backend tests
+        working-directory: ${{ env.BACKEND_DIR }}
+        run: uv run python manage.py test
+
+      - name: Compute image tags
+        id: meta
+        run: |
+          REPO_SLUG=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+          IMAGE_ID="${{ env.REGISTRY }}/${REPO_SLUG}-backend"
+          echo "image=$IMAGE_ID" >> "$GITHUB_OUTPUT"
+          echo "sha_tag=${IMAGE_ID}:${{ github.sha }}" >> "$GITHUB_OUTPUT"
+          echo "main_tag=${IMAGE_ID}:main" >> "$GITHUB_OUTPUT"
+          echo "latest_tag=${IMAGE_ID}:latest" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build backend image
+        run: |
+          docker build \
+            --file ${{ env.BACKEND_DIR }}/Dockerfile \
+            --tag ${{ steps.meta.outputs.sha_tag }} \
+            --tag ${{ steps.meta.outputs.main_tag }} \
+            --tag ${{ steps.meta.outputs.latest_tag }} \
+            ${{ env.BACKEND_DIR }}
+
+      - name: Push backend image
+        run: |
+          docker push ${{ steps.meta.outputs.sha_tag }}
+          docker push ${{ steps.meta.outputs.main_tag }}
+          docker push ${{ steps.meta.outputs.latest_tag }}
+
+      - name: Deploy to Fedora droplet
+        if: ${{ secrets.DEPLOY_SSH_KEY != '' && secrets.GHCR_READ_TOKEN != '' }}
+        uses: appleboy/ssh-action@v0.1.10
+        env:
+          REMOTE_IMAGE: ${{ steps.meta.outputs.main_tag }}
+          GHCR_USERNAME: ${{ github.repository_owner }}
+          GHCR_TOKEN: ${{ secrets.GHCR_READ_TOKEN }}
+        with:
+          host: ${{ env.DROPLET_HOST }}
+          username: ${{ env.DROPLET_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          port: 22
+          envs: REMOTE_IMAGE,GHCR_USERNAME,GHCR_TOKEN,SYSTEMD_UNIT
+          script: |
+            set -euo pipefail
+            export XDG_RUNTIME_DIR=/run/user/$(id -u)
+            podman login ${{ env.REGISTRY }} -u "$GHCR_USERNAME" -p "$GHCR_TOKEN"
+            podman pull "$REMOTE_IMAGE"
+            systemctl --user daemon-reload
+            systemctl --user restart "$SYSTEMD_UNIT"
