@@ -30,7 +30,6 @@ from django.http import JsonResponse, StreamingHttpResponse
 from django_ratelimit.decorators import ratelimit
 from django.conf import settings
 from datascraper import datascraper as ds
-from datascraper import create_embeddings as ce
 from datascraper.preferred_links_manager import get_manager
 
 from django.views import View
@@ -390,7 +389,6 @@ def chat_response(request):
     """
     question = request.GET.get('question', '')
     selected_models = request.GET.get('models', '')
-    use_rag = request.GET.get('use_rag', 'false').lower() == 'true'
     current_url = request.GET.get('current_url', '')
     use_r2c = request.GET.get('use_r2c', 'true').lower() == 'true'
     user_timezone = request.GET.get('user_timezone')
@@ -423,22 +421,18 @@ def chat_response(request):
 
     for model in models:
         try:
-            if use_rag:
-                # Use the RAG pipeline
-                response = ds.create_rag_response(question, legacy_messages, model)
-            else:
-                # Normal mode always uses agent with Playwright (domain-restricted)
-                response = ds.create_agent_response(
-                    question,
-                    legacy_messages,
-                    model,
-                    use_playwright=True,
-                    restricted_domain=restricted_domain,
-                    current_url=current_url,
-                    user_timezone=user_timezone,
-                    user_time=user_time
-                )
-                logging.info(f"[NORMAL MODE] Using Playwright within {restricted_domain or 'any domain'}")
+            # Normal mode always uses agent with Playwright (domain-restricted)
+            response = ds.create_agent_response(
+                question,
+                legacy_messages,
+                model,
+                use_playwright=True,
+                restricted_domain=restricted_domain,
+                current_url=current_url,
+                user_timezone=user_timezone,
+                user_time=user_time
+            )
+            logging.info(f"[NORMAL MODE] Using Playwright within {restricted_domain or 'any domain'}")
 
             responses[model] = response
 
@@ -462,7 +456,6 @@ def chat_response_stream(request):
     """
     question = request.GET.get('question', '')
     selected_models = request.GET.get('models', '')
-    use_rag = request.GET.get('use_rag', 'false').lower() == 'true'
     current_url = request.GET.get('current_url', '')
     use_r2c = request.GET.get('use_r2c', 'true').lower() == 'true'
     user_timezone = request.GET.get('user_timezone')
@@ -501,81 +494,72 @@ def chat_response_stream(request):
             detail = restricted_domain or (current_url or "current site")
             yield _build_status_frame("Preparing context", str(detail))
 
-            if use_rag:
-                # RAG doesn't support streaming yet, return full response
-                yield _build_status_frame("Retrieving knowledge base")
-                response = ds.create_rag_response(question, legacy_messages, model)
-                yield _build_status_frame("Drafting answer")
-                sse_data = f'data: {json.dumps({"content": response, "done": True})}\n\n'
-                yield sse_data.encode('utf-8')
-                full_response = response
+            # Normal mode always uses agent with Playwright (domain-restricted)
+            logging.info(f"[NORMAL MODE STREAM] Using Playwright within {restricted_domain or 'any domain'}")
+            if restricted_domain:
+                yield _build_status_frame("Navigating site", restricted_domain)
             else:
-                # Normal mode always uses agent with Playwright (domain-restricted)
-                logging.info(f"[NORMAL MODE STREAM] Using Playwright within {restricted_domain or 'any domain'}")
-                if restricted_domain:
-                    yield _build_status_frame("Navigating site", restricted_domain)
-                else:
-                    yield _build_status_frame("Navigating current page")
+                yield _build_status_frame("Navigating current page")
 
-                full_response = ""
-                stream_generator = None
-                stream_state = {"final_output": ""}
-                loop = None
-                stream_iter = None
-                drafting_status_sent = False
+            full_response = ""
+            stream_generator = None
+            stream_state = {"final_output": ""}
+            loop = None
+            stream_iter = None
+            drafting_status_sent = False
 
-                try:
-                    stream_generator, stream_state = ds.create_agent_response_stream(
-                        question,
-                        legacy_messages,
-                        model,
-                        use_playwright=True,
-                        restricted_domain=restricted_domain,
-                        current_url=current_url,
-                        user_timezone=user_timezone,
-                        user_time=user_time
-                    )
+            try:
+                stream_generator, stream_state = ds.create_agent_response_stream(
+                    question,
+                    legacy_messages,
+                    model,
+                    use_playwright=True,
+                    restricted_domain=restricted_domain,
+                    current_url=current_url,
+                    user_timezone=user_timezone,
+                    user_time=user_time
+                )
 
-                    loop = asyncio.new_event_loop()
-                    asyncio.set_event_loop(loop)
-                    stream_iter = stream_generator.__aiter__()
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                stream_iter = stream_generator.__aiter__()
 
-                    while True:
-                        try:
-                            chunk = loop.run_until_complete(stream_iter.__anext__())
-                        except StopAsyncIteration:
-                            break
+                while True:
+                    try:
+                        chunk = loop.run_until_complete(stream_iter.__anext__())
+                    except StopAsyncIteration:
+                        break
 
-                        if chunk:
-                            full_response += chunk
-                            if not drafting_status_sent:
-                                drafting_status_sent = True
-                                yield _build_status_frame("Drafting answer")
-                            sse_payload = {"content": chunk, "done": False}
-                            sse_data = f"data: {json.dumps(sse_payload)}\n\n"
-                            yield sse_data.encode('utf-8')
+                    if chunk:
+                        full_response += chunk
+                        if not drafting_status_sent:
+                            drafting_status_sent = True
+                            yield _build_status_frame("Drafting answer")
+                        sse_payload = {"content": chunk, "done": False}
+                        sse_data = f"data: {json.dumps(sse_payload)}\n\n"
+                        yield sse_data.encode('utf-8')
 
-                finally:
-                    if stream_iter and loop:
-                        try:
-                            loop.run_until_complete(stream_iter.aclose())
-                        except Exception:
-                            pass
-                    if loop:
-                        try:
-                            loop.run_until_complete(loop.shutdown_asyncgens())
-                        except Exception:
-                            pass
-                        asyncio.set_event_loop(None)
-                        loop.close()
+            finally:
+                if stream_iter and loop:
+                    try:
+                        loop.run_until_complete(stream_iter.aclose())
+                    except Exception:
+                        pass
+                if loop:
+                    try:
+                        loop.run_until_complete(loop.shutdown_asyncgens())
+                    except Exception:
+                        pass
+                    asyncio.set_event_loop(None)
+                    loop.close()
 
-                final_response = stream_state.get("final_output") or full_response
-                full_response = final_response
+            final_response = stream_state.get("final_output") or full_response
+            full_response = final_response
 
-                # Send completion event
-                yield _build_status_frame("Finalizing response")
-                sse_data = f'data: {json.dumps({"content": "", "done": True})}\n\n'
-                yield sse_data.encode('utf-8')
+            # Send completion event
+            yield _build_status_frame("Finalizing response")
+            sse_data = f'data: {json.dumps({"content": "", "done": True})}\n\n'
+            yield sse_data.encode('utf-8')
 
             _add_response_to_context(session_id, full_response, use_r2c)
 
@@ -664,7 +648,6 @@ def adv_response(request):
     """
     question = request.GET.get('question', '')
     selected_models = request.GET.get('models', '')
-    use_rag = request.GET.get('use_rag', 'false').lower() == 'true'
     current_url = request.GET.get('current_url', '')
     use_r2c = request.GET.get('use_r2c', 'true').lower() == 'true'
     preferred_links_json = request.GET.get('preferred_links', '')
@@ -694,14 +677,17 @@ def adv_response(request):
 
     for model in models:
         try:
-            if use_rag:
-                # Use the RAG pipeline for advanced response
-                response = ds.create_rag_advanced_response(question, legacy_messages, model, preferred_links)
-            else:
-                # Extensive mode uses OpenAI Responses API with web_search (no Playwright for now)
-                # TODO combine Playwright, web_search and even more tools in the future for the ultimate intelligent web search UX
-                logging.info(f"[EXTENSIVE MODE] Using web_search for external research")
-                response = ds.create_advanced_response(question, legacy_messages, model, preferred_links, user_timezone=user_timezone, user_time=user_time)
+            # Extensive mode uses OpenAI Responses API with web_search (no Playwright for now)
+            # TODO combine Playwright, web_search and even more tools in the future for the ultimate intelligent web search UX
+            logging.info(f"[EXTENSIVE MODE] Using web_search for external research")
+            response = ds.create_advanced_response(
+                question,
+                legacy_messages,
+                model,
+                preferred_links,
+                user_timezone=user_timezone,
+                user_time=user_time
+            )
 
             responses[model] = response
 
@@ -735,7 +721,6 @@ def adv_response_stream(request):
     """Process streaming advanced chat response from selected models using SSE"""
     question = request.GET.get('question', '')
     selected_models = request.GET.get('models', '')
-    use_rag = request.GET.get('use_rag', 'false').lower() == 'true'
     current_url = request.GET.get('current_url', '')
     use_r2c = request.GET.get('use_r2c', 'true').lower() == 'true'
     preferred_links_json = request.GET.get('preferred_links', '')
@@ -771,132 +756,122 @@ def adv_response_stream(request):
             yield b'event: connected\ndata: {"status": "connected"}\n\n'
             yield _build_status_frame("Preparing context", "Research mode")
 
-            if use_rag:
-                # RAG doesn't support streaming yet, can't be bothered to mock streaming
-                yield _build_status_frame("Retrieving knowledge base")
-                response = ds.create_rag_advanced_response(question, legacy_messages, model, preferred_links)
-                yield _build_status_frame("Drafting answer")
-                sse_data = f'data: {json.dumps({"content": response, "done": True})}\n\n'
-                yield sse_data.encode('utf-8')
+            # Stream response from advanced model
+            full_response = ""
+            source_entries: list[dict[str, Any]] = []
+            stream_generator = None
+            stream_state = {"final_output": "", "used_urls": [], "used_sources": []}
+            loop = None
+            stream_iter = None
+            drafting_status_sent = False
 
-                _add_response_to_context(session_id, response, use_r2c)
-            else:
-                # Stream response from advanced model
-                full_response = ""
+            import asyncio
+
+            def format_source_detail(entry: dict[str, Any] | None):
+                if not entry:
+                    return None
+                site = entry.get("site_name")
+                display = entry.get("display_url") or entry.get("url")
+                if site and display:
+                    return f"{site} · {display}"
+                return site or display
+
+            try:
+                stream_generator, stream_state = ds.create_advanced_response_streaming(
+                    question,
+                    legacy_messages,
+                    model,
+                    preferred_links,
+                    user_timezone=user_timezone,
+                    user_time=user_time
+                )
+                yield _build_status_frame("Searching the web")
+
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                stream_iter = stream_generator.__aiter__()
+
+                latest_source_signature: list[tuple[str, str, bool]] = []
+                latest_sources_payload: list[dict[str, Any]] = []
                 source_entries: list[dict[str, Any]] = []
-                stream_generator = None
-                stream_state = {"final_output": "", "used_urls": [], "used_sources": []}
-                loop = None
-                stream_iter = None
-                drafting_status_sent = False
 
-                import asyncio
+                while True:
+                    try:
+                        text_chunk, entries = loop.run_until_complete(stream_iter.__anext__())
+                    except StopAsyncIteration:
+                        break
 
-                def format_source_detail(entry: dict[str, Any] | None):
-                    if not entry:
-                        return None
-                    site = entry.get("site_name")
-                    display = entry.get("display_url") or entry.get("url")
-                    if site and display:
-                        return f"{site} · {display}"
-                    return site or display
-
-                try:
-                    stream_generator, stream_state = ds.create_advanced_response_streaming(
-                        question,
-                        legacy_messages,
-                        model,
-                        preferred_links,
-                        user_timezone=user_timezone,
-                        user_time=user_time
-                    )
-                    yield _build_status_frame("Searching the web")
-
-                    loop = asyncio.new_event_loop()
-                    asyncio.set_event_loop(loop)
-                    stream_iter = stream_generator.__aiter__()
-
-                    latest_source_signature: list[tuple[str, str, bool]] = []
-                    latest_sources_payload: list[dict[str, Any]] = []
-                    source_entries: list[dict[str, Any]] = []
-
-                    while True:
-                        try:
-                            text_chunk, entries = loop.run_until_complete(stream_iter.__anext__())
-                        except StopAsyncIteration:
-                            break
-
-                        if text_chunk:
-                            full_response += text_chunk
-                            if not drafting_status_sent:
-                                drafting_status_sent = True
-                                yield _build_status_frame("Drafting answer")
-                            sse_data = f'data: {json.dumps({"content": text_chunk, "done": False})}\n\n'
+                    if text_chunk:
+                        full_response += text_chunk
+                        if not drafting_status_sent:
+                            drafting_status_sent = True
+                            yield _build_status_frame("Drafting answer")
+                        sse_data = f'data: {json.dumps({"content": text_chunk, "done": False})}\n\n'
+                        yield sse_data.encode('utf-8')
+                    if entries:
+                        payload_snapshot = [dict(entry) for entry in entries if entry]
+                        source_entries = payload_snapshot
+                        signature = [
+                            (
+                                entry.get("url"),
+                                entry.get("title"),
+                                bool(entry.get("provisional"))
+                            )
+                            for entry in payload_snapshot if entry.get("url")
+                        ]
+                        if signature != latest_source_signature:
+                            detail = format_source_detail(payload_snapshot[0] if payload_snapshot else None)
+                            if detail:
+                                yield _build_status_frame("Reading source", detail, payload_snapshot[0].get("url"))
+                            latest_source_signature = signature
+                            latest_sources_payload = payload_snapshot
+                            used_urls = [entry.get("url") for entry in payload_snapshot if entry.get("url")]
+                            update_payload = {
+                                "content": "",
+                                "done": False,
+                                "used_urls": used_urls,
+                                "used_sources": payload_snapshot
+                            }
+                            sse_data = f'data: {json.dumps(update_payload)}\n\n'
                             yield sse_data.encode('utf-8')
-                        if entries:
-                            payload_snapshot = [dict(entry) for entry in entries if entry]
-                            source_entries = payload_snapshot
-                            signature = [
-                                (
-                                    entry.get("url"),
-                                    entry.get("title"),
-                                    bool(entry.get("provisional"))
-                                )
-                                for entry in payload_snapshot if entry.get("url")
-                            ]
-                            if signature != latest_source_signature:
-                                detail = format_source_detail(payload_snapshot[0] if payload_snapshot else None)
-                                if detail:
-                                    yield _build_status_frame("Reading source", detail, payload_snapshot[0].get("url"))
-                                latest_source_signature = signature
-                                latest_sources_payload = payload_snapshot
-                                used_urls = [entry.get("url") for entry in payload_snapshot if entry.get("url")]
-                                update_payload = {
-                                    "content": "",
-                                    "done": False,
-                                    "used_urls": used_urls,
-                                    "used_sources": payload_snapshot
-                                }
-                                sse_data = f'data: {json.dumps(update_payload)}\n\n'
-                                yield sse_data.encode('utf-8')
 
-                finally:
-                    if stream_iter and loop:
-                        try:
-                            loop.run_until_complete(stream_iter.aclose())
-                        except Exception:
-                            pass
-                    if loop:
-                        try:
-                            loop.run_until_complete(loop.shutdown_asyncgens())
-                        except Exception:
-                            pass
-                        asyncio.set_event_loop(None)
-                        loop.close()
+            finally:
+                if stream_iter and loop:
+                    try:
+                        loop.run_until_complete(stream_iter.aclose())
+                    except Exception:
+                        pass
+                if loop:
+                    try:
+                        loop.run_until_complete(loop.shutdown_asyncgens())
+                    except Exception:
+                        pass
+                    asyncio.set_event_loop(None)
+                    loop.close()
 
-                final_response = stream_state.get("final_output") or full_response
-                final_entries = stream_state.get("used_sources") or source_entries or latest_sources_payload
-                final_urls = stream_state.get("used_urls") or [entry.get("url") for entry in (final_entries or []) if entry and entry.get("url")]
+            final_response = stream_state.get("final_output") or full_response
+            final_entries = stream_state.get("used_sources") or source_entries or latest_sources_payload
+            final_urls = stream_state.get("used_urls") or [entry.get("url") for entry in (final_entries or []) if entry and entry.get("url")]
 
-                _add_response_to_context(session_id, final_response, use_r2c)
-                _log_interaction("advanced_stream", current_url, question, final_response)
+            _add_response_to_context(session_id, final_response, use_r2c)
+            _log_interaction("advanced_stream", current_url, question, final_response)
 
-                final_payload = {
-                    "content": "",
-                    "done": True
-                }
+            final_payload = {
+                "content": "",
+                "done": True
+            }
 
-                yield _build_status_frame("Finalizing response")
-                if final_urls:
-                    final_payload["used_urls"] = final_urls
-                if final_entries:
-                    final_payload["used_sources"] = final_entries
-                if use_r2c and session_id:
-                    stats = r2c_manager.get_session_stats(session_id)
-                    final_payload["r2c_stats"] = stats
+            yield _build_status_frame("Finalizing response")
+            if final_urls:
+                final_payload["used_urls"] = final_urls
+            if final_entries:
+                final_payload["used_sources"] = final_entries
+            if use_r2c and session_id:
+                stats = r2c_manager.get_session_stats(session_id)
+                final_payload["r2c_stats"] = stats
 
-                sse_data = f'data: {json.dumps(final_payload)}\n\n'
-                yield sse_data.encode('utf-8')
+            sse_data = f'data: {json.dumps(final_payload)}\n\n'
+            yield sse_data.encode('utf-8')
 
         except Exception as e:
             logging.error(f"Error in advanced streaming response: {e}")
@@ -1047,42 +1022,11 @@ def get_available_models(request):
             'id': model_id,
             'provider': config['provider'],
             'description': config['description'],
-            'supports_rag': config['supports_rag'],
             'supports_mcp': config['supports_mcp'],
             'supports_advanced': config['supports_advanced'],
             'display_name': f"{model_id} - {config['description']}"
         })
     return JsonResponse({'models': models})
-
-@csrf_exempt
-def folder_path(request):
-    """
-    Upload the folder path for the RAG.
-    """
-    # print("[DEBUG] arrived in view with request:", request)
-    if request.method == 'POST':
-        try:
-
-            if 'json_data' not in request.FILES :
-                return JsonResponse({'error': 'No JSON file received'}, status=400)
-
-            file = request.FILES['json_data']
-
-            # Read the JSON data from the file
-            json_data = json.loads(file.read())
-            # print("[DEBUG] json_data: ", json_data)
-
-            # Create embeddings for files
-            response_data, status_code = ce.upload_folder(json_data)
-            # print("[DEBUG] Flask API response:", response_data)
-            # print("[DEBUG] Response status code:", status_code)
-
-            return JsonResponse(response_data, status=status_code)
-
-        except Exception as e:
-            return JsonResponse({'error': str(e)}, status=500)
-    else:
-        return JsonResponse({'error': 'Only POST requests allowed'}, status=405)
 
 def health(request):
     """
