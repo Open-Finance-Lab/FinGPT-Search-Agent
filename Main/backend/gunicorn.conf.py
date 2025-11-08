@@ -5,8 +5,8 @@ import multiprocessing
 # Bind to port from environment variable or default to 8000
 bind = f"0.0.0.0:{os.getenv('PORT', '8000')}"
 
-# Worker processes
-workers = int(os.getenv('GUNICORN_WORKERS', multiprocessing.cpu_count() * 2 + 1))
+# Worker processes (default to a conservative 2 to keep memory bounded on small droplets)
+workers = int(os.getenv('GUNICORN_WORKERS', '2'))
 worker_class = 'sync'
 worker_connections = 1000
 max_requests = 1000
