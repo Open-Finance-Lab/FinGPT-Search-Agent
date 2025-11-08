@@ -39,7 +39,6 @@ Browser Extension → Django Backend (views.py)
     - question: User's query
     - models: Selected AI models
     - use_r2c: Enable R2C (default: true)
-    - use_rag: Enable RAG mode (optional)
     - current_url: Current webpage URL
 ```
 
@@ -97,7 +96,6 @@ _compress_context() triggers:
 Selected endpoint based on mode:
     - Agent (with tools): ds.create_agent_response() [Primary method]
     - Regular (direct LLM): ds.create_response() [Fallback only]
-    - RAG: ds.create_rag_response()
     - Advanced: ds.create_advanced_response()
     ↓
     All receive the prepared context messages
@@ -171,7 +169,6 @@ The system uses three tiers of financial keywords for importance scoring:
 - `question`: User's query (required)
 - `models`: Comma-separated model names (required)
 - `use_r2c`: Enable R2C context management (default: "true")
-- `use_rag`: Enable RAG mode (default: "false")
 - `current_url`: Current webpage URL
 
 ## Usage Examples
@@ -183,16 +180,6 @@ fetch('/get_chat_response/?question=What is the P/E ratio?&models=gpt-4&use_r2c=
     .then(data => {
         console.log('Response:', data.resp);
         console.log('Token usage:', data.r2c_stats.token_count);
-    });
-```
-
-### Advanced Request with RAG
-```javascript
-fetch('/get_adv_response/?question=Analyze AAPL stock&models=gpt-4&use_rag=true&use_r2c=true')
-    .then(response => response.json())
-    .then(data => {
-        console.log('Response:', data.resp);
-        console.log('Compressed:', data.r2c_stats.compressed);
     });
 ```
 

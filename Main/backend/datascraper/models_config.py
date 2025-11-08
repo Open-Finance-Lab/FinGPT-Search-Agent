@@ -8,7 +8,6 @@ MODELS_CONFIG = {
     "FinGPT-Light": {
         "provider": "openai",
         "model_name": "gpt-4o-mini",
-        "supports_rag": True,
         "supports_mcp": True,
         "supports_advanced": True,
         "max_tokens": 128000,
@@ -17,7 +16,6 @@ MODELS_CONFIG = {
     # "o1-pro": {
     #     "provider": "openai",
     #     "model_name": "o1-pro",
-    #     "supports_rag": True,
     #     "supports_mcp": True,
     #     "supports_advanced": True,
     #     "max_tokens": 128000,
@@ -26,7 +24,6 @@ MODELS_CONFIG = {
     # "gpt-5-chat": {
     #     "provider": "openai",
     #     "model_name": "gpt-5-chat-latest",
-    #     "supports_rag": True,
     #     "supports_mcp": True,
     #     "supports_advanced": True,
     #     "max_tokens": 128000,
@@ -35,7 +32,6 @@ MODELS_CONFIG = {
     "FinGPT": {
         "provider": "openai",
         "model_name": "gpt-5-chat-latest",
-        "supports_rag": True,
         "supports_mcp": True,
         "supports_advanced": True,
         "max_tokens": 128000,
@@ -45,7 +41,6 @@ MODELS_CONFIG = {
         "provider": "buffet",
         "model_name": "Buffet-Agent",  # Display only: actual calls use the custom endpoint
         "endpoint_url": "https://l7d6yqg7nzbkumx8.us-east-1.aws.endpoints.huggingface.cloud",
-        "supports_rag": True,
         "supports_mcp": True,
         "supports_advanced": True,
         "max_tokens": 400000,
@@ -56,7 +51,6 @@ MODELS_CONFIG = {
     # "deepseek-reasoner": {
     #     "provider": "deepseek",
     #     "model_name": "deepseek-reasoner",
-    #     "supports_rag": True,
     #     "supports_mcp": True,
     #     "supports_advanced": True,
     #     "max_tokens": 128000,
@@ -69,7 +63,6 @@ MODELS_CONFIG = {
     # "claude-4-sonnet": {
     #     "provider": "anthropic",
     #     "model_name": "claude-sonnet-4-20250514",
-    #     "supports_rag": True,
     #     "supports_mcp": True,
     #     "supports_advanced": True,
     #     "max_tokens": 200000,
@@ -78,7 +71,6 @@ MODELS_CONFIG = {
     # "claude-haiku-3.5": {
     #     "provider": "anthropic",
     #     "model_name": "claude-3-5-haiku-20241022",
-    #     "supports_rag": True,
     #     "supports_mcp": True,
     #     "supports_advanced": True,
     #     "max_tokens": 200000,
@@ -131,7 +123,7 @@ def get_models_by_provider(provider: str) -> list[str]:
     ]
 
 def validate_model_support(model_id: str, feature: str) -> bool:
-    """Check if a model supports a specific feature (rag, mcp, advanced)."""
+    """Check if a model supports a specific feature (e.g., mcp, advanced)."""
     config = get_model_config(model_id)
     if not config:
         return False
