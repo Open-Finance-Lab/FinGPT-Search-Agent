@@ -4,7 +4,7 @@ Vision: A financial agent to assist users in information retrieval and data anal
  
 This is a demo of FinLLM Leaderboard on HuggingFace's [Open Financial LLM Leaderboard](https://huggingface.co/spaces/TheFinAI/Open-Financial-LLM-Leaderboard).
 
-1. A powerful agent for retrieving financial information: financial websites (Yahoo Finance, Bloomberg, XBRL International) and local files (SEC 10K, XBRL files (eXtensible Business Reporting Language)).
+1. A powerful agent for retrieving financial information across major finance websites (Yahoo Finance, Bloomberg, XBRL International).
 2. A powerful answer engine: performs open search to quickly locate relevant financial information from various sources, such as websites, reports, filings, and databases
 3. Users can check the sources of generated responses, ensuring reliability and accuracy.
 
@@ -17,9 +17,6 @@ Current Progress:
 
 2. Checking sources, which are very important and help reduce misinformation.
    ![image](Docs/source/_static/images/F4.0_Source.png)
-
-3. Dedicated RAG for local files (SEC 10K, XBRL files).
-   ![image](Docs/source/_static/images/F4.0_RAG_1.png)
 
 
 ## Installation

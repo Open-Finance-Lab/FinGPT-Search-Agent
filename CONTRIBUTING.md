@@ -65,7 +65,7 @@ Refer to FinGPT Search Agent's [documentation](https://fingpt-search-agent-docs.
    - `feat: Add R2C context compression stats endpoint`
    - `fix: Resolve session isolation bug in context manager`
    - `docs: Update API documentation for MCP endpoints`
-   - `refactor: Simplify RAG pipeline initialization`
+   - `refactor: Simplify context pipeline initialization`
 
 ---
 
