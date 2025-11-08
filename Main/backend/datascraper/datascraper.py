@@ -10,7 +10,6 @@ from dotenv import load_dotenv
 from openai import OpenAI
 from anthropic import Anthropic
 
-from . import cdm_rag
 from mcp_client.agent import create_fin_agent, USER_ONLY_MODELS, DEFAULT_PROMPT
 from .models_config import (
     MODELS_CONFIG,
@@ -125,23 +124,6 @@ def _prepare_advanced_search_inputs(model: str, preferred_links: list[str] | Non
         logging.info(f"Using {len(preferred_urls)} stored preferred URLs")
 
     return actual_model, preferred_urls
-
-
-
-def create_rag_response(user_input, message_list, model):
-    """
-    Generates a response using the RAG pipeline.
-    """
-    try:
-        response = cdm_rag.get_rag_response(user_input, model)
-        # Don't append to message_list here - let the caller handle it properly
-        return response
-    except FileNotFoundError as e:
-        # Handle the error and return the error message
-        error_message = str(e)
-        # Don't append to message_list here - let the caller handle it properly
-        return error_message
-
 
 def _prepare_messages(message_list: list[dict], user_input: str, model: str = None):
     """
@@ -707,23 +689,6 @@ def create_advanced_response_streaming(
             logging.info(f"[ADVANCED STREAM] Completed with {len(final_text)} characters and {len(latest_entries)} sources")
 
     return _stream(), state
-
-
-def create_rag_advanced_response(user_input: str, message_list: list[dict], model: str = "o4-mini", preferred_links: list[str] = None) -> str:
-    """
-    Creates an advanced response using the RAG pipeline.
-    Combines RAG functionality with advanced web search.
-    """
-    try:
-        # First try to get response from RAG
-        rag_response = cdm_rag.get_rag_advanced_response(user_input, model)
-        if rag_response:
-            return rag_response
-    except Exception as e:
-        logging.warning(f"RAG advanced response failed: {e}, falling back to advanced search")
-
-    # Fallback to advanced search if RAG fails, passing preferred links
-    return create_advanced_response(user_input, message_list, model, preferred_links)
 
 
 def create_agent_response(user_input: str, message_list: list[dict], model: str = "o4-mini", use_playwright: bool = False, restricted_domain: str = None, current_url: str = None, user_timezone: str = None, user_time: str = None) -> str:

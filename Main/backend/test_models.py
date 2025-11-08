@@ -29,7 +29,6 @@ def test_models_config():
         print(f"\n{model_id}:")
         print(f"  Provider: {config['provider']}")
         print(f"  Model Name: {config['model_name']}")
-        print(f"  Supports RAG: {config['supports_rag']}")
         print(f"  Supports MCP: {config['supports_mcp']}")
         print(f"  Supports Advanced: {config['supports_advanced']}")
     
@@ -45,7 +44,6 @@ def test_models_config():
     test_model = models[0] if models else None
     if test_model:
         print(f"Testing {test_model}:")
-        print(f"  RAG: {validate_model_support(test_model, 'rag')}")
         print(f"  MCP: {validate_model_support(test_model, 'mcp')}")
         print(f"  Advanced: {validate_model_support(test_model, 'advanced')}")
 

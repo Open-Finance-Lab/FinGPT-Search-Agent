@@ -39,10 +39,8 @@ Features
 --------
 
 - **Multi-Model Support**: Choose between OpenAI (GPT-4, GPT-3.5), DeepSeek, and Anthropic (Claude) models
-- **RAG Integration**: Retrieval-Augmented Generation for accurate, source-backed responses
 - **MCP Support**: Model Context Protocol integration for enhanced agent capabilities
 - **Browser Extension**: Seamless integration with major financial websites
-- **Local Document Processing**: Upload and analyze your own financial documents
 - **Real-time Web Scraping**: Extract and analyze content from financial websites
 
 Quick Start
