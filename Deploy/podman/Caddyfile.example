@@ -21,7 +21,8 @@ fingpt.example.com {
     }
 
     # Allow health checks to pass straight through without caching.
-    @healthcheck path /health/
+    # Match both `/health` and `/health/` so probes skip redirect.
+    @healthcheck path /health /health/
     handle @healthcheck {
         reverse_proxy fingpt-api:8000
     }
