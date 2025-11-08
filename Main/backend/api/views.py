@@ -63,12 +63,72 @@ message_list = [
      "content": "[SYSTEM MESSAGE]: You are a helpful financial assistant. Always answer questions to the best of your ability."}
 ]
 
+
+def _int_env(name: str, default: int) -> int:
+    """Safely parse integer environment variables."""
+    try:
+        return int(os.getenv(name, default))
+    except (TypeError, ValueError):
+        return default
+
+
+LEGACY_HISTORY_LIMIT = _int_env("LEGACY_HISTORY_LIMIT", 60)
+
+
+def _trim_legacy_history():
+    """Keep the global legacy buffer bounded."""
+    if not message_list:
+        return
+
+    max_items = max(LEGACY_HISTORY_LIMIT, 1)
+    if len(message_list) <= max_items:
+        return
+
+    system_message = message_list[0]
+    recent = message_list[-(max_items - 1):] if max_items > 1 else []
+    message_list.clear()
+    message_list.append(system_message)
+    message_list.extend(recent)
+
+
+def _append_legacy_message(content: str):
+    """Append a legacy message while enforcing limits."""
+    message_list.append({"role": "user", "content": content})
+    _trim_legacy_history()
+
+
+def _reset_legacy_history(preserve_web_content: bool = False):
+    """Reset the legacy buffer while optionally keeping scraped pages."""
+    if not message_list:
+        return
+
+    system_message = message_list[0]
+    if not preserve_web_content:
+        message_list.clear()
+        message_list.append(system_message)
+        return
+
+    preserved_messages = [system_message]
+    for msg in message_list[1:]:
+        content = msg.get("content", "")
+        if "[Web Content from" in content:
+            preserved_messages.append(msg)
+
+    message_list.clear()
+    message_list.extend(preserved_messages)
+    _trim_legacy_history()
+
 # R2C
 r2c_manager = R2CContextManager(
     max_tokens=50000,
     compression_ratio=0.5,
     rho=0.5,
-    gamma=1.0
+    gamma=1.0,
+    max_sessions=_int_env("R2C_MAX_SESSIONS", 400),
+    session_ttl_seconds=_int_env("R2C_SESSION_TTL_SECONDS", 3600),
+    max_messages_per_session=_int_env("R2C_MAX_MESSAGES", 200),
+    max_web_messages_per_session=_int_env("R2C_MAX_WEB_MESSAGES", 3),
+    max_web_content_chars=_int_env("R2C_MAX_WEB_CHARS", 20000),
 )
 
 class MCPGreetView(View):
@@ -179,7 +239,7 @@ def _prepare_context_messages(request, question, use_r2c=True, current_url=None)
         legacy_messages = context_messages
     else:
         # Use legacy message_list - append the question with header
-        message_list.append({"role": "user", "content": f"[USER MESSAGE]: {question}"})
+        _append_legacy_message(f"[USER MESSAGE]: {question}")
         legacy_messages = message_list.copy()
 
     return legacy_messages, session_id
@@ -190,7 +250,7 @@ def _add_response_to_context(session_id, response, use_r2c=True):
         r2c_manager.add_message(session_id, "assistant", response)
     else:
         # Add to legacy message_list with header
-        message_list.append({"role": "user", "content": f"[ASSISTANT MESSAGE]: {response}"})
+        _append_legacy_message(f"[ASSISTANT MESSAGE]: {response}")
 
 def _prepare_response_with_stats(responses, session_id, use_r2c=True, single_response_mode=False):
     """
@@ -304,12 +364,10 @@ def add_webtext(request):
             # logging.warning("[R2C DEBUG] No text content provided")
             return JsonResponse({"error": "No textContent provided."}, status=400)
 
-        message_list.append({
-            "role": "user",
-            "content": text_content
-        })
-
-        if use_r2c:
+        if not use_r2c:
+            url_label = current_url or "unknown location"
+            _append_legacy_message(f"[Web Content from {url_label}]: {text_content}")
+        elif use_r2c:
             session_id = _get_session_id(request)
             if session_id:
                 # logging.info(f"[R2C DEBUG] Adding web content to session {session_id}, URL: {current_url}, content length: {len(text_content)}")
@@ -859,30 +917,27 @@ def adv_response_stream(request):
 
 @csrf_exempt
 def clear(request):
-    """Clear conversation messages but preserve scraped web content"""
+    """Clear conversation messages and optionally preserve scraped web content."""
     use_r2c = request.GET.get('use_r2c', 'true').lower() == 'true'
+    preserve_web = request.GET.get('preserve_web', 'false').lower() == 'true'
 
-    # For legacy system, only clear non-web content messages
-    if message_list:
-        # Keep only the system message and web content
-        preserved_messages = [message_list[0]]
-        for msg in message_list[1:]:
-            if "[Web Content from" in msg.get("content", "") or msg.get("content", "").startswith("Yahoo Finance") or msg.get("content", "").startswith("<!DOCTYPE"):
-                preserved_messages.append(msg)
-
-        message_list.clear()
-        message_list.extend(preserved_messages)
+    # Reset legacy buffer according to preference
+    _reset_legacy_history(preserve_web)
 
     # Clear only conversation in R2C if enabled
     if use_r2c:
         session_id = _get_session_id(request)
         if session_id:
-            r2c_manager.clear_conversation_only(session_id)
-            message = 'Conversation cleared (web content preserved)'
+            if preserve_web:
+                r2c_manager.clear_conversation_only(session_id)
+                message = 'Conversation cleared (web content preserved)'
+            else:
+                r2c_manager.clear_session(session_id)
+                message = 'Conversation and cached web content cleared'
         else:
             message = 'Conversation cleared (no R2C session found)'
     else:
-        message = 'Conversation cleared'
+        message = 'Conversation cleared (web content preserved)' if preserve_web else 'Conversation cleared'
 
     current_url = request.GET.get('current_url', 'N/A')
     _log_interaction("clear", current_url, "Cleared conversation history")
