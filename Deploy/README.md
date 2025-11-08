@@ -25,5 +25,6 @@ The `Backend CI and Deploy` workflow (`.github/workflows/backend-deploy.yml`) tu
 - The `fingpt-api` unit should reference the GHCR image (`ghcr.io/<owner>/<repo>-backend:main`) instead of a locally loaded tarball. A simple `podman run --rm ghcr.io/...` wrapper script is sufficient.
 - Ensure `/home/deploy/.config/containers` allows logins to GHCR (the workflow already executes `podman login`, so no persistent config is strictly required).
 - Confirm that `.env` / `.env.production` and the Caddy config are already on the droplet; the workflow only handles code + container restarts.
+- Gunicorn now defaults to two workers for memory safety. Override with `GUNICORN_WORKERS=<n>` in your environment if the droplet has headroom.
 
 After creating the secrets above, push to `main` (or use the manual `workflow_dispatch`) to trigger the pipeline. Watch the workflow logs for the deploy step; it will be skipped automatically if either secret is missing.
