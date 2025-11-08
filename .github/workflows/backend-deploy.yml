@@ -25,10 +25,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up uv and Python
+      - name: Set up uv
         uses: astral-sh/setup-uv@v3
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install Python ${{ env.PYTHON_VERSION }}
+        run: uv python install ${{ env.PYTHON_VERSION }}
 
       - name: Sync backend dependencies
         working-directory: ${{ env.BACKEND_DIR }}
