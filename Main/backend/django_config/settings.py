@@ -161,6 +161,9 @@ else:
     SECURE_SSL_REDIRECT = False
     SECURE_HSTS_SECONDS = 0
 
+# Allow local health probes to call /health without being redirected to HTTPS.
+SECURE_REDIRECT_EXEMPT = [r'^health/?$']
+
 # Rate Limiting Configuration
 # Rate limit format: "requests/period" where period can be 's' (second), 'm' (minute), 'h' (hour), 'd' (day)
 # Examples: "100/h" = 100 requests per hour, "10/m" = 10 requests per minute
