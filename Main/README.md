@@ -9,7 +9,7 @@ This document provides comprehensive details about the FinGPT Search Agents proj
 ```markdown
 fingpt_rcos/
 ├── Main/
-│   ├── backend/               # Django backend with RAG and R2C context management
+│   ├── backend/               # Django backend with R2C context management
 │   └── frontend/              # Browser extension (Webpack-bundled JS)
 ├── mcp-server/                # Model Context Protocol server
 ├── Docs/                      # Sphinx documentation
@@ -34,19 +34,15 @@ backend/
 │   ├── admin.py                # Django admin configuration
 │   ├── apps.py                 # Django app configuration
 │   ├── models.py               # Database models
-│   ├── views.py                # API endpoints (chat, RAG, MCP, context management)
+│   ├── views.py                # API endpoints (chat, MCP, context management)
 │   ├── tests.py                # Unit tests
 │   └── questionLog.csv         # Runtime artifact: per-prompt telemetry (git-ignored)
-├── datascraper/                # RAG & Context Management utilities
-│   ├── cdm_rag.py              # Orchestrates retrieval-augmented generation pipeline
-│   ├── create_embeddings.py   # Batch-embeds local docs via OpenAI embeddings
+├── datascraper/                # Context management utilities
 │   ├── datascraper.py         # General helpers: web scraping, source parsing, API calls
 │   ├── models_config.py       # Centralized model configuration (OpenAI, DeepSeek, Anthropic)
 │   ├── preferred_links_manager.py  # Manages user-curated preferred sources
 │   ├── r2c_context_manager.py # R2C Context Manager - hierarchical compression system
-│   ├── test/                   # Test files and fixtures
 │   ├── embeddings.pkl          # Cached embeddings (git-ignored)
-│   ├── faiss_index.idx         # FAISS vector index (git-ignored)
 │   └── .gitignore              # Datascraper-specific ignore rules
 ├── mcp_client/                 # Model Context Protocol integration
 │   └── agent.py                # MCP client functionality
@@ -80,11 +76,6 @@ backend/
 - Financial-aware importance scoring
 - Automatic compression at 4096 tokens
 - Session-based context isolation
-
-**`datascraper/cdm_rag.py`** – RAG Pipeline Orchestration:
-- FAISS vector similarity search
-- OpenAI text-embedding-3-large integration
-- Seamless integration with R2C compressed context
 
 **`datascraper/models_config.py`** – Centralized Model Configuration:
 - OpenAI API integration

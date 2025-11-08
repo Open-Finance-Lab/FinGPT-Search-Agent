@@ -31,7 +31,6 @@ urlpatterns = [
     path('api/get_preferred_urls/', views.get_preferred_urls, name='get_preferred_urls'),
     path('api/add_preferred_url/', views.add_preferred_url, name='add_preferred_url'),
     path('api/sync_preferred_urls/', views.sync_preferred_urls, name='sync_preferred_urls'),
-    path('api/folder_path', views.folder_path, name='folder_path'),
     path('get_agent_response/', views.agent_chat_response, name='get_agent_response'),
     path('log_question/', views.log_question, name='log_question'),
     path('api/get_r2c_stats/', views.get_r2c_stats, name='get_r2c_stats'),
