@@ -9,7 +9,7 @@ import numpy as np
 from typing import List, Dict, Tuple, Optional
 from collections import defaultdict
 import tiktoken
-from datetime import datetime
+from datetime import datetime, timedelta
 
 
 class R2CContextManager:
@@ -24,7 +24,12 @@ class R2CContextManager:
         compression_ratio: float = 0.5,
         rho: float = 0.5,
         gamma: float = 1.0,
-        model: str = "gpt-3.5-turbo"
+        model: str = "gpt-3.5-turbo",
+        max_sessions: int = 500,
+        session_ttl_seconds: int = 3600,
+        max_messages_per_session: int = 200,
+        max_web_messages_per_session: int = 3,
+        max_web_content_chars: int = 20000,
     ):
         """
         Initialize R2C Context Manager.
@@ -40,6 +45,11 @@ class R2CContextManager:
         self.compression_ratio = compression_ratio
         self.rho = rho
         self.gamma = gamma
+        self.max_sessions = max_sessions
+        self.session_ttl_seconds = session_ttl_seconds
+        self.max_messages_per_session = max_messages_per_session
+        self.max_web_messages_per_session = max_web_messages_per_session
+        self.max_web_content_chars = max_web_content_chars
 
         # Initialize tokenizer based on model
         try:
@@ -48,16 +58,7 @@ class R2CContextManager:
             self.tokenizer = tiktoken.get_encoding("cl100k_base")
 
         # Session storage
-        self.sessions = defaultdict(lambda: {
-            "messages": [],
-            "message_tokens": [],  # Track tokens separately
-            "compressed_context": None,
-            "token_count": 0,
-            "compression_history": [],
-            "current_webpage": None,  # Store current webpage info
-            "user_timezone": None,  # Store user's timezone
-            "user_time": None  # Store user's current time
-        })
+        self.sessions = defaultdict(self._session_factory)
 
         # Base system message for financial assistant
         self.base_system_prompt = "You are a helpful financial assistant. Always answer questions to the best of your ability. You are situated inside an agent. The user may asks questions directly related to an active webpage (which you will have context for), or the user may asks questions that requires extensive research."
@@ -73,6 +74,124 @@ class R2CContextManager:
         }
 
         # logging.info("R2C Context Manager initialized")
+
+    def _now(self) -> datetime:
+        return datetime.utcnow()
+
+    def _session_factory(self) -> dict:
+        return {
+            "messages": [],
+            "message_tokens": [],
+            "compressed_context": None,
+            "token_count": 0,
+            "compression_history": [],
+            "current_webpage": None,
+            "user_timezone": None,
+            "user_time": None,
+            "last_used": self._now(),
+            "web_content_chars": 0,
+        }
+
+    def _get_or_create_session(self, session_id: str) -> dict:
+        self._evict_idle_sessions()
+        session = self.sessions[session_id]
+        session["last_used"] = self._now()
+        return session
+
+    def _evict_idle_sessions(self) -> None:
+        if not self.sessions:
+            return
+
+        now = self._now()
+        if self.session_ttl_seconds > 0:
+            ttl = timedelta(seconds=self.session_ttl_seconds)
+            expired = [
+                sid for sid, data in self.sessions.items()
+                if now - data.get("last_used", now) > ttl
+            ]
+            for sid in expired:
+                del self.sessions[sid]
+
+        if self.max_sessions > 0 and len(self.sessions) > self.max_sessions:
+            sorted_sessions = sorted(
+                self.sessions.items(),
+                key=lambda item: item[1].get("last_used", now)
+            )
+            for sid, _ in sorted_sessions:
+                if len(self.sessions) <= self.max_sessions:
+                    break
+                del self.sessions[sid]
+
+    def _compute_web_chars(self, session: dict) -> int:
+        return sum(
+            len(msg.get("content", ""))
+            for msg in session.get("messages", [])
+            if "[Web Content from" in msg.get("content", "")
+        )
+
+    def _enforce_session_limits(self, session_id: str) -> None:
+        session = self.sessions.get(session_id)
+        if not session:
+            return
+
+        if self.max_messages_per_session > 0:
+            overflow = len(session["messages"]) - self.max_messages_per_session
+            while overflow > 0 and session["messages"]:
+                removed_tokens = session["message_tokens"].pop(0)
+                session["messages"].pop(0)
+                session["token_count"] = max(session["token_count"] - removed_tokens, 0)
+                overflow -= 1
+
+        self._enforce_web_content_limits(session_id)
+
+    def _enforce_web_content_limits(self, session_id: str) -> None:
+        session = self.sessions.get(session_id)
+        if not session:
+            return
+
+        messages = session["messages"]
+        tokens = session["message_tokens"]
+        if not messages:
+            session["web_content_chars"] = 0
+            return
+
+        web_indices = [
+            idx for idx, msg in enumerate(messages)
+            if "[Web Content from" in msg.get("content", "")
+        ]
+        drop_indices: set[int] = set()
+        if self.max_web_messages_per_session > 0 and len(web_indices) > self.max_web_messages_per_session:
+            drop_count = len(web_indices) - self.max_web_messages_per_session
+            drop_indices.update(web_indices[:drop_count])
+
+        new_messages = []
+        new_tokens = []
+        current_web_chars = 0
+
+        for idx, msg in enumerate(messages):
+            tok = tokens[idx] if idx < len(tokens) else 0
+            is_web = "[Web Content from" in msg.get("content", "")
+            if idx in drop_indices:
+                session["token_count"] = max(session["token_count"] - tok, 0)
+                continue
+
+            if self.max_web_content_chars > 0 and is_web:
+                prospective = current_web_chars + len(msg.get("content", ""))
+                if prospective > self.max_web_content_chars:
+                    session["token_count"] = max(session["token_count"] - tok, 0)
+                    continue
+                current_web_chars = prospective
+            elif is_web:
+                current_web_chars += len(msg.get("content", ""))
+
+            new_messages.append(msg)
+            new_tokens.append(tok)
+
+        session["messages"] = new_messages
+        session["message_tokens"] = new_tokens
+
+        # Re-run to ensure we count any preserved entries accurately
+        session["web_content_chars"] = self._compute_web_chars(session)
     
     def count_tokens(self, text: str) -> int:
         """Count tokens in text using the model's tokenizer."""
@@ -86,7 +205,7 @@ class R2CContextManager:
             session_id: Session identifier
             url: Current webpage URL
         """
-        session = self.sessions[session_id]
+        session = self._get_or_create_session(session_id)
         session["current_webpage"] = url
         # logging.info(f"[R2C DEBUG] Updated current webpage for session {session_id}: {url}")
 
@@ -99,7 +218,7 @@ class R2CContextManager:
             timezone: User's IANA timezone (e.g., "America/New_York")
             current_time: User's current time in ISO format
         """
-        session = self.sessions[session_id]
+        session = self._get_or_create_session(session_id)
         if timezone:
             session["user_timezone"] = timezone
         if current_time:
@@ -116,7 +235,7 @@ class R2CContextManager:
             content: Message content
         """
         # logging.info(f"[R2C DEBUG] Adding message to session {session_id}, role: {role}, content_length: {len(content)}")
-        session = self.sessions[session_id]
+        session = self._get_or_create_session(session_id)
 
         # Check if this is web content and extract URL
         if role == "user" and "[Web Content from" in content:
@@ -145,6 +264,9 @@ class R2CContextManager:
         session["message_tokens"].append(tokens)
         session["token_count"] += tokens
 
+        # Enforce per-session limits before considering compression
+        self._enforce_session_limits(session_id)
+
         # Check if compression is needed
         if session["token_count"] > self.max_tokens:
             # logging.info(f"[R2C DEBUG] Token count {session['token_count']} exceeds max {self.max_tokens}, compressing...")
@@ -161,7 +283,7 @@ class R2CContextManager:
         Returns:
             List of messages for the session
         """
-        session = self.sessions[session_id]
+        session = self._get_or_create_session(session_id)
 
         # Build system prompt with current webpage info and time/timezone
         system_prompt = self.base_system_prompt
@@ -221,10 +343,10 @@ class R2CContextManager:
     
     def clear_conversation_only(self, session_id: str) -> None:
         """Clear conversation messages but preserve web content."""
-        if session_id not in self.sessions:
+        session = self.sessions.get(session_id)
+        if not session:
             return
-            
-        session = self.sessions[session_id]
+
         preserved_messages = []
         preserved_tokens = []
         preserved_token_count = 0
@@ -242,6 +364,8 @@ class R2CContextManager:
         session["token_count"] = preserved_token_count
         session["compressed_context"] = None
         session["compression_history"] = []
+        session["web_content_chars"] = self._compute_web_chars(session)
+        session["last_used"] = self._now()
 
         # logging.info(f"[R2C DEBUG] Cleared conversation for session {session_id}, preserved {len(preserved_messages)} web content messages")
     
@@ -316,7 +440,9 @@ class R2CContextManager:
         Args:
             session_id: Session identifier
         """
-        session = self.sessions[session_id]
+        session = self.sessions.get(session_id)
+        if not session:
+            return
         messages = session["messages"]
         
         if len(messages) < 3:  # Don't compress if too few messages
@@ -361,6 +487,7 @@ class R2CContextManager:
         session["messages"] = messages[-2:]  # Keep only recent messages
         session["message_tokens"] = session["message_tokens"][-2:]  # Keep corresponding tokens
         session["token_count"] = compressed_tokens + sum(session["message_tokens"])
+        session["web_content_chars"] = self._compute_web_chars(session)
         
         # Log compression
         session["compression_history"].append({
@@ -485,14 +612,18 @@ class R2CContextManager:
     
     def get_session_stats(self, session_id: str) -> Dict:
         """Get statistics for a session."""
-        if session_id not in self.sessions:
+        session = self.sessions.get(session_id)
+        if not session:
             return {}
         
-        session = self.sessions[session_id]
+        last_used = session.get("last_used")
         return {
             "message_count": len(session["messages"]),
             "token_count": session["token_count"],
             "compressed": session["compressed_context"] is not None,
             "compression_count": len(session["compression_history"]),
-            "compression_history": session["compression_history"]
+            "compression_history": session["compression_history"],
+            "web_content_chars": session.get("web_content_chars", 0),
+            "last_used": last_used.isoformat() if last_used else None,
+            "active_sessions": len(self.sessions)
         }
