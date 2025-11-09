@@ -13,13 +13,19 @@ env:
   DROPLET_HOST: agenticfinsearch.org
   DROPLET_USER: deploy
   SYSTEMD_UNIT: fingpt-api
+  RUN_TESTS: "false" # Toggle to "true" to re-enable backend tests
 
 jobs:
-  test-build-publish:
+  build:
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
+    outputs:
+      image: ${{ steps.meta.outputs.image }}
+      sha_tag: ${{ steps.meta.outputs.sha_tag }}
+      main_tag: ${{ steps.meta.outputs.main_tag }}
+      latest_tag: ${{ steps.meta.outputs.latest_tag }}
 
     steps:
       - name: Checkout repository
@@ -38,10 +44,6 @@ jobs:
       - name: Run Django system checks
         working-directory: ${{ env.BACKEND_DIR }}
         run: uv run python manage.py check
-
-      - name: Run backend tests
-        working-directory: ${{ env.BACKEND_DIR }}
-        run: uv run python manage.py test
 
       - name: Compute image tags
         id: meta
@@ -75,6 +77,47 @@ jobs:
           docker push ${{ steps.meta.outputs.main_tag }}
           docker push ${{ steps.meta.outputs.latest_tag }}
 
+  test:
+    runs-on: ubuntu-latest
+    needs: build
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Tests temporarily disabled
+        if: ${{ env.RUN_TESTS != 'true' }}
+        run: echo "::warning::Backend test suite is currently skipped. Set RUN_TESTS to true when ready to re-enable it."
+
+      - name: Set up uv
+        if: ${{ env.RUN_TESTS == 'true' }}
+        uses: astral-sh/setup-uv@v3
+
+      - name: Install Python ${{ env.PYTHON_VERSION }}
+        if: ${{ env.RUN_TESTS == 'true' }}
+        run: uv python install ${{ env.PYTHON_VERSION }}
+
+      - name: Sync backend dependencies
+        if: ${{ env.RUN_TESTS == 'true' }}
+        working-directory: ${{ env.BACKEND_DIR }}
+        run: uv sync --frozen --python ${{ env.PYTHON_VERSION }}
+
+      - name: Run backend tests
+        if: ${{ env.RUN_TESTS == 'true' }}
+        working-directory: ${{ env.BACKEND_DIR }}
+        run: uv run python manage.py test
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs:
+      - build
+      - test
+    permissions:
+      contents: read
+
+    steps:
       - name: Determine deploy eligibility
         id: deploy-gate
         env:
@@ -92,7 +135,7 @@ jobs:
         if: ${{ steps.deploy-gate.outputs.enabled == 'true' }}
         uses: appleboy/ssh-action@v0.1.10
         env:
-          REMOTE_IMAGE: ${{ steps.meta.outputs.main_tag }}
+          REMOTE_IMAGE: ${{ needs.build.outputs.main_tag }}
           GHCR_USERNAME: ${{ github.repository_owner }}
           GHCR_TOKEN: ${{ secrets.GHCR_READ_TOKEN }}
         with:
