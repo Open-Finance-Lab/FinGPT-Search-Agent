@@ -8,6 +8,7 @@
     border-radius: 15px 15px 0 0;
     padding: 10px;
     cursor: move;
+    overflow: visible;
 }
 
 #header span {
@@ -24,6 +25,7 @@
 #icon-container {
     display: flex;
     align-items: center;
+    overflow: visible;
 }
 
 /* Headers for Settings Window */
@@ -64,4 +66,77 @@
     cursor: pointer;
     font-size: 1.2em;
     margin-left: 10px;
+}
+
+/* Header Buttons (Settings and Position Mode) */
+.header-button {
+    background-color: #444;
+    border: none;
+    border-radius: 6px;
+    padding: 8px 12px;
+    color: white;
+    cursor: pointer;
+    font-size: 0.9em;
+    margin-left: 8px;
+    transition: background-color 0.2s ease;
+    position: relative;
+}
+
+.header-button:hover {
+    background-color: #555;
+}
+
+/* Tooltip for header buttons */
+.header-button[data-tooltip]::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: rgba(0, 0, 0, 0.9);
+    color: white;
+    padding: 10px 12px;
+    border-radius: 6px;
+    font-size: 13px;
+    white-space: normal;
+    max-width: 280px;
+    width: max-content;
+    text-align: left;
+    line-height: 1.4;
+    pointer-events: none;
+    z-index: 100000;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.2s ease, visibility 0.2s ease;
+    transition-delay: 0s;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.header-button[data-tooltip]:hover::after {
+    opacity: 1;
+    visibility: visible;
+    transition-delay: 1s;
+}
+
+/* Tooltip arrow */
+.header-button[data-tooltip]::before {
+    content: '';
+    position: absolute;
+    bottom: calc(100% + 2px);
+    left: 50%;
+    transform: translateX(-50%);
+    border: 6px solid transparent;
+    border-top-color: rgba(0, 0, 0, 0.9);
+    pointer-events: none;
+    z-index: 100000;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.2s ease, visibility 0.2s ease;
+    transition-delay: 0s;
+}
+
+.header-button[data-tooltip]:hover::before {
+    opacity: 1;
+    visibility: visible;
+    transition-delay: 1s;
 }
