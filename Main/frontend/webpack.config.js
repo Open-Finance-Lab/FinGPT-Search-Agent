@@ -119,7 +119,7 @@ module.exports = {
             banner: '// @charset "UTF-8";',
             raw: true
         }),
-        new EnsureUTF8Plugin((filename) => /^vendor\/.*\.js$/.test(filename)),
+        new EnsureUTF8Plugin((filename) => /\.js$/.test(filename)),
         new CopyPlugin({
           patterns: [
             { from: 'src/manifest.json', to: '.' },
