@@ -7,7 +7,7 @@
     background-color: #333;
     border-radius: 15px;
     box-shadow: 5px 0px 10px black;
-    overflow: hidden;
+    overflow: visible;
     z-index: 10000;
     color: white;
     display: flex;

@@ -8,7 +8,7 @@ import { createLinkManager } from './link_manager.js';
 // import * as pdfjsLib from "https://cdn.jsdelivr.net/npm/pdfjs-dist@2.11.338/es5/build/pdf.js";
 // import { mammoth } from 'https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.4.2/mammoth.browser.min.js';
 
-function createSettingsWindow(isFixedModeRef, settingsIcon, positionModeIcon) {
+function createSettingsWindow(isFixedModeRef, settingsButton, positionModeButton) {
     const settings_window = document.createElement('div');
     settings_window.style.display = "none";
     settings_window.id = "settings_window";
@@ -376,9 +376,9 @@ function createSettingsWindow(isFixedModeRef, settingsIcon, positionModeIcon) {
     // settings_window.appendChild(mcpLabel);
     // settings_window.appendChild(ragSectionContainer);
     
-    settingsIcon.onclick = function (event) {
+    settingsButton.onclick = function (event) {
         event.stopPropagation();
-        const rect = settingsIcon.getBoundingClientRect();
+        const rect = settingsButton.getBoundingClientRect();
         const y = rect.bottom + (isFixedModeRef.value ? 0 : window.scrollY);
         const x = rect.left + (isFixedModeRef.value ? 0 : window.scrollX) - 100;
         settings_window.style.top = `${y}px`;
@@ -392,8 +392,8 @@ function createSettingsWindow(isFixedModeRef, settingsIcon, positionModeIcon) {
         if (
             settings_window.style.display === 'block' &&
             !settings_window.contains(event.target) &&
-            !settingsIcon.contains(event.target) &&
-            !positionModeIcon.contains(event.target)
+            !settingsButton.contains(event.target) &&
+            !positionModeButton.contains(event.target)
         ) {
             settings_window.style.display = 'none';
         }
