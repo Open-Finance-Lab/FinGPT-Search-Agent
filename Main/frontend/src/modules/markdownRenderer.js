@@ -1,16 +1,11 @@
 // markdownRenderer.js
-// Centralized Markdown + math rendering that relies on self-hosted UMD builds.
+// Clean markdown + math rendering using markdown-it with texmath plugin
 
-const MARKDOWN_OPTIONS = {
-  gfm: true,
-  breaks: true,
-  mangle: false,
-  headerIds: false,
-};
+import markdownIt from 'markdown-it';
+import texmath from 'markdown-it-texmath';
 
-const MATH_PLACEHOLDER_PREFIX = '__MATH_BLOCK_';
-
-const DEFAULT_MATH_RENDER_OPTIONS = {
+// KaTeX render options for the final math rendering
+const KATEX_RENDER_OPTIONS = {
   delimiters: [
     { left: '$$', right: '$$', display: true },
     { left: '$', right: '$', display: false },
@@ -31,178 +26,54 @@ const DEFAULT_MATH_RENDER_OPTIONS = {
   },
 };
 
-function countOccurrences(haystack, needle) {
-  if (!haystack || !needle) {
-    return 0;
-  }
-  return haystack.split(needle).length - 1;
-}
-
-function stripAllOccurrences(text, token) {
-  if (!text || !token) {
-    return text;
-  }
-  return text.split(token).join('');
-}
-
-function stabilizeStreamingDelimiters(text) {
-  if (!text) {
-    return text;
-  }
-
-  const suffixes = [];
-  const append = (token) => {
-    if (token) {
-      suffixes.push(token);
-    }
-  };
-
-  const codeFenceCount = countOccurrences(text, '```');
-  if (codeFenceCount % 2 !== 0) {
-    append('\n```');
-  }
-
-  const tildeFenceCount = countOccurrences(text, '~~~');
-  if (tildeFenceCount % 2 !== 0) {
-    append('\n~~~');
-  }
-
-  const mathFenceCount = countOccurrences(text, '$$');
-  if (mathFenceCount % 2 !== 0) {
-    append('\n$$');
-  }
-
-  let inlineScan = stripAllOccurrences(text, '```');
-  inlineScan = stripAllOccurrences(inlineScan, '~~~');
-
-  const inlineCodeCount = countOccurrences(inlineScan, '`');
-  if (inlineCodeCount % 2 !== 0) {
-    append('`');
-  }
-  inlineScan = stripAllOccurrences(inlineScan, '`');
-
-  let emphasisScan = inlineScan;
-
-  const doubleAsteriskCount = countOccurrences(emphasisScan, '**');
-  if (doubleAsteriskCount % 2 !== 0) {
-    append('**');
-  }
-  emphasisScan = stripAllOccurrences(emphasisScan, '**');
-
-  const doubleUnderscoreCount = countOccurrences(emphasisScan, '__');
-  if (doubleUnderscoreCount % 2 !== 0) {
-    append('__');
-  }
-  emphasisScan = stripAllOccurrences(emphasisScan, '__');
-
-  const strikeCount = countOccurrences(emphasisScan, '~~');
-  if (strikeCount % 2 !== 0) {
-    append('~~');
-  }
-  emphasisScan = stripAllOccurrences(emphasisScan, '~~');
-
-  const singleAsteriskCount = countOccurrences(emphasisScan, '*');
-  if (singleAsteriskCount % 2 !== 0) {
-    append('*');
-  }
-  emphasisScan = stripAllOccurrences(emphasisScan, '*');
-
-  const singleUnderscoreCount = countOccurrences(emphasisScan, '_');
-  if (singleUnderscoreCount % 2 !== 0) {
-    append('_');
-  }
-
-  if (suffixes.length === 0) {
-    return text;
-  }
-
-  return `${text}${suffixes.join('')}`;
-}
-
-function getMarked() {
-  const globalMarked = globalThis.marked?.marked || globalThis.marked;
-  if (!globalMarked || typeof globalMarked.parse !== 'function') {
-    console.warn('Marked UMD bundle is not available in the current context.');
-    return null;
-  }
-  return globalMarked;
-}
-
-function normalizeEmphasisDelimiters(text) {
-  if (!text) {
-    return text;
-  }
-
-  let normalized = text.replace(/\*(?:\s*\*)+/g, (match) => match.replace(/\s+/g, ''));
-
-  normalized = normalized.replace(/(\*{2,})([ \t]+)(?=\S)/g, '$1');
-  normalized = normalized.replace(/(?<=\S)([ \t]+)(\*{2,})/g, (_match, _spaces, stars) => stars);
-
-  return normalized;
-}
-
-function autoWrapMathExpressions(text) {
-  if (!text) {
-    return text;
-  }
-
-  let processed = text.replace(
-    /(?<!\$)([^\s$])([^$\n]+?)(?<!\$)([^\s$])/g,
-    (match, p1, p2, p3) => {
-      if (/[∂σ²∆ΓΘνρ√]|\b[dN]_[12]\b|\bln\b|\be\^/.test(match)) {
-        return `${p1}$${p2}${p3}$`;
-      }
-      return match;
-    }
-  );
-
-  processed = processed.replace(/^\s*([^$\n]+?)\s*$/gm, (match) => {
-    if (/[∂σ²∆ΓΘνρ√=−].*[∂σ²∆ΓΘνρ√=−]/.test(match) && !/\$\$.*\$\$/.test(match)) {
-      return `$$${match}$$`;
-    }
-    return match;
+// Create and configure the markdown-it instance
+function createMarkdownRenderer() {
+  const md = markdownIt({
+    html: true,        // Enable HTML tags in source
+    linkify: true,     // Autoconvert URL-like text to links
+    typographer: false, // Disable typographic replacements to avoid conflicts
+    breaks: true,      // Convert '\n' to <br>
   });
 
-  return processed;
-}
-
-function extractMathBlocks(text) {
-  const blocks = [];
-  const patterns = [
-    /\\\[([\s\S]+?)\\\]/g, // \[...\]
-    /\$\$([\s\S]+?)\$\$/g, // $$...$$
-    /\\\(([\s\S]+?)\\\)/g, // \(...\)
-    /\$([^\$\n]+?)\$/g, // $...$
-  ];
-
-  let processedText = text;
-  const toPlaceholder = (match) => {
-    const token = `${MATH_PLACEHOLDER_PREFIX}${blocks.length}__`;
-    blocks.push(match);
-    return token;
-  };
-
-  patterns.forEach((regex) => {
-    processedText = processedText.replace(regex, (match) => toPlaceholder(match));
+  // Add the texmath plugin - this handles math at tokenization level
+  // BEFORE any emphasis parsing, solving our asterisk problem
+  md.use(texmath, {
+    engine: {
+      // We don't render here - just preserve the math for KaTeX
+      renderToString: (tex, options) => {
+        // Return the raw TeX wrapped in a span for KaTeX to find
+        if (options.displayMode) {
+          return `$$${tex}$$`;
+        }
+        return `$${tex}$`;
+      },
+    },
+    delimiters: 'dollars', // Handles $...$ and $$...$$
   });
 
-  return { processedText, blocks };
+  return md;
 }
 
-function restoreMathBlocks(html, blocks) {
-  return blocks.reduce((acc, block, index) => {
-    const token = `${MATH_PLACEHOLDER_PREFIX}${index}__`;
-    return acc.split(token).join(block);
-  }, html);
+// Singleton instance
+let markdownRenderer = null;
+
+function getMarkdownRenderer() {
+  if (!markdownRenderer) {
+    markdownRenderer = createMarkdownRenderer();
+  }
+  return markdownRenderer;
 }
 
+// Sanitize HTML to prevent XSS
 function sanitizeHtml(html) {
   const template = document.createElement('template');
   template.innerHTML = html;
 
+  // Remove dangerous elements
   const forbiddenSelectors = 'script,style,iframe,object,embed,link,meta';
   template.content.querySelectorAll(forbiddenSelectors).forEach((node) => node.remove());
 
+  // Remove event handlers
   const walker = document.createTreeWalker(template.content, NodeFilter.SHOW_ELEMENT, null, false);
   while (walker.nextNode()) {
     const element = walker.currentNode;
@@ -213,6 +84,7 @@ function sanitizeHtml(html) {
     });
   }
 
+  // Remove HTML comments
   const commentWalker = document.createTreeWalker(template.content, NodeFilter.SHOW_COMMENT, null, false);
   const comments = [];
   while (commentWalker.nextNode()) {
@@ -223,6 +95,7 @@ function sanitizeHtml(html) {
   return template.innerHTML;
 }
 
+// Apply target="_blank" to links for security
 function applyLinkAttributes(element) {
   const links = element.querySelectorAll('a');
   links.forEach((link) => {
@@ -231,29 +104,17 @@ function applyLinkAttributes(element) {
   });
 }
 
+// Use KaTeX auto-render for final math rendering
 function renderMath(element) {
   if (typeof globalThis.renderMathInElement !== 'function') {
     console.warn('KaTeX auto-render is not available.');
     return;
   }
 
-  globalThis.renderMathInElement(element, DEFAULT_MATH_RENDER_OPTIONS);
+  globalThis.renderMathInElement(element, KATEX_RENDER_OPTIONS);
 }
 
-function buildContentHtml(markedInstance, source, { wrapMath, stabilizeStreaming = false }) {
-  const normalized = normalizeEmphasisDelimiters(source || '');
-  const mathWrapped = wrapMath ? autoWrapMathExpressions(normalized) : normalized;
-  const { processedText, blocks } = extractMathBlocks(mathWrapped);
-
-  const textForMarked = stabilizeStreaming
-    ? stabilizeStreamingDelimiters(processedText)
-    : processedText;
-
-  let html = markedInstance.parse(textForMarked, MARKDOWN_OPTIONS);
-  html = restoreMathBlocks(html, blocks);
-  return sanitizeHtml(html);
-}
-
+// Apply optional prefix label
 function applyPrefix(html, prefixLabel) {
   if (!prefixLabel) {
     return html;
@@ -261,48 +122,74 @@ function applyPrefix(html, prefixLabel) {
   return `<strong>${prefixLabel}:</strong> ${html}`;
 }
 
+// Core render function - MUCH simpler now!
+function render(markdown, options = {}) {
+  const { stabilizeStreaming = false } = options;
+
+  // For streaming, append closing delimiters if needed
+  let processedMarkdown = markdown || '';
+
+  if (stabilizeStreaming) {
+    // Simple checks for unclosed delimiters
+    // markdown-it handles most cases well, but we help with streaming
+    const dollarCount = (processedMarkdown.match(/\$/g) || []).length;
+    if (dollarCount % 2 !== 0) {
+      processedMarkdown += '$';
+    }
+
+    const fenceCount = (processedMarkdown.match(/```/g) || []).length;
+    if (fenceCount % 2 !== 0) {
+      processedMarkdown += '\n```';
+    }
+  }
+
+  // Let markdown-it with texmath do ALL the work
+  const md = getMarkdownRenderer();
+  const html = md.render(processedMarkdown);
+
+  return sanitizeHtml(html);
+}
+
+// Main export - renders final markdown content
 export function renderMarkdownContent(targetElement, rawText, options = {}) {
   if (!targetElement) {
     return;
   }
 
   const { prefixLabel = 'FinGPT', wrapMath = true } = options;
-  const markedInstance = getMarked();
-  if (!markedInstance) {
+
+  try {
+    const html = render(rawText);
+    targetElement.innerHTML = applyPrefix(html, prefixLabel);
+    targetElement.dataset.renderState = 'final';
+
+    applyLinkAttributes(targetElement);
+    renderMath(targetElement);
+  } catch (error) {
+    console.error('Error rendering markdown:', error);
+    // Fallback to plain text
     targetElement.textContent = `${prefixLabel ? `${prefixLabel}: ` : ''}${rawText || ''}`;
-    return;
   }
-
-  const html = buildContentHtml(markedInstance, rawText, { wrapMath });
-  targetElement.innerHTML = applyPrefix(html, prefixLabel);
-  targetElement.dataset.renderState = 'final';
-
-  applyLinkAttributes(targetElement);
-  renderMath(targetElement);
 }
 
+// Export for streaming preview - uses same renderer with stabilization
 export function renderStreamingPreview(targetElement, rawText, options = {}) {
   if (!targetElement) {
     return;
   }
 
   const { prefixLabel = 'FinGPT', wrapMath = true } = options;
-  const prefix = prefixLabel ? `${prefixLabel}: ` : '';
-  const markedInstance = getMarked();
 
-  if (!markedInstance) {
-    targetElement.textContent = `${prefix}${rawText || ''}`;
+  try {
+    const html = render(rawText, { stabilizeStreaming: true });
+    targetElement.innerHTML = applyPrefix(html, prefixLabel);
     targetElement.dataset.renderState = 'streaming';
-    return;
+
+    applyLinkAttributes(targetElement);
+    renderMath(targetElement);
+  } catch (error) {
+    console.error('Error rendering streaming markdown:', error);
+    // Fallback to plain text
+    targetElement.textContent = `${prefixLabel ? `${prefixLabel}: ` : ''}${rawText || ''}`;
   }
-
-  const html = buildContentHtml(markedInstance, rawText, {
-    wrapMath,
-    stabilizeStreaming: true,
-  });
-  targetElement.innerHTML = applyPrefix(html, prefixLabel);
-  targetElement.dataset.renderState = 'streaming';
-
-  applyLinkAttributes(targetElement);
-  renderMath(targetElement);
 }
