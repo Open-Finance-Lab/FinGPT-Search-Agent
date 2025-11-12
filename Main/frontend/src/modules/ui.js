@@ -19,33 +19,34 @@ function createUI() {
     // Main popup
     const popup = createPopup();
 
-    // Icons
-    const settingsIcon = document.createElement('span');
-    settingsIcon.innerText = "⚙️";
-    settingsIcon.className = "icon";
+    // Header buttons
+    const settingsButton = document.createElement('button');
+    settingsButton.innerText = "Settings";
+    settingsButton.className = "header-button";
 
-    const positionModeIcon = document.createElement('span');
-    positionModeIcon.innerText = "⛓️‍💥";
-    positionModeIcon.id = "position-mode-icon";
-    positionModeIcon.className = "icon";
+    const positionModeButton = document.createElement('button');
+    positionModeButton.innerText = "Hover in Place";
+    positionModeButton.id = "position-mode-button";
+    positionModeButton.className = "header-button";
+    positionModeButton.setAttribute('data-tooltip', 'This toggles this pop up\'s dynamic placement. "Hover in Place" keeps the pop up in place when you scroll the webpage, while "Move with Page" moves the pop up with the page when the page is scrolled.');
 
     // Settings window
-    const settings_window = createSettingsWindow(isFixedModeRef, settingsIcon, positionModeIcon);
+    const settings_window = createSettingsWindow(isFixedModeRef, settingsButton, positionModeButton);
 
     // Position mode toggle logic
-    positionModeIcon.onclick = function () {
+    positionModeButton.onclick = function () {
         const rect = popup.getBoundingClientRect();
         if (isFixedModeRef.value) {
             popup.style.position = "absolute";
             popup.style.top = `${rect.top + window.scrollY}px`;
             popup.style.left = `${rect.left + window.scrollX}px`;
             popup.style.right = "auto"; // Clear right positioning when switching to absolute
-            positionModeIcon.innerText = "📌";
+            positionModeButton.innerText = "Move with Page";
 
-            const settingsIconRect = settingsIcon.getBoundingClientRect();
+            const settingsButtonRect = settingsButton.getBoundingClientRect();
             settings_window.style.position = "absolute";
-            settings_window.style.top = `${settingsIconRect.bottom + window.scrollY}px`;
-            settings_window.style.left = `${settingsIconRect.left + window.scrollX - 100}px`;
+            settings_window.style.top = `${settingsButtonRect.bottom + window.scrollY}px`;
+            settings_window.style.left = `${settingsButtonRect.left + window.scrollX - 100}px`;
 
             // Update sources window position mode
             const sources_window = document.getElementById('sources_window');
@@ -58,12 +59,12 @@ function createUI() {
             popup.style.position = "fixed";
             popup.style.top = `${rect.top}px`;
             popup.style.left = `${rect.left}px`;
-            positionModeIcon.innerText = "⛓️‍💥";
+            positionModeButton.innerText = "Hover in Place";
 
-            const settingsIconRect = settingsIcon.getBoundingClientRect();
+            const settingsButtonRect = settingsButton.getBoundingClientRect();
             settings_window.style.position = "fixed";
-            settings_window.style.top = `${settingsIconRect.bottom}px`;
-            settings_window.style.left = `${settingsIconRect.left - 100}px`;
+            settings_window.style.top = `${settingsButtonRect.bottom}px`;
+            settings_window.style.left = `${settingsButtonRect.left - 100}px`;
 
             // Update sources window position mode
             const sources_window = document.getElementById('sources_window');
@@ -77,7 +78,7 @@ function createUI() {
     };
 
     // Header
-    const header = createHeader(popup, settings_window, settingsIcon, positionModeIcon, isFixedModeRef, DEFAULT_POPUP_HEIGHT);
+    const header = createHeader(popup, settings_window, settingsButton, positionModeButton, isFixedModeRef, DEFAULT_POPUP_HEIGHT);
 
     // Intro
     const intro = document.createElement('div');
