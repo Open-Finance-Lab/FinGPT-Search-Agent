@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 from openai import OpenAI
 from anthropic import Anthropic
 
-from mcp_client.agent import create_fin_agent, USER_ONLY_MODELS, DEFAULT_PROMPT
+from mcp_client.agent import create_fin_agent, USER_ONLY_MODELS, DEFAULT_PROMPT, apply_guardrails
 from .models_config import (
     MODELS_CONFIG,
     PROVIDER_CONFIGS,
@@ -57,13 +57,13 @@ if DEEPSEEK_API_KEY:
 if ANTHROPIC_API_KEY:
     clients["anthropic"] = Anthropic(api_key=ANTHROPIC_API_KEY)
 
-INSTRUCTION = (
+INSTRUCTION = apply_guardrails(
     "When provided context, use provided context as fact and not your own knowledge; "
     "the context provided is the most up-to-date information."
 )
 
 # Warren Buffett-specific system prompt for the Buffet Agent
-BUFFETT_INSTRUCTION = (
+BUFFETT_INSTRUCTION = apply_guardrails(
     "You are Warren Buffett, the legendary investor and CEO of Berkshire Hathaway. "
     "Answer questions with his characteristic wisdom, folksy charm, and value investing philosophy. "
     "Use his well-known principles: invest in what you understand, focus on long-term value, "
@@ -432,22 +432,20 @@ def create_response(
 
     # Route to streaming or non-streaming based on flag
     if stream:
-        return _create_response_stream(client, provider, model_name, model_config, msgs, system_message)
+        return _create_response_stream(client, provider, model_name, model_config, msgs)
     else:
-        return _create_response_sync(client, provider, model_name, model_config, msgs, system_message)
+        return _create_response_sync(client, provider, model_name, model_config, msgs)
 
 
-def _create_response_sync(client, provider: str, model_name: str, model_config: dict, msgs: list, system_message: str) -> str:
+def _create_response_sync(client, provider: str, model_name: str, model_config: dict, msgs: list) -> str:
     """Non-streaming response - returns a string directly."""
     if provider == "anthropic":
         # Anthropic uses a different API structure
-        system_content = msgs[0]["content"] if msgs and msgs[0].get("role") == "system" else INSTRUCTION
         anthropic_msgs = [msg for msg in msgs if msg.get("role") != "system"]
 
         response = client.messages.create(
             model=model_name,
             messages=anthropic_msgs,
-            system=system_content,
             max_tokens=1024
         )
         return response.content[0].text
@@ -465,17 +463,15 @@ def _create_response_sync(client, provider: str, model_name: str, model_config: 
         return response.choices[0].message.content
 
 
-def _create_response_stream(client, provider: str, model_name: str, model_config: dict, msgs: list, system_message: str):
+def _create_response_stream(client, provider: str, model_name: str, model_config: dict, msgs: list):
     """Streaming response - returns a generator."""
     if provider == "anthropic":
         # Anthropic streaming
-        system_content = msgs[0]["content"] if msgs and msgs[0].get("role") == "system" else INSTRUCTION
         anthropic_msgs = [msg for msg in msgs if msg.get("role") != "system"]
 
         with client.messages.stream(
             model=model_name,
             messages=anthropic_msgs,
-            system=system_content,
             max_tokens=1024
         ) as stream_response:
             for text in stream_response.text_stream:
