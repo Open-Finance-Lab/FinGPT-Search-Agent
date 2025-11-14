@@ -28,6 +28,7 @@ dependencies = [
     "gunicorn>=21.2.0,<24",
     "whitenoise>=6.6.0,<7",
     "playwright>=1.48.0,<2",
+    "pypdf2>=3.0.0,<4",
     "Django==5.2.8 ; sys_platform == 'win32'",
     "Django==5.2.8 ; sys_platform == 'darwin'",
     "Django==5.2.8 ; sys_platform == 'linux'",

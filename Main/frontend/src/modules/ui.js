@@ -5,6 +5,7 @@ import { createHeader } from './components/header.js';
 import { createChatInterface } from './components/chat.js';
 import { createSettingsWindow } from './components/settings_window.js';
 import { createLinkManager } from './components/link_manager.js';
+import { createPdfUploadButton } from './components/pdf_upload.js';
 
 const DEFAULT_POPUP_HEIGHT = '520px';
 const DEFAULT_POPUP_WIDTH = '690px';

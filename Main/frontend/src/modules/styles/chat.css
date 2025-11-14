@@ -62,8 +62,17 @@
 #inputContainer {
   display: flex;
   flex-direction: column;
-  align-items: center;
+  gap: 8px;
   margin-top: 12px;
+}
+
+/* Input Wrapper - holds button + textbox */
+.input-wrapper {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
 }
 
 /* Textbox */
@@ -459,4 +468,140 @@
   font-size: 14px;
   text-align: center;
   width: 100%;
+}
+/* PDF Upload Button */
+.pdf-upload-container {
+  display: flex;
+  align-items: center;
+}
+
+.pdf-upload-button {
+  background-color: transparent;
+  border: none;
+  color: white;
+  font-size: 20px;
+  cursor: pointer;
+  padding: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  transition: background-color 0.2s ease, transform 0.1s ease;
+  min-width: 36px;
+  height: 36px;
+}
+
+.pdf-upload-button:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.pdf-upload-button:active {
+  background-color: rgba(255, 255, 255, 0.15);
+  transform: scale(0.95);
+}
+
+/* PDF Attachment Card (ChatGPT style) */
+.pdf-attachment-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background-color: #3a3a3a;
+  border: 1px solid #555;
+  border-radius: 10px;
+  padding: 10px 14px;
+  margin-bottom: 8px;
+  width: fit-content;
+  max-width: 100%;
+}
+
+.pdf-attachment-icon {
+  font-size: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  height: 32px;
+  background-color: #e85d4f;
+  border-radius: 6px;
+}
+
+.pdf-attachment-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.pdf-attachment-name {
+  color: white;
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pdf-attachment-meta {
+  color: #999;
+  font-size: 12px;
+}
+
+.pdf-attachment-remove {
+  background-color: transparent;
+  border: none;
+  color: #999;
+  font-size: 24px;
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  width: 28px;
+  height: 28px;
+  transition: background-color 0.2s ease, color 0.2s ease;
+  line-height: 1;
+}
+
+.pdf-attachment-remove:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+  color: white;
+}
+
+.pdf-attachment-remove:active {
+  transform: scale(0.95);
+}
+
+/* tool calls display */
+.tool-call-container {
+  background: rgba(0, 0, 0, 0.05);
+  border-left: 3px solid #007bff;
+  padding: 8px 12px;
+  margin: 8px 0;
+  font-size: 0.9em;
+  font-family: 'Courier New', monospace;
+}
+
+.tool-call-header {
+  font-weight: bold;
+  color: #007bff;
+  margin-bottom: 4px;
+}
+
+.tool-call-name {
+  color: #28a745;
+}
+
+.tool-call-args {
+  color: #666;
+  margin-left: 10px;
+}
+
+.system-message {
+  display: block;
+  background: rgba(0, 123, 255, 0.1);
+  padding: 10px;
+  border-radius: 6px;
+  margin: 10px 0;
 }

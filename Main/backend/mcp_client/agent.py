@@ -36,6 +36,25 @@ except ImportError:
     logging.warning("Playwright tools not available. Install playwright to enable browser automation.")
     PLAYWRIGHT_AVAILABLE = False
 
+# Import additional tools from tools directory
+try:
+    from .tools import get_all_tools
+    ADDITIONAL_TOOLS = get_all_tools()
+    logging.info(f"loaded {len(ADDITIONAL_TOOLS)} additional tools from tools directory")
+except Exception as e:
+    logging.warning(f"could not load additional tools: {e}")
+    ADDITIONAL_TOOLS = []
+
+# Import MCP server tools
+try:
+    from .mcp_loader import get_all_mcp_tools, cleanup_mcp_clients
+    MCP_TOOLS = get_all_mcp_tools()
+    logging.info(f"loaded {len(MCP_TOOLS)} tools from mcp servers")
+except Exception as e:
+    logging.warning(f"could not load mcp tools: {e}")
+    MCP_TOOLS = []
+    cleanup_mcp_clients = None
+
 USER_ONLY_MODELS = {"o3-mini"}
 
 # Default prompt for standard usage
@@ -165,6 +184,8 @@ async def create_fin_agent(model: str = "gpt-4o",
 
     # Build tools list
     tools: List = []
+    
+    # add playwright tools if requested
     if use_playwright and PLAYWRIGHT_AVAILABLE:
         # Store domain restriction in global context for tools to access
         from . import playwright_tools
@@ -185,6 +206,16 @@ async def create_fin_agent(model: str = "gpt-4o",
         logging.info(f"Playwright tools enabled{domain_info}: {len(tools)} tools available")
     elif use_playwright and not PLAYWRIGHT_AVAILABLE:
         logging.error("Playwright requested but not available. Running without browser tools.")
+    
+    # always add additional tools (calculator, etc)
+    if ADDITIONAL_TOOLS:
+        tools.extend(ADDITIONAL_TOOLS)
+        logging.info(f"added {len(ADDITIONAL_TOOLS)} additional tools")
+    
+    # add mcp server tools
+    if MCP_TOOLS:
+        tools.extend(MCP_TOOLS)
+        logging.info(f"added {len(MCP_TOOLS)} mcp tools")
 
     try:
         # Create agent with or without tools
@@ -212,3 +243,10 @@ async def create_fin_agent(model: str = "gpt-4o",
                 await cleanup_browser()
             except Exception as e:
                 logging.error(f"Browser cleanup error: {e}")
+        
+        # Cleanup MCP clients
+        if cleanup_mcp_clients:
+            try:
+                await cleanup_mcp_clients()
+            except Exception as e:
+                logging.error(f"MCP cleanup error: {e}")

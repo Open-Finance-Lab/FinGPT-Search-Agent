@@ -1,0 +1,34 @@
+{
+  "mcpServers": {
+    "pageindex-remote": {
+      "enabled": false,
+      "description": "pageindex mcp for long pdf chat (remote)",
+      "type": "http",
+      "url": "https://mcp.pageindex.ai/mcp"
+    },
+    "pageindex-local": {
+      "enabled": true,
+      "description": "pageindex mcp for long pdf chat (local upload)",
+      "command": "npx",
+      "args": ["-y", "pageindex-mcp"]
+    },
+    "example-remote-mcp": {
+      "enabled": false,
+      "description": "example remote mcp server",
+      "url": "https://api.example.com/mcp",
+      "headers": {
+        "Authorization": "Bearer YOUR_API_KEY"
+      }
+    },
+    "example-local-mcp": {
+      "enabled": false,
+      "description": "example local mcp server",
+      "command": "python",
+      "args": ["path/to/mcp_server.py"],
+      "env": {
+        "API_KEY": "your-key-here"
+      }
+    }
+  }
+}
+

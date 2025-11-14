@@ -16,6 +16,7 @@ Including another URLconf
 """
 from django.urls import path
 from api import views
+from api.pdf_upload import PDFUploadView, PDFDeleteView
 
 urlpatterns = [
     # Admin disabled (requires database)
@@ -35,5 +36,10 @@ urlpatterns = [
     path('log_question/', views.log_question, name='log_question'),
     path('api/get_r2c_stats/', views.get_r2c_stats, name='get_r2c_stats'),
     path('api/get_available_models/', views.get_available_models, name='get_available_models'),
+    
+    # pdf upload endpoints
+    path('api/upload_pdf/', PDFUploadView.as_view(), name='upload_pdf'),
+    path('api/pdfs/', PDFUploadView.as_view(), name='list_pdfs'),
+    path('api/pdf/<str:file_id>/', PDFDeleteView.as_view(), name='delete_pdf'),
 
 ]

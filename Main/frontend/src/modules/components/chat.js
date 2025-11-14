@@ -1,175 +1,196 @@
 // chat.js
 import { submit_question, clear, get_sources } from '../helpers.js';
+import {
+  createPdfUploadButton,
+  createPdfAttachmentCard,
+} from './pdf_upload.js';
 
 function createChatInterface(searchQuery) {
-    const inputContainer = document.createElement('div');
-    inputContainer.id = "inputContainer";
+  const inputContainer = document.createElement('div');
+  inputContainer.id = 'inputContainer';
 
-    // State for current mode
-    let currentMode = 'Thinking';  // Default to Thinking mode
+  // State for current mode
+  let currentMode = 'Thinking'; // Default to Thinking mode
 
-    const textbox = document.createElement("input");
-    textbox.type = "text";
-    textbox.id = "textbox";
-    textbox.placeholder = "Type your question here...";
-    textbox.addEventListener("keydown", function (event) {
-        if (event.key === "Enter") {
-            submit_question(currentMode);
-        }
-    });
-    inputContainer.appendChild(textbox);
+  // PDF attachment card (shows above input when PDF is uploaded)
+  const pdfCard = createPdfAttachmentCard();
 
-    const buttonContainer = document.createElement('div');
-    buttonContainer.id = "buttonContainer";
+  // Input wrapper (contains button + textbox)
+  const inputWrapper = document.createElement('div');
+  inputWrapper.className = 'input-wrapper';
 
-    // Create mode selector dropdown
-    const modeSelector = document.createElement('div');
-    modeSelector.id = 'modeSelector';
-    modeSelector.className = 'mode-selector';
+  // PDF upload button
+  const pdfUploadBtn = createPdfUploadButton();
 
-    // Main button that shows current mode
-    const modeSelectorButton = document.createElement('button');
-    modeSelectorButton.id = 'modeSelectorButton';
-    modeSelectorButton.className = 'mode-selector-button mode-thinking';
+  const textbox = document.createElement('input');
+  textbox.type = 'text';
+  textbox.id = 'textbox';
+  textbox.placeholder = 'Type your question here...';
+  textbox.addEventListener('keydown', function (event) {
+    if (event.key === 'Enter') {
+      submit_question(currentMode);
+    }
+  });
 
-    const modeText = document.createElement('span');
-    modeText.className = 'mode-text';
-    modeText.innerText = currentMode;
+  inputWrapper.appendChild(pdfUploadBtn);
+  inputWrapper.appendChild(textbox);
 
-    const modeArrow = document.createElement('span');
-    modeArrow.className = 'mode-arrow';
-    modeArrow.innerHTML = '▲';
+  inputContainer.appendChild(pdfCard);
+  inputContainer.appendChild(inputWrapper);
 
-    modeSelectorButton.appendChild(modeText);
-    modeSelectorButton.appendChild(modeArrow);
+  const buttonContainer = document.createElement('div');
+  buttonContainer.id = 'buttonContainer';
 
-    // Dropdown menu
-    const modeDropdown = document.createElement('div');
-    modeDropdown.id = 'modeDropdown';
-    modeDropdown.className = 'mode-dropdown';
-    modeDropdown.style.display = 'none';
+  // Create mode selector dropdown
+  const modeSelector = document.createElement('div');
+  modeSelector.id = 'modeSelector';
+  modeSelector.className = 'mode-selector';
 
-    // Thinking mode option
-    const thinkingOption = document.createElement('div');
-    thinkingOption.className = 'mode-option mode-option-selected';
-    thinkingOption.dataset.mode = 'Thinking';
+  // Main button that shows current mode
+  const modeSelectorButton = document.createElement('button');
+  modeSelectorButton.id = 'modeSelectorButton';
+  modeSelectorButton.className = 'mode-selector-button mode-thinking';
 
-    const thinkingCheckmark = document.createElement('span');
-    thinkingCheckmark.className = 'mode-checkmark';
-    thinkingCheckmark.innerHTML = '✓';
+  const modeText = document.createElement('span');
+  modeText.className = 'mode-text';
+  modeText.innerText = currentMode;
 
-    const thinkingText = document.createElement('span');
-    thinkingText.className = 'mode-option-text';
-    thinkingText.innerText = 'Thinking';
+  const modeArrow = document.createElement('span');
+  modeArrow.className = 'mode-arrow';
+  modeArrow.innerHTML = '▲';
 
-    thinkingOption.appendChild(thinkingText);
-    thinkingOption.appendChild(thinkingCheckmark);
+  modeSelectorButton.appendChild(modeText);
+  modeSelectorButton.appendChild(modeArrow);
 
-    // Research mode option
-    const researchOption = document.createElement('div');
-    researchOption.className = 'mode-option';
-    researchOption.dataset.mode = 'Research';
+  // Dropdown menu
+  const modeDropdown = document.createElement('div');
+  modeDropdown.id = 'modeDropdown';
+  modeDropdown.className = 'mode-dropdown';
+  modeDropdown.style.display = 'none';
 
-    const researchCheckmark = document.createElement('span');
-    researchCheckmark.className = 'mode-checkmark';
-    researchCheckmark.innerHTML = '✓';
-    researchCheckmark.style.visibility = 'hidden';
+  // Thinking mode option
+  const thinkingOption = document.createElement('div');
+  thinkingOption.className = 'mode-option mode-option-selected';
+  thinkingOption.dataset.mode = 'Thinking';
 
-    const researchText = document.createElement('span');
-    researchText.className = 'mode-option-text';
-    researchText.innerText = 'Research';
+  const thinkingCheckmark = document.createElement('span');
+  thinkingCheckmark.className = 'mode-checkmark';
+  thinkingCheckmark.innerHTML = '✓';
 
-    researchOption.appendChild(researchText);
-    researchOption.appendChild(researchCheckmark);
+  const thinkingText = document.createElement('span');
+  thinkingText.className = 'mode-option-text';
+  thinkingText.innerText = 'Thinking';
 
-    modeDropdown.appendChild(thinkingOption);
-    modeDropdown.appendChild(researchOption);
+  thinkingOption.appendChild(thinkingText);
+  thinkingOption.appendChild(thinkingCheckmark);
 
-    modeSelector.appendChild(modeSelectorButton);
-    modeSelector.appendChild(modeDropdown);
+  // Research mode option
+  const researchOption = document.createElement('div');
+  researchOption.className = 'mode-option';
+  researchOption.dataset.mode = 'Research';
 
-    // Toggle dropdown on button click
-    modeSelectorButton.onclick = function(e) {
-        e.stopPropagation();
-        const isOpen = modeDropdown.style.display !== 'none';
-        if (isOpen) {
-            modeDropdown.style.display = 'none';
-            modeArrow.innerHTML = '▲';
-        } else {
-            modeDropdown.style.display = 'block';
-            modeArrow.innerHTML = '▼';
-        }
+  const researchCheckmark = document.createElement('span');
+  researchCheckmark.className = 'mode-checkmark';
+  researchCheckmark.innerHTML = '✓';
+  researchCheckmark.style.visibility = 'hidden';
+
+  const researchText = document.createElement('span');
+  researchText.className = 'mode-option-text';
+  researchText.innerText = 'Research';
+
+  researchOption.appendChild(researchText);
+  researchOption.appendChild(researchCheckmark);
+
+  modeDropdown.appendChild(thinkingOption);
+  modeDropdown.appendChild(researchOption);
+
+  modeSelector.appendChild(modeSelectorButton);
+  modeSelector.appendChild(modeDropdown);
+
+  // Toggle dropdown on button click
+  modeSelectorButton.onclick = function (e) {
+    e.stopPropagation();
+    const isOpen = modeDropdown.style.display !== 'none';
+    if (isOpen) {
+      modeDropdown.style.display = 'none';
+      modeArrow.innerHTML = '▲';
+    } else {
+      modeDropdown.style.display = 'block';
+      modeArrow.innerHTML = '▼';
+    }
+  };
+
+  // Handle mode selection
+  [thinkingOption, researchOption].forEach((option) => {
+    option.onclick = function (e) {
+      e.stopPropagation();
+      const selectedMode = this.dataset.mode;
+
+      // Update current mode
+      currentMode = selectedMode;
+      modeText.innerText = currentMode;
+
+      // Update button styling
+      if (currentMode === 'Thinking') {
+        modeSelectorButton.className = 'mode-selector-button mode-thinking';
+      } else {
+        modeSelectorButton.className = 'mode-selector-button mode-research';
+      }
+
+      // Update checkmarks
+      if (currentMode === 'Thinking') {
+        thinkingOption.classList.add('mode-option-selected');
+        researchOption.classList.remove('mode-option-selected');
+        thinkingCheckmark.style.visibility = 'visible';
+        researchCheckmark.style.visibility = 'hidden';
+      } else {
+        thinkingOption.classList.remove('mode-option-selected');
+        researchOption.classList.add('mode-option-selected');
+        thinkingCheckmark.style.visibility = 'hidden';
+        researchCheckmark.style.visibility = 'visible';
+      }
+
+      // Close dropdown
+      modeDropdown.style.display = 'none';
+      modeArrow.innerHTML = '▲';
     };
+  });
 
-    // Handle mode selection
-    [thinkingOption, researchOption].forEach(option => {
-        option.onclick = function(e) {
-            e.stopPropagation();
-            const selectedMode = this.dataset.mode;
+  // Close dropdown when clicking outside
+  document.addEventListener('click', function (e) {
+    if (!modeSelector.contains(e.target)) {
+      modeDropdown.style.display = 'none';
+      modeArrow.innerHTML = '▲';
+    }
+  });
 
-            // Update current mode
-            currentMode = selectedMode;
-            modeText.innerText = currentMode;
+  // Create mode label
+  const modeLabel = document.createElement('span');
+  modeLabel.className = 'mode-label';
+  modeLabel.innerText = 'Mode:';
 
-            // Update button styling
-            if (currentMode === 'Thinking') {
-                modeSelectorButton.className = 'mode-selector-button mode-thinking';
-            } else {
-                modeSelectorButton.className = 'mode-selector-button mode-research';
-            }
+  buttonContainer.appendChild(modeLabel);
+  buttonContainer.appendChild(modeSelector);
 
-            // Update checkmarks
-            if (currentMode === 'Thinking') {
-                thinkingOption.classList.add('mode-option-selected');
-                researchOption.classList.remove('mode-option-selected');
-                thinkingCheckmark.style.visibility = 'visible';
-                researchCheckmark.style.visibility = 'hidden';
-            } else {
-                thinkingOption.classList.remove('mode-option-selected');
-                researchOption.classList.add('mode-option-selected');
-                thinkingCheckmark.style.visibility = 'hidden';
-                researchCheckmark.style.visibility = 'visible';
-            }
+  const buttonRow = document.createElement('div');
+  buttonRow.className = 'button-row';
 
-            // Close dropdown
-            modeDropdown.style.display = 'none';
-            modeArrow.innerHTML = '▲';
-        };
-    });
+  const clearButton = document.createElement('button');
+  clearButton.innerText = 'Clear';
+  clearButton.className = 'clear-button';
+  clearButton.onclick = clear;
 
-    // Close dropdown when clicking outside
-    document.addEventListener('click', function(e) {
-        if (!modeSelector.contains(e.target)) {
-            modeDropdown.style.display = 'none';
-            modeArrow.innerHTML = '▲';
-        }
-    });
+  const sourcesButton = document.createElement('button');
+  sourcesButton.innerText = 'Sources';
+  sourcesButton.className = 'sources-button';
+  sourcesButton.onclick = function () {
+    get_sources();
+  };
 
-    // Create mode label
-    const modeLabel = document.createElement('span');
-    modeLabel.className = 'mode-label';
-    modeLabel.innerText = 'Mode:';
+  buttonRow.appendChild(sourcesButton);
+  buttonRow.appendChild(clearButton);
 
-    buttonContainer.appendChild(modeLabel);
-    buttonContainer.appendChild(modeSelector);
-
-    const buttonRow = document.createElement('div');
-    buttonRow.className = "button-row";
-
-    const clearButton = document.createElement('button');
-    clearButton.innerText = "Clear";
-    clearButton.className = "clear-button";
-    clearButton.onclick = clear;
-
-    const sourcesButton = document.createElement('button');
-    sourcesButton.innerText = "Sources";
-    sourcesButton.className = "sources-button";
-    sourcesButton.onclick = function () { get_sources(); };
-
-    buttonRow.appendChild(sourcesButton);
-    buttonRow.appendChild(clearButton);
-
-    return { inputContainer, buttonContainer, buttonRow };
+  return { inputContainer, buttonContainer, buttonRow };
 }
 
 export { createChatInterface };
