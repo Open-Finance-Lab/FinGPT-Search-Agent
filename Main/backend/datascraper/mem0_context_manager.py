@@ -7,6 +7,7 @@ import logging
 import os
 from typing import List, Dict, Optional
 from datetime import datetime, UTC
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from collections import defaultdict
 
 # Mem0 will be imported conditionally to handle cases where it's not installed yet
@@ -50,6 +51,14 @@ class Mem0ContextManager:
             )
 
         self.max_recent_messages = max_recent_messages
+        self.max_session_tokens = max(
+            int(os.getenv("MEM0_CONTEXT_TOKEN_LIMIT", "50000")),
+            2000,
+        )
+        target_ratio = float(os.getenv("MEM0_COMPRESSION_TARGET_RATIO", "0.7"))
+        self.compression_target_ratio = min(max(target_ratio, 0.4), 0.9)
+        self.max_compression_chars = max(int(os.getenv("MEM0_COMPRESSION_MAX_CHARS", "4000")), 500)
+        self.min_messages_before_compress = max(int(os.getenv("MEM0_MIN_MESSAGES_BEFORE_COMPRESS", "6")), 2)
 
         # Initialize Mem0 client
         try:
@@ -58,7 +67,7 @@ class Mem0ContextManager:
             logging.error(f"Failed to initialize Mem0 client: {e}")
             raise
 
-        # Local session storage for recent messages and metadata
+        # Local session storage for per-worker short-term buffers and metadata
         self.sessions = defaultdict(self._session_factory)
 
         # Base system message for financial assistant
@@ -71,13 +80,16 @@ class Mem0ContextManager:
     def _session_factory(self) -> dict:
         """Create new session storage."""
         return {
-            "recent_messages": [],  # Last N messages verbatim
+            "recent_messages": [],
             "message_count": 0,
+            "token_count": 0,
             "current_webpage": None,
             "user_timezone": None,
             "user_time": None,
             "last_used": datetime.now(UTC),
             "mem0_operations": 0,
+            "compressed_chunk_count": 0,
+            "has_compressed_chunks": False,
         }
 
     def add_message(self, session_id: str, role: str, content: str) -> None:
@@ -100,46 +112,23 @@ class Mem0ContextManager:
                 current_url = url_match.group(1)
                 self.update_current_webpage(session_id, current_url)
 
-        # Format message with role headers for clarity
-        if role == "assistant":
-            formatted_content = f"[ASSISTANT RESPONSE]: {content}"
-        elif role == "user":
-            formatted_content = f"[USER QUESTION]: {content}"
-        else:
-            formatted_content = content
+        timestamp = datetime.now(UTC)
+        formatted_content = self._format_message_content(role, content)
+        token_estimate = self.count_tokens(content)
 
-        # Store in recent messages (sliding window)
         message = {
             "role": role,
-            "content": formatted_content,
-            "timestamp": datetime.now(UTC).isoformat()
+            "content": content,
+            "formatted": formatted_content,
+            "timestamp": timestamp,
+            "token_estimate": token_estimate,
         }
 
         session["recent_messages"].append(message)
         session["message_count"] += 1
+        session["token_count"] += token_estimate
 
-        # Keep only last N messages
-        if len(session["recent_messages"]) > self.max_recent_messages:
-            session["recent_messages"].pop(0)
-
-        # Add to Mem0 for long-term memory extraction
-        try:
-            # Mem0 automatically extracts facts, preferences, and entities
-            self.client.add(
-                messages=[{"role": role, "content": content}],
-                user_id=session_id,
-                metadata={
-                    "session_id": session_id,
-                    "timestamp": message["timestamp"],
-                    "webpage": session.get("current_webpage"),
-                    "timezone": session.get("user_timezone"),
-                }
-            )
-            session["mem0_operations"] += 1
-            logging.debug(f"[Mem0] Added message to memory for session {session_id}")
-        except Exception as e:
-            logging.error(f"[Mem0] Failed to add message: {e}")
-            # Continue execution - recent messages still available
+        self._check_context_limits(session_id)
 
     def get_context(self, session_id: str, query: Optional[str] = None) -> List[Dict]:
         """
@@ -160,24 +149,36 @@ class Mem0ContextManager:
 
         # Add timezone and time information
         if session.get("user_timezone") or session.get("user_time"):
-            from datetime import datetime
-            import pytz
-
             time_info_parts = []
-            if session.get("user_timezone") and session.get("user_time"):
-                try:
-                    utc_time = datetime.fromisoformat(session["user_time"].replace('Z', '+00:00'))
-                    user_tz = pytz.timezone(session["user_timezone"])
-                    local_time = utc_time.astimezone(user_tz)
+            user_timezone = session.get("user_timezone")
+            user_time_str = session.get("user_time")
 
-                    time_info_parts.append(f"User's timezone: {session['user_timezone']}")
-                    time_info_parts.append(f"Current local time for user: {local_time.strftime('%Y-%m-%d %H:%M:%S %Z')}")
-                except Exception as e:
-                    logging.warning(f"Error formatting time info: {e}")
-                    if session.get("user_timezone"):
-                        time_info_parts.append(f"User's timezone: {session['user_timezone']}")
-            elif session.get("user_timezone"):
-                time_info_parts.append(f"User's timezone: {session['user_timezone']}")
+            if user_time_str:
+                try:
+                    utc_time = datetime.fromisoformat(user_time_str.replace('Z', '+00:00'))
+                except ValueError as exc:
+                    logging.warning(f"Error parsing user time '{user_time_str}': {exc}")
+                    utc_time = None
+
+                if utc_time and user_timezone:
+                    try:
+                        local_time = utc_time.astimezone(ZoneInfo(user_timezone))
+                        time_info_parts.append(f"User's timezone: {user_timezone}")
+                        time_info_parts.append(
+                            f"Current local time for user: {local_time.strftime('%Y-%m-%d %H:%M:%S %Z')}"
+                        )
+                    except ZoneInfoNotFoundError:
+                        logging.warning(f"Unknown timezone '{user_timezone}', using UTC time reference")
+                        time_info_parts.append(f"User's timezone: {user_timezone} (unrecognized)")
+                        time_info_parts.append(
+                            f"User provided time (UTC): {utc_time.strftime('%Y-%m-%d %H:%M:%S %Z')}"
+                        )
+                elif utc_time:
+                    time_info_parts.append(
+                        f"User provided time (UTC): {utc_time.strftime('%Y-%m-%d %H:%M:%S %Z')}"
+                    )
+            elif user_timezone:
+                time_info_parts.append(f"User's timezone: {user_timezone}")
 
             if time_info_parts:
                 system_prompt += f"\n\n[TIME CONTEXT]: {' | '.join(time_info_parts)}"
@@ -195,63 +196,16 @@ class Mem0ContextManager:
             "content": system_prompt
         }]
 
-        # Retrieve relevant memories from Mem0
-        try:
-            if query:
-                # Search for relevant memories based on the query
-                search_result = self.client.search(
-                    query=query,
-                    user_id=session_id,
-                    limit=5  # Get top 5 relevant memories
-                )
-                session["mem0_operations"] += 1
+        # Include compressed chunks only when they exist
+        if session.get("has_compressed_chunks"):
+            for chunk in self._get_compressed_chunks(session_id, query=query):
+                context.append(chunk)
 
-                # Extract results from the response dict
-                memories = search_result.get('results', []) if isinstance(search_result, dict) else search_result
-
-                if memories and len(memories) > 0:
-                    # Format retrieved memories
-                    memory_text = "[RELEVANT CONTEXT FROM PREVIOUS CONVERSATIONS]:\n"
-                    for idx, memory in enumerate(memories, 1):
-                        memory_content = memory.get('memory', memory.get('text', ''))
-                        if memory_content:
-                            memory_text += f"{idx}. {memory_content}\n"
-
-                    context.append({
-                        "role": "user",
-                        "content": memory_text
-                    })
-                    logging.debug(f"[Mem0] Retrieved {len(memories)} relevant memories for session {session_id}")
-            else:
-                # If no specific query, get all memories for this session
-                get_all_result = self.client.get_all(user_id=session_id)
-                session["mem0_operations"] += 1
-
-                # Extract results from the response dict
-                all_memories = get_all_result.get('results', []) if isinstance(get_all_result, dict) else get_all_result
-
-                if all_memories and len(all_memories) > 0:
-                    memory_text = "[CONTEXT FROM PREVIOUS CONVERSATIONS]:\n"
-                    for idx, memory in enumerate(all_memories[:10], 1):  # Limit to 10 most relevant
-                        memory_content = memory.get('memory', memory.get('text', ''))
-                        if memory_content:
-                            memory_text += f"{idx}. {memory_content}\n"
-
-                    context.append({
-                        "role": "user",
-                        "content": memory_text
-                    })
-                    logging.debug(f"[Mem0] Retrieved {len(all_memories)} total memories for session {session_id}")
-
-        except Exception as e:
-            logging.error(f"[Mem0] Failed to retrieve memories: {e}")
-            # Continue without memories - recent messages still available
-
-        # Add recent messages verbatim (last N exchanges)
-        for msg in session["recent_messages"]:
+        # Retrieve recent conversation entries from local buffer
+        for msg in self._get_recent_conversation_entries(session_id):
             context.append({
-                "role": "user",  # Use "user" role for compatibility
-                "content": msg["content"]
+                "role": "user",
+                "content": msg["formatted"],
             })
 
         return context
@@ -293,16 +247,25 @@ class Mem0ContextManager:
         Args:
             session_id: Session identifier
         """
-        # Clear local session data
-        if session_id in self.sessions:
-            del self.sessions[session_id]
+        session = self.sessions.get(session_id)
+        if session:
+            session["recent_messages"].clear()
+            session["message_count"] = 0
+            session["token_count"] = 0
+            session["compressed_chunk_count"] = 0
+            session["has_compressed_chunks"] = False
 
         # Clear Mem0 memories for this user
         try:
             self.client.delete_all(user_id=session_id)
+            if session:
+                session["mem0_operations"] += 1
             logging.info(f"[Mem0] Cleared all memories for session {session_id}")
         except Exception as e:
             logging.error(f"[Mem0] Failed to clear memories: {e}")
+
+        if session_id in self.sessions:
+            del self.sessions[session_id]
 
     def clear_conversation_only(self, session_id: str) -> None:
         """
@@ -315,19 +278,27 @@ class Mem0ContextManager:
         if not session:
             return
 
-        # Preserve web content messages
         preserved_messages = []
         for msg in session["recent_messages"]:
             if "[Web Content from" in msg.get("content", ""):
                 preserved_messages.append(msg)
 
-        # Reset session but keep metadata and preserved messages
         session["recent_messages"] = preserved_messages
         session["message_count"] = len(preserved_messages)
+        session["token_count"] = sum(
+            m.get("token_estimate", self.count_tokens(m.get("content", ""))) for m in preserved_messages
+        )
+        session["compressed_chunk_count"] = 0
+        session["has_compressed_chunks"] = False
         session["last_used"] = datetime.now(UTC)
 
-        # Note: Long-term memories in Mem0 are preserved automatically
-        logging.info(f"[Mem0] Cleared recent conversation for session {session_id}, preserved {len(preserved_messages)} web content messages")
+        try:
+            self.client.delete_all(user_id=session_id)
+            session["mem0_operations"] += 1
+        except Exception as e:
+            logging.error(f"[Mem0] Failed to clear compressed chunks: {e}")
+
+        logging.info(f"[Mem0] Cleared conversation for session {session_id}, preserved {len(preserved_messages)} web content messages")
 
     def get_session_stats(self, session_id: str) -> Dict:
         """
@@ -343,27 +314,127 @@ class Mem0ContextManager:
         if not session:
             return {}
 
-        # Get memory count from Mem0
-        memory_count = 0
-        try:
-            get_all_result = self.client.get_all(user_id=session_id)
-            # Extract results from the response dict
-            memories = get_all_result.get('results', []) if isinstance(get_all_result, dict) else get_all_result
-            memory_count = len(memories) if memories else 0
-        except Exception as e:
-            logging.error(f"[Mem0] Failed to get memory count: {e}")
-
         last_used = session.get("last_used")
         return {
             "recent_message_count": len(session["recent_messages"]),
-            "total_message_count": session["message_count"],
-            "memory_count": memory_count,
+            "total_message_count": session.get("message_count", 0),
+            "compressed_chunk_count": session.get("compressed_chunk_count", 0),
+            "memory_count": session.get("compressed_chunk_count", 0),
+            "token_estimate": session.get("token_count", 0),
             "mem0_operations": session.get("mem0_operations", 0),
             "current_webpage": session.get("current_webpage"),
             "last_used": last_used.isoformat() if last_used else None,
             "active_sessions": len(self.sessions),
             "using_mem0": True,
         }
+
+    def _format_message_content(self, role: str, content: str) -> str:
+        if role == "assistant":
+            return f"[ASSISTANT RESPONSE]: {content}"
+        if role == "user":
+            return f"[USER QUESTION]: {content}"
+        return content
+
+    def _check_context_limits(self, session_id: str) -> None:
+        session = self.sessions[session_id]
+        if session["token_count"] <= self.max_session_tokens:
+            return
+        if len(session["recent_messages"]) < self.min_messages_before_compress:
+            return
+        self._compress_session_history(session_id)
+
+    def _compress_session_history(self, session_id: str) -> None:
+        session = self.sessions[session_id]
+        target_tokens = int(self.max_session_tokens * self.compression_target_ratio)
+        target_tokens = max(target_tokens, int(self.max_session_tokens * 0.5))
+
+        removed_messages = []
+        while session["token_count"] > target_tokens and session["recent_messages"]:
+            oldest = session["recent_messages"].pop(0)
+            session["token_count"] -= oldest.get("token_estimate", self.count_tokens(oldest.get("content", "")))
+            removed_messages.append(oldest)
+
+        if not removed_messages:
+            return
+
+        chunk_index = session.get("compressed_chunk_count", 0) + 1
+        chunk_text = self._summarize_messages_for_mem0(removed_messages, chunk_index)
+        try:
+            self._store_compressed_chunk(session_id, chunk_text, chunk_index, removed_messages[-1]["timestamp"])
+            session["compressed_chunk_count"] = chunk_index
+            session["has_compressed_chunks"] = True
+            logging.info(f"[Mem0] Stored compressed chunk #{chunk_index} for session {session_id}")
+        except Exception as e:
+            logging.error(f"[Mem0] Failed to store compressed chunk: {e}")
+            # If storing fails, push removed messages back to preserve context
+            session["recent_messages"] = removed_messages + session["recent_messages"]
+            session["token_count"] += sum(m.get("token_estimate", self.count_tokens(m.get("content", ""))) for m in removed_messages)
+
+    def _summarize_messages_for_mem0(self, messages: List[Dict], chunk_index: int) -> str:
+        summary_lines = [f"[COMPRESSED CHUNK #{chunk_index}] Earlier conversation context:"]
+        for msg in messages:
+            role_label = "Assistant" if msg.get("role") == "assistant" else "User"
+            formatted = msg.get("formatted") or msg.get("content", "")
+            summary_lines.append(f"{role_label}: {formatted}")
+            if sum(len(line) for line in summary_lines) > self.max_compression_chars:
+                summary_lines.append("... (truncated)")
+                break
+
+        summary = "\n".join(summary_lines)
+        if len(summary) > self.max_compression_chars:
+            summary = summary[: self.max_compression_chars] + "..."
+        return summary
+
+    def _store_compressed_chunk(self, session_id: str, chunk_text: str, chunk_index: int, timestamp: datetime) -> None:
+        metadata = {
+            "session_id": session_id,
+            "memory_type": "compressed_chunk",
+            "chunk_sequence": chunk_index,
+            "timestamp": timestamp.isoformat(),
+        }
+        self.client.add(
+            messages=[{"role": "user", "content": chunk_text}],
+            user_id=session_id,
+            metadata=metadata,
+        )
+        session = self.sessions[session_id]
+        session["mem0_operations"] += 1
+
+    def _get_recent_conversation_entries(self, session_id: str) -> List[Dict]:
+        session = self.sessions[session_id]
+        return list(session["recent_messages"])
+
+    def _get_compressed_chunks(self, session_id: str, query: Optional[str] = None) -> List[Dict]:
+        session = self.sessions[session_id]
+        try:
+            if query:
+                search_result = self.client.search(query=query, user_id=session_id, limit=5)
+                memories = search_result.get('results', []) if isinstance(search_result, dict) else search_result
+            else:
+                get_all_result = self.client.get_all(user_id=session_id)
+                memories = get_all_result.get('results', []) if isinstance(get_all_result, dict) else get_all_result
+            session["mem0_operations"] += 1
+        except Exception as e:
+            logging.error(f"[Mem0] Failed to load compressed chunks: {e}")
+            return []
+
+        chunks: List[Dict] = []
+        for memory in memories or []:
+            metadata = memory.get('metadata') or {}
+            if metadata.get('memory_type') != 'compressed_chunk':
+                continue
+            chunk_text = memory.get('memory') or memory.get('text') or memory.get('content')
+            if not chunk_text:
+                continue
+            sequence = metadata.get('chunk_sequence', 0)
+            chunks.append({
+                "role": "user",
+                "content": chunk_text,
+                "sequence": sequence,
+            })
+
+        chunks.sort(key=lambda item: item.get('sequence', 0))
+        return chunks
 
     def count_tokens(self, text: str) -> int:
         """
