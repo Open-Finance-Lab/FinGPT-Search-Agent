@@ -13,7 +13,7 @@ dependencies = [
     "openai>=1.86.0,<2",
     "openai-agents>=0.0.17,<0.0.18",
     "anthropic>=0.67.0,<0.68",
-    "mem0ai>=0.1.0,<1",
+    "mem0ai>=1.0.0,<2",
     "tiktoken>=0.11.0,<0.12",
     "requests==2.32.4",
     "pytz>=2024.1,<2025",

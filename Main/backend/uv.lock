@@ -482,7 +482,7 @@ requires-dist = [
     { name = "mammoth", marker = "sys_platform == 'darwin'", specifier = ">=1.9.0,<2" },
     { name = "markdown", specifier = "==3.7" },
     { name = "mcp", extras = ["cli"], specifier = ">=1.9.0,<2" },
-    { name = "mem0ai", specifier = ">=0.1.0,<1" },
+    { name = "mem0ai", specifier = ">=1.0.0,<2" },
     { name = "numpy", specifier = ">=2.2.0,<3" },
     { name = "openai", specifier = ">=1.86.0,<2" },
     { name = "openai-agents", specifier = ">=0.0.17,<0.0.18" },
@@ -914,7 +914,7 @@ wheels = [
 
 [[package]]
 name = "mem0ai"
-version = "0.1.118"
+version = "1.0.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "openai" },
@@ -925,9 +925,9 @@ dependencies = [
     { name = "qdrant-client" },
     { name = "sqlalchemy" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/db/1d/b7797ee607d0de2979d2a8b4c0c102989d5e1a1c9d67478dc6a2e2e0b2a8/mem0ai-0.1.118.tar.gz", hash = "sha256:d62497286616357f8726b849afc20031cd0ab56d1cf312fa289b006be33c3ce7", size = 159324, upload-time = "2025-09-25T20:53:00.427Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/39/cd/f9047cd45952af08da8084c2297f8aad780f9ac8558631fc64b3ed235b28/mem0ai-1.0.1.tar.gz", hash = "sha256:53be77f479387e6c07508096eb6c0688150b31152613bdcf6c281246b000b14d", size = 182296, upload-time = "2025-11-13T22:32:13.658Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/78/70/e648ab026aa6505b920ed405a422727777bebdc5135691b2ca6350a02062/mem0ai-0.1.118-py3-none-any.whl", hash = "sha256:c2b371224a340fd5529d608dfbd2e77c610c7ffe421005ff7e862fd6f322cca8", size = 239476, upload-time = "2025-09-25T20:52:58.32Z" },
+    { url = "https://files.pythonhosted.org/packages/81/42/120d6db33e190ef09d69428ddd2eaaa87e10f4c8243af788f5fc524748c9/mem0ai-1.0.1-py3-none-any.whl", hash = "sha256:a8eeca9688e87f175af53d463b4a3b2d552984c81e29bc656c847dc04eaf6f75", size = 275351, upload-time = "2025-11-13T22:32:11.839Z" },
 ]
 
 [[package]]
