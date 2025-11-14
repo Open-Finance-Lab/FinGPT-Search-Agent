@@ -6,7 +6,7 @@ Implements production-ready memory layer using Mem0 for conversation context.
 import logging
 import os
 from typing import List, Dict, Optional
-from datetime import datetime
+from datetime import datetime, UTC
 from collections import defaultdict
 
 # Mem0 will be imported conditionally to handle cases where it's not installed yet
@@ -77,7 +77,7 @@ class Mem0ContextManager:
             "current_webpage": None,
             "user_timezone": None,
             "user_time": None,
-            "last_used": datetime.utcnow(),
+            "last_used": datetime.now(UTC),
             "mem0_operations": 0,
         }
 
@@ -91,7 +91,7 @@ class Mem0ContextManager:
             content: Message content
         """
         session = self.sessions[session_id]
-        session["last_used"] = datetime.utcnow()
+        session["last_used"] = datetime.now(UTC)
 
         # Check if this is web content and extract URL
         if role == "user" and "[Web Content from" in content:
@@ -113,7 +113,7 @@ class Mem0ContextManager:
         message = {
             "role": role,
             "content": formatted_content,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(UTC).isoformat()
         }
 
         session["recent_messages"].append(message)
@@ -154,7 +154,7 @@ class Mem0ContextManager:
             List of messages for the session (system prompt + relevant memories + recent messages)
         """
         session = self.sessions[session_id]
-        session["last_used"] = datetime.utcnow()
+        session["last_used"] = datetime.now(UTC)
 
         # Build system prompt with current webpage info and time/timezone
         system_prompt = self.base_system_prompt
@@ -267,7 +267,7 @@ class Mem0ContextManager:
         """
         session = self.sessions[session_id]
         session["current_webpage"] = url
-        session["last_used"] = datetime.utcnow()
+        session["last_used"] = datetime.now(UTC)
         logging.debug(f"[Mem0] Updated current webpage for session {session_id}: {url}")
 
     def update_user_time_info(self, session_id: str, timezone: str = None, current_time: str = None) -> None:
@@ -284,7 +284,7 @@ class Mem0ContextManager:
             session["user_timezone"] = timezone
         if current_time:
             session["user_time"] = current_time
-        session["last_used"] = datetime.utcnow()
+        session["last_used"] = datetime.now(UTC)
         logging.debug(f"[Mem0] Updated time info for session {session_id}: {timezone}, {current_time}")
 
     def clear_session(self, session_id: str) -> None:
@@ -325,7 +325,7 @@ class Mem0ContextManager:
         # Reset session but keep metadata and preserved messages
         session["recent_messages"] = preserved_messages
         session["message_count"] = len(preserved_messages)
-        session["last_used"] = datetime.utcnow()
+        session["last_used"] = datetime.now(UTC)
 
         # Note: Long-term memories in Mem0 are preserved automatically
         logging.info(f"[Mem0] Cleared recent conversation for session {session_id}, preserved {len(preserved_messages)} web content messages")
