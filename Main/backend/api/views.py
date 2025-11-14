@@ -35,7 +35,7 @@ from datascraper.preferred_links_manager import get_manager
 from django.views import View
 from mcp_client.agent import create_fin_agent
 from agents import Runner
-from datascraper.r2c_context_manager import R2CContextManager
+from datascraper.mem0_context_manager import Mem0ContextManager
 from datascraper.models_config import MODELS_CONFIG
 
 # Constants
@@ -117,18 +117,33 @@ def _reset_legacy_history(preserve_web_content: bool = False):
     message_list.extend(preserved_messages)
     _trim_legacy_history()
 
-# R2C
-r2c_manager = R2CContextManager(
-    max_tokens=50000,
-    compression_ratio=0.5,
-    rho=0.5,
-    gamma=1.0,
-    max_sessions=_int_env("R2C_MAX_SESSIONS", 400),
-    session_ttl_seconds=_int_env("R2C_SESSION_TTL_SECONDS", 3600),
-    max_messages_per_session=_int_env("R2C_MAX_MESSAGES", 200),
-    max_web_messages_per_session=_int_env("R2C_MAX_WEB_MESSAGES", 3),
-    max_web_content_chars=_int_env("R2C_MAX_WEB_CHARS", 20000),
-)
+# Mem0 Context Manager
+# Initialize with API key from environment variable (MEM0_API_KEY)
+mem0_manager = None
+MEM0_ENABLED = False
+
+try:
+    mem0_manager = Mem0ContextManager(
+        max_recent_messages=_int_env("MEM0_MAX_RECENT_MESSAGES", 10),
+    )
+    MEM0_ENABLED = True
+    logging.info("Mem0 Context Manager initialized successfully")
+except ImportError as e:
+    logging.warning("Mem0 not installed. Install with: pip install mem0ai")
+    logging.warning("Falling back to legacy message list (no intelligent memory)")
+except ValueError as e:
+    logging.warning("MEM0_API_KEY not found in environment variables")
+    logging.warning("Get your API key at: https://app.mem0.ai/dashboard/api-keys")
+    logging.warning("Falling back to legacy message list (no intelligent memory)")
+except Exception as e:
+    logging.warning(f"Failed to initialize Mem0: {e}")
+    logging.warning("Falling back to legacy message list (no intelligent memory)")
+
+# Log final status
+if MEM0_ENABLED:
+    logging.info("Memory System: Mem0 (AI-powered intelligent memory)")
+else:
+    logging.info("Memory System: Legacy (simple message buffer - upgrade recommended)")
 
 class MCPGreetView(View):
     def get(self, request):
@@ -169,7 +184,7 @@ class MCPGreetView(View):
 
 # Helper functions
 def _get_session_id(request):
-    """Get or create session ID for R2C context management."""
+    """Get or create session ID for Mem0 context management."""
     # custom session ID from frontend
     custom_session_id = request.GET.get('session_id')
     
@@ -182,16 +197,12 @@ def _get_session_id(request):
             pass
     
     if custom_session_id:
-        # logging.info(f"[R2C DEBUG] Using custom session ID: {custom_session_id}")
         return custom_session_id
 
     # Fall back to Django session
     if not request.session.session_key:
         request.session.create()
-        # logging.info(f"[R2C DEBUG] Created new Django session: {request.session.session_key}")
-    else:
-        pass
-            # logging.info(f"[R2C DEBUG] Using existing Django session: {request.session.session_key}")
+
     return request.session.session_key
 
 def _build_status_frame(label: str, detail: str | None = None, url: str | None = None):
@@ -203,39 +214,45 @@ def _build_status_frame(label: str, detail: str | None = None, url: str | None =
         status_payload["status"]["url"] = url
     return f'data: {json.dumps(status_payload)}\n\n'.encode('utf-8')
 
-def _prepare_context_messages(request, question, use_r2c=True, current_url=None):
+def _prepare_context_messages(request, question, use_memory=True, current_url=None):
     """
-    Prepare context messages using R2C or legacy system.
+    Prepare context messages using Mem0 or legacy system.
 
     Args:
         request: Django request object
         question: User's question to add
-        use_r2c: Whether to use R2C context management
+        use_memory: Whether to use Mem0 context management
         current_url: Current webpage URL (optional)
 
     Returns:
         tuple: (legacy_messages, session_id)
     """
-    session_id = _get_session_id(request) if use_r2c else None
+    session_id = _get_session_id(request) if use_memory else None
 
-    if use_r2c and session_id:
-        # Update current webpage if URL provided
-        if current_url:
-            r2c_manager.update_current_webpage(session_id, current_url)
+    if use_memory and session_id and MEM0_ENABLED and mem0_manager:
+        # Use Mem0 if available
+        try:
+            # Update current webpage if URL provided
+            if current_url:
+                mem0_manager.update_current_webpage(session_id, current_url)
 
-        # Update user's timezone and time if provided
-        user_timezone = request.GET.get('user_timezone')
-        user_time = request.GET.get('user_time')
-        if user_timezone or user_time:
-            r2c_manager.update_user_time_info(session_id, user_timezone, user_time)
+            # Update user's timezone and time if provided
+            user_timezone = request.GET.get('user_timezone')
+            user_time = request.GET.get('user_time')
+            if user_timezone or user_time:
+                mem0_manager.update_user_time_info(session_id, user_timezone, user_time)
 
-        r2c_manager.add_message(session_id, "user", question)
+            mem0_manager.add_message(session_id, "user", question)
 
-        context_messages = r2c_manager.get_context(session_id)
+            # Get context with intelligent memory retrieval based on the question
+            context_messages = mem0_manager.get_context(session_id, query=question)
 
-        # R2C already includes system prompt and handles compression
-        # Just use the context messages directly
-        legacy_messages = context_messages
+            # Mem0 already includes system prompt and relevant memories
+            legacy_messages = context_messages
+        except Exception as e:
+            logging.error(f"Mem0 error, falling back to legacy: {e}")
+            _append_legacy_message(f"[USER MESSAGE]: {question}")
+            legacy_messages = message_list.copy()
     else:
         # Use legacy message_list - append the question with header
         _append_legacy_message(f"[USER MESSAGE]: {question}")
@@ -243,46 +260,54 @@ def _prepare_context_messages(request, question, use_r2c=True, current_url=None)
 
     return legacy_messages, session_id
 
-def _add_response_to_context(session_id, response, use_r2c=True):
-    """Add assistant response to R2C manager if enabled."""
-    if use_r2c and session_id:
-        r2c_manager.add_message(session_id, "assistant", response)
+def _add_response_to_context(session_id, response, use_memory=True):
+    """Add assistant response to Mem0 manager if enabled."""
+    if use_memory and session_id and MEM0_ENABLED and mem0_manager:
+        try:
+            mem0_manager.add_message(session_id, "assistant", response)
+        except Exception as e:
+            logging.error(f"Mem0 error adding response, using legacy: {e}")
+            _append_legacy_message(f"[ASSISTANT MESSAGE]: {response}")
     else:
         # Add to legacy message_list with header
         _append_legacy_message(f"[ASSISTANT MESSAGE]: {response}")
 
-def _prepare_response_with_stats(responses, session_id, use_r2c=True, single_response_mode=False):
+def _prepare_response_with_stats(responses, session_id, use_memory=True, single_response_mode=False):
     """
-    Prepare JSON response with optional R2C stats.
+    Prepare JSON response with optional Mem0 stats.
 
     Args:
         responses: Dictionary of model responses or single response string
-        session_id: Session ID for R2C
-        use_r2c: Whether R2C is enabled
+        session_id: Session ID for Mem0
+        use_memory: Whether Mem0 is enabled
         single_response_mode: Whether to use 'reply' field for single response
 
     Returns:
         JsonResponse object
     """
-    if use_r2c and session_id:
-        stats = r2c_manager.get_session_stats(session_id)
+    if use_memory and session_id and MEM0_ENABLED and mem0_manager:
+        try:
+            stats = mem0_manager.get_session_stats(session_id)
+        except Exception as e:
+            logging.error(f"Mem0 error getting stats: {e}")
+            stats = {"error": "Stats unavailable", "using_mem0": False}
 
         if single_response_mode and isinstance(responses, dict) and len(responses) == 1:
             # Single model - return as 'reply' for MCP frontend compatibility
             single_response = next(iter(responses.values()))
             return JsonResponse({
                 'reply': single_response,
-                'r2c_stats': stats
+                'memory_stats': stats
             })
         else:
             # Multiple models or not in single response mode
             response_key = 'resp' if isinstance(responses, dict) else 'reply'
             return JsonResponse({
                 response_key: responses,
-                'r2c_stats': stats
+                'memory_stats': stats
             })
     else:
-        # No R2C stats
+        # No Mem0 stats
         if single_response_mode and isinstance(responses, dict) and len(responses) == 1:
             single_response = next(iter(responses.values()))
             return JsonResponse({'reply': single_response})
@@ -354,26 +379,28 @@ def add_webtext(request):
         body_data = json.loads(request.body)
         text_content = body_data.get('textContent', '')
         current_url = body_data.get('currentUrl', '')
-        use_r2c = body_data.get('use_r2c', True)  # Default to using R2C
+        use_memory = body_data.get('use_memory', True)
         session_id_from_body = body_data.get('session_id')
 
-        # logging.info(f"[R2C DEBUG] add_webtext - URL: {current_url}, use_r2c: {use_r2c}, session_id: {session_id_from_body}, content_length: {len(text_content)}")
-
         if not text_content:
-            # logging.warning("[R2C DEBUG] No text content provided")
             return JsonResponse({"error": "No textContent provided."}, status=400)
 
-        if not use_r2c:
+        if not use_memory:
             url_label = current_url or "unknown location"
             _append_legacy_message(f"[Web Content from {url_label}]: {text_content}")
-        elif use_r2c:
+        elif use_memory:
             session_id = _get_session_id(request)
-            if session_id:
-                # logging.info(f"[R2C DEBUG] Adding web content to session {session_id}, URL: {current_url}, content length: {len(text_content)}")
-                r2c_manager.add_message(session_id, "user", f"[Web Content from {current_url}]: {text_content}")
-                # Log session stats after adding
-                stats = r2c_manager.get_session_stats(session_id)
-                # logging.info(f"[R2C DEBUG] Session {session_id} stats after web content: {stats}")
+            if session_id and MEM0_ENABLED and mem0_manager:
+                try:
+                    mem0_manager.add_message(session_id, "user", f"[Web Content from {current_url}]: {text_content}")
+                except Exception as e:
+                    logging.error(f"Mem0 error adding web content, using legacy: {e}")
+                    url_label = current_url or "unknown location"
+                    _append_legacy_message(f"[Web Content from {url_label}]: {text_content}")
+            else:
+                # Fallback to legacy
+                url_label = current_url or "unknown location"
+                _append_legacy_message(f"[Web Content from {url_label}]: {text_content}")
 
         _log_interaction("add_webtext", current_url, f"Added web content: {text_content[:20]}...")
         
@@ -390,7 +417,7 @@ def chat_response(request):
     question = request.GET.get('question', '')
     selected_models = request.GET.get('models', '')
     current_url = request.GET.get('current_url', '')
-    use_r2c = request.GET.get('use_r2c', 'true').lower() == 'true'
+    use_memory = request.GET.get('use_memory', 'true').lower() == 'true'
     user_timezone = request.GET.get('user_timezone')
     user_time = request.GET.get('user_time')
 
@@ -416,8 +443,8 @@ def chat_response(request):
 
     responses = {}
 
-    # Prepare context messages using R2C or legacy system
-    legacy_messages, session_id = _prepare_context_messages(request, question, use_r2c, current_url)
+    # Prepare context messages using Mem0 or legacy system
+    legacy_messages, session_id = _prepare_context_messages(request, question, use_memory, current_url)
 
     for model in models:
         try:
@@ -436,8 +463,8 @@ def chat_response(request):
 
             responses[model] = response
 
-            # Add assistant response to R2C manager
-            _add_response_to_context(session_id, response, use_r2c)
+            # Add assistant response to Mem0 manager
+            _add_response_to_context(session_id, response, use_memory)
 
         except Exception as e:
             logging.error(f"Error processing model {model}: {e}")
@@ -446,7 +473,7 @@ def chat_response(request):
     first_model_response = next(iter(responses.values())) if responses else "No response"
     _log_interaction("normal_mode", current_url, question, first_model_response)
 
-    return _prepare_response_with_stats(responses, session_id, use_r2c)
+    return _prepare_response_with_stats(responses, session_id, use_memory)
 
 @ratelimit(key='ip', rate=lambda g, r: settings.API_RATE_LIMIT, method='GET')
 def chat_response_stream(request):
@@ -457,7 +484,7 @@ def chat_response_stream(request):
     question = request.GET.get('question', '')
     selected_models = request.GET.get('models', '')
     current_url = request.GET.get('current_url', '')
-    use_r2c = request.GET.get('use_r2c', 'true').lower() == 'true'
+    use_memory = request.GET.get('use_memory', 'true').lower() == 'true'
     user_timezone = request.GET.get('user_timezone')
     user_time = request.GET.get('user_time')
 
@@ -483,8 +510,8 @@ def chat_response_stream(request):
         except Exception as e:
             logging.warning(f"Failed to parse current_url: {e}")
 
-    # Prepare context messages using R2C
-    legacy_messages, session_id = _prepare_context_messages(request, question, use_r2c, current_url)
+    # Prepare context messages using Mem0
+    legacy_messages, session_id = _prepare_context_messages(request, question, use_memory, current_url)
 
     def event_stream():
         """Generator function for SSE streaming"""
@@ -561,15 +588,18 @@ def chat_response_stream(request):
             sse_data = f'data: {json.dumps({"content": "", "done": True})}\n\n'
             yield sse_data.encode('utf-8')
 
-            _add_response_to_context(session_id, full_response, use_r2c)
+            _add_response_to_context(session_id, full_response, use_memory)
 
             _log_interaction("normal_mode_stream", current_url, question, full_response)
 
-            # Send R2C stats if enabled
-            if use_r2c and session_id:
-                stats = r2c_manager.get_session_stats(session_id)
-                sse_data = f'data: {json.dumps({"r2c_stats": stats})}\n\n'
-                yield sse_data.encode('utf-8')
+            # Send Mem0 stats if enabled
+            if use_memory and session_id and MEM0_ENABLED and mem0_manager:
+                try:
+                    stats = mem0_manager.get_session_stats(session_id)
+                    sse_data = f'data: {json.dumps({"memory_stats": stats})}\n\n'
+                    yield sse_data.encode('utf-8')
+                except Exception as e:
+                    logging.error(f"Mem0 error getting stats: {e}")
 
         except Exception as e:
             logging.error(f"Error in streaming response: {e}")
@@ -593,7 +623,7 @@ def agent_chat_response(request):
     question = request.GET.get('question', '')
     selected_models = request.GET.get('models', '')
     current_url = request.GET.get('current_url', '')
-    use_r2c = request.GET.get('use_r2c', 'true').lower() == 'true'
+    use_memory = request.GET.get('use_memory', 'true').lower() == 'true'
     use_playwright = request.GET.get('use_playwright', 'false').lower() == 'true'
     user_timezone = request.GET.get('user_timezone')
     user_time = request.GET.get('user_time')
@@ -608,8 +638,8 @@ def agent_chat_response(request):
 
     responses = {}
 
-    # Prepare context messages using R2C or legacy system
-    legacy_messages, session_id = _prepare_context_messages(request, question, use_r2c, current_url)
+    # Prepare context messages using Mem0 or legacy system
+    legacy_messages, session_id = _prepare_context_messages(request, question, use_memory, current_url)
 
     for model in models:
         try:
@@ -626,7 +656,7 @@ def agent_chat_response(request):
                 logging.info(f"[AGENT DEBUG] Model {model} response with Playwright tools")
             responses[model] = response
 
-            _add_response_to_context(session_id, response, use_r2c)
+            _add_response_to_context(session_id, response, use_memory)
 
         except Exception as e:
             logging.error(f"Error processing agent model {model}: {e}")
@@ -636,8 +666,8 @@ def agent_chat_response(request):
     first_model_response = next(iter(responses.values())) if responses else "No response"
     _log_interaction("agent_chat", current_url, question, first_model_response)
 
-    # Return response with optional R2C stats, using single response mode
-    return _prepare_response_with_stats(responses, session_id, use_r2c, single_response_mode=True)
+    # Return response with optional Mem0 stats, using single response mode
+    return _prepare_response_with_stats(responses, session_id, use_memory, single_response_mode=True)
 
 @csrf_exempt
 @ratelimit(key='ip', rate=lambda g, r: settings.API_RATE_LIMIT, method='POST')
@@ -649,7 +679,7 @@ def adv_response(request):
     question = request.GET.get('question', '')
     selected_models = request.GET.get('models', '')
     current_url = request.GET.get('current_url', '')
-    use_r2c = request.GET.get('use_r2c', 'true').lower() == 'true'
+    use_memory = request.GET.get('use_memory', 'true').lower() == 'true'
     preferred_links_json = request.GET.get('preferred_links', '')
     user_timezone = request.GET.get('user_timezone')
     user_time = request.GET.get('user_time')
@@ -672,8 +702,8 @@ def adv_response(request):
 
     responses = {}
 
-    # Prepare context messages using R2C or legacy system
-    legacy_messages, session_id = _prepare_context_messages(request, question, use_r2c, current_url)
+    # Prepare context messages using Mem0 or legacy system
+    legacy_messages, session_id = _prepare_context_messages(request, question, use_memory, current_url)
 
     for model in models:
         try:
@@ -691,7 +721,7 @@ def adv_response(request):
 
             responses[model] = response
 
-            _add_response_to_context(session_id, response, use_r2c)
+            _add_response_to_context(session_id, response, use_memory)
 
         except Exception as e:
             logging.error(f"Error processing extensive mode model {model}: {e}")
@@ -708,8 +738,8 @@ def adv_response(request):
     for idx, url in enumerate(used_urls_list, 1):
         logging.info(f"  [{idx}] {url}")
 
-    # Return response with optional R2C stats and used URLs
-    response_data = _prepare_response_with_stats(responses, session_id, use_r2c)
+    # Return response with optional memory stats and used URLs
+    response_data = _prepare_response_with_stats(responses, session_id, use_memory)
     response_json = json.loads(response_data.content)
     response_json['used_urls'] = used_urls_list
     response_json['used_sources'] = used_sources_list
@@ -722,7 +752,7 @@ def adv_response_stream(request):
     question = request.GET.get('question', '')
     selected_models = request.GET.get('models', '')
     current_url = request.GET.get('current_url', '')
-    use_r2c = request.GET.get('use_r2c', 'true').lower() == 'true'
+    use_memory = request.GET.get('use_memory', 'true').lower() == 'true'
     preferred_links_json = request.GET.get('preferred_links', '')
     user_timezone = request.GET.get('user_timezone')
     user_time = request.GET.get('user_time')
@@ -746,8 +776,8 @@ def adv_response_stream(request):
 
     model = models[0]
 
-    # Prepare context messages using R2C
-    legacy_messages, session_id = _prepare_context_messages(request, question, use_r2c, current_url)
+    # Prepare context messages using Mem0
+    legacy_messages, session_id = _prepare_context_messages(request, question, use_memory, current_url)
 
     def event_stream():
         """Generator function for SSE streaming"""
@@ -853,7 +883,7 @@ def adv_response_stream(request):
             final_entries = stream_state.get("used_sources") or source_entries or latest_sources_payload
             final_urls = stream_state.get("used_urls") or [entry.get("url") for entry in (final_entries or []) if entry and entry.get("url")]
 
-            _add_response_to_context(session_id, final_response, use_r2c)
+            _add_response_to_context(session_id, final_response, use_memory)
             _log_interaction("advanced_stream", current_url, question, final_response)
 
             final_payload = {
@@ -866,9 +896,12 @@ def adv_response_stream(request):
                 final_payload["used_urls"] = final_urls
             if final_entries:
                 final_payload["used_sources"] = final_entries
-            if use_r2c and session_id:
-                stats = r2c_manager.get_session_stats(session_id)
-                final_payload["r2c_stats"] = stats
+            if use_memory and session_id and MEM0_ENABLED and mem0_manager:
+                try:
+                    stats = mem0_manager.get_session_stats(session_id)
+                    final_payload["memory_stats"] = stats
+                except Exception as e:
+                    logging.error(f"Mem0 error getting stats: {e}")
 
             sse_data = f'data: {json.dumps(final_payload)}\n\n'
             yield sse_data.encode('utf-8')
@@ -893,24 +926,28 @@ def adv_response_stream(request):
 @csrf_exempt
 def clear(request):
     """Clear conversation messages and optionally preserve scraped web content."""
-    use_r2c = request.GET.get('use_r2c', 'true').lower() == 'true'
+    use_memory = request.GET.get('use_memory', 'true').lower() == 'true'
     preserve_web = request.GET.get('preserve_web', 'false').lower() == 'true'
 
     # Reset legacy buffer according to preference
     _reset_legacy_history(preserve_web)
 
-    # Clear only conversation in R2C if enabled
-    if use_r2c:
+    # Clear only conversation in Mem0 if enabled
+    if use_memory:
         session_id = _get_session_id(request)
-        if session_id:
-            if preserve_web:
-                r2c_manager.clear_conversation_only(session_id)
-                message = 'Conversation cleared (web content preserved)'
-            else:
-                r2c_manager.clear_session(session_id)
-                message = 'Conversation and cached web content cleared'
+        if session_id and MEM0_ENABLED and mem0_manager:
+            try:
+                if preserve_web:
+                    mem0_manager.clear_conversation_only(session_id)
+                    message = 'Conversation cleared (web content and memories preserved)'
+                else:
+                    mem0_manager.clear_session(session_id)
+                    message = 'Conversation, web content, and all memories cleared'
+            except Exception as e:
+                logging.error(f"Mem0 error clearing session: {e}")
+                message = 'Conversation cleared (legacy mode)'
         else:
-            message = 'Conversation cleared (no R2C session found)'
+            message = 'Conversation cleared (legacy mode)'
     else:
         message = 'Conversation cleared (web content preserved)' if preserve_web else 'Conversation cleared'
 
@@ -1005,12 +1042,19 @@ def sync_preferred_urls(request):
 
     return JsonResponse({'status': 'failed'}, status=400)
 
-def get_r2c_stats(request):
-    """Get R2C context statistics for current session"""
+def get_memory_stats(request):
+    """Get Mem0 context statistics for current session"""
     session_id = _get_session_id(request)
     if session_id:
-        stats = r2c_manager.get_session_stats(session_id)
-        return JsonResponse({'stats': stats})
+        if MEM0_ENABLED and mem0_manager:
+            try:
+                stats = mem0_manager.get_session_stats(session_id)
+                return JsonResponse({'stats': stats})
+            except Exception as e:
+                logging.error(f"Mem0 error getting stats: {e}")
+                return JsonResponse({'stats': {"error": "Stats unavailable", "using_mem0": False}})
+        else:
+            return JsonResponse({'stats': {"message": "Mem0 not enabled", "using_mem0": False}})
     else:
         return JsonResponse({'error': 'No session found'}, status=404)
 

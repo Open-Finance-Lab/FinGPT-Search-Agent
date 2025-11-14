@@ -20,7 +20,7 @@ function postWebTextToServer(textContent, currentUrl) {
         body: JSON.stringify({
             textContent: textContent,
             currentUrl: currentUrl,
-            use_r2c: true,
+            use_memory: true,
             session_id: currentSessionId
         }),
     })
@@ -71,7 +71,7 @@ function getChatResponse(question, selectedModel, promptMode, useRAG, useMCP) {
         `&models=${selectedModel}` +
         `&is_advanced=${promptMode}` +
         `&use_rag=${useRAG}` +
-        `&use_r2c=true` +
+        `&use_memory=true` +
         `&session_id=${currentSessionId}` +
         `&current_url=${encodedCurrentUrl}` +
         `&user_timezone=${encodedTimezone}` +
@@ -139,7 +139,7 @@ function getChatResponseStream(question, selectedModel, promptMode, useRAG, useM
             `?question=${encodedQuestion}` +
             `&models=${selectedModel}` +
             `&use_rag=${useRAG}` +
-            `&use_r2c=true` +
+            `&use_memory=true` +
             `&session_id=${currentSessionId}` +
             `&current_url=${encodedCurrentUrl}` +
             `&user_timezone=${encodedTimezone}` +
@@ -160,7 +160,7 @@ function getChatResponseStream(question, selectedModel, promptMode, useRAG, useM
             `?question=${encodedQuestion}` +
             `&models=${selectedModel}` +
             `&use_rag=${useRAG}` +
-            `&use_r2c=true` +
+            `&use_memory=true` +
             `&session_id=${currentSessionId}` +
             `&current_url=${encodedCurrentUrl}` +
             `&user_timezone=${encodedTimezone}` +
@@ -250,9 +250,9 @@ function getChatResponseStream(question, selectedModel, promptMode, useRAG, useM
                 }
             }
 
-            // Handle R2C stats if present
-            if (data.r2c_stats) {
-                console.log('R2C stats:', data.r2c_stats);
+            // Handle memory stats if present
+            if (data.memory_stats) {
+                console.log('Memory stats:', data.memory_stats);
             }
         } catch (e) {
             console.error('Error parsing SSE data:', e);
@@ -298,7 +298,7 @@ function getChatResponseStream(question, selectedModel, promptMode, useRAG, useM
 
 // Function to clear messages
 function clearMessages() {
-    return fetch(`${buildBackendUrl('/clear_messages/')}?use_r2c=true&session_id=${currentSessionId}`, { method: "POST", credentials: "include" })
+    return fetch(`${buildBackendUrl('/clear_messages/')}?use_memory=true&session_id=${currentSessionId}`, { method: "POST", credentials: "include" })
         .then(response => {
             if (!response.ok) {
                 throw new Error('Network response was not ok');
