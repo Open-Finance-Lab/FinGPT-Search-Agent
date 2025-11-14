@@ -22,6 +22,7 @@ import csv
 import asyncio
 import logging
 import re
+from openai import OpenAI
 from typing import Any
 from datetime import datetime
 from pathlib import Path
@@ -39,7 +40,7 @@ from agents import Runner
 from datascraper.r2c_context_manager import R2CContextManager
 from datascraper.models_config import MODELS_CONFIG
 
-from scripts.mongo_client import save_conversation
+from scripts.mongo_client import save_conversation, save_vector
 
 # Constants
 QUESTION_LOG_PATH = os.path.join(os.path.dirname(__file__), 'questionLog.csv')
@@ -303,6 +304,20 @@ def _save_conversation_to_db(session_id, question, response_text, metadata=None)
         }
         inserted_id = save_conversation(payload)
         logging.info(f"[MONGO] saved conversation id={inserted_id} session={session_id}")
+        
+        client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+        try:
+            resp = client.embeddings.create(
+                model="text-embedding-3-small",
+                input=[question, response_text]
+                )
+
+            question_vec = resp.data[0].embedding
+            answer_vec = resp.data[1].embedding
+            save_vector(inserted_id, question_vec, answer_vec, metadata={"mode": meta.get("mode")})
+        except Exception as e:
+            logging.warning(f"[EMBED] OpenAI embedding failed: {e}")
     except Exception as e:
         logging.warning(f"[MONGO] failed to save conversation: {e}")
 
