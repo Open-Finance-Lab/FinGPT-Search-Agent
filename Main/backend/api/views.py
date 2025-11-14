@@ -127,7 +127,6 @@ try:
         max_recent_messages=_int_env("MEM0_MAX_RECENT_MESSAGES", 10),
     )
     MEM0_ENABLED = True
-    logging.info("Mem0 Context Manager initialized successfully")
 except ImportError as e:
     logging.warning("Mem0 not installed. Install with: pip install mem0ai")
     logging.warning("Falling back to legacy message list (no intelligent memory)")
@@ -139,11 +138,11 @@ except Exception as e:
     logging.warning(f"Failed to initialize Mem0: {e}")
     logging.warning("Falling back to legacy message list (no intelligent memory)")
 
-# Log final status
+# Log memory system status (once per worker boot)
 if MEM0_ENABLED:
-    logging.info("Memory System: Mem0 (AI-powered intelligent memory)")
+    logging.info("Memory system ready: Mem0 (AI-powered intelligent memory)")
 else:
-    logging.info("Memory System: Legacy (simple message buffer - upgrade recommended)")
+    logging.info("Memory system ready: Legacy buffer mode (upgrade recommended)")
 
 class MCPGreetView(View):
     def get(self, request):

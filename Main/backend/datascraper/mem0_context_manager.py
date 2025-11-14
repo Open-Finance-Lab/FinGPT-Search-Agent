@@ -51,10 +51,9 @@ class Mem0ContextManager:
 
         self.max_recent_messages = max_recent_messages
 
-        # Initialize Mem0 client with minimal parameters
+        # Initialize Mem0 client
         try:
             self.client = MemoryClient(api_key=self.api_key)
-            logging.info("Mem0 Context Manager initialized successfully")
         except Exception as e:
             logging.error(f"Failed to initialize Mem0 client: {e}")
             raise
