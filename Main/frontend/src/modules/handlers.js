@@ -5,6 +5,129 @@ import { getSelectedModel, selectedModel } from './config.js';
 import { setCachedSources } from './sourcesCache.js';
 import { renderMarkdownContent, renderStreamingPreview } from './markdownRenderer.js';
 
+const NAVIGATION_STATUS_LABELS = new Set(['navigating site', 'navigating current page']);
+const STATUS_LABEL_REMAPPINGS = {
+  'preparing context': 'Processing',
+  'drafting answer': 'Drafting response',
+  'finalizing response': 'Finalizing response',
+};
+const SEARCH_STATUS_LABEL = 'searching the web';
+const READING_STATUS_LABEL = 'reading source';
+
+function normalizeStatusLabel(label) {
+  return (label || '').trim().toLowerCase();
+}
+
+function getCurrentPageHostname() {
+  try {
+    if (typeof window !== 'undefined' && window.location) {
+      return window.location.hostname || '';
+    }
+  } catch (_error) {
+    // Ignore – fallback below
+  }
+  return '';
+}
+
+function extractHostname(value) {
+  if (!value) {
+    return '';
+  }
+
+  const trimmed = value.trim();
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+    try {
+      const parsed = new URL(trimmed);
+      return parsed.hostname || '';
+    } catch (_error) {
+      // Fall through to manual parsing
+    }
+  }
+
+  const withoutProtocol = trimmed.replace(/^https?:\/\//i, '');
+  const stopChars = ['/', '?', '#'];
+  let endIndex = withoutProtocol.length;
+  stopChars.forEach((char) => {
+    const idx = withoutProtocol.indexOf(char);
+    if (idx >= 0 && idx < endIndex) {
+      endIndex = idx;
+    }
+  });
+  const hostWithPort = withoutProtocol.slice(0, endIndex);
+  return hostWithPort.replace(/:\d+$/, '');
+}
+
+function deriveLocation(detail, url, { allowDetail = true } = {}) {
+  const trimmedDetail = (detail || '').trim();
+  const lower = trimmedDetail.toLowerCase();
+  if (
+    allowDetail &&
+    trimmedDetail &&
+    lower !== 'current site' &&
+    lower !== 'current page'
+  ) {
+    return trimmedDetail;
+  }
+
+  const fromUrl = extractHostname(url);
+  if (fromUrl) {
+    return fromUrl;
+  }
+
+  return getCurrentPageHostname();
+}
+
+function formatNavigationDetail(detail, url) {
+  const target = deriveLocation(detail, url, { allowDetail: true });
+  if (!target) {
+    return 'Exploring this page';
+  }
+  return /^(visiting|navigating)/i.test(target) ? target : `Visiting ${target}`;
+}
+
+function formatReadingDetail(detail, url) {
+  if (detail && detail.trim()) {
+    return detail;
+  }
+  const target = deriveLocation(detail, url, { allowDetail: false });
+  if (!target) {
+    return 'Reviewing source';
+  }
+  return /^reviewing/i.test(target) ? target : `Reviewing ${target}`;
+}
+
+function describeAgentStatus(status, options = {}) {
+  const fallbackDetail = options.fallbackDetail || '';
+  if (!status || typeof status !== 'object') {
+    return { label: 'Processing', detail: fallbackDetail };
+  }
+
+  const normalizedLabel = normalizeStatusLabel(status.label);
+  let label =
+    STATUS_LABEL_REMAPPINGS[normalizedLabel] || status.label || 'Processing';
+  let detail = (status.detail || '').trim();
+  const url = status.url || '';
+
+  if (NAVIGATION_STATUS_LABELS.has(normalizedLabel)) {
+    label = 'Navigating site';
+    detail = formatNavigationDetail(detail, url);
+  } else if (normalizedLabel === SEARCH_STATUS_LABEL) {
+    label = 'Searching the web';
+    if (!detail) {
+      detail = 'Looking for relevant information';
+    }
+  } else if (normalizedLabel === READING_STATUS_LABEL) {
+    label = 'Reading source';
+    detail = formatReadingDetail(detail, url);
+  }
+
+  if (!detail && label.toLowerCase() === 'processing') {
+    detail = fallbackDetail || 'Working on it';
+  }
+
+  return { label, detail };
+}
+
 function createLoadingCard(responseContainer) {
   const card = document.createElement('div');
   card.className = 'agent_response agent-loading-card';
@@ -271,9 +394,17 @@ function handleChatResponse(question, promptMode = false, useStreaming = true) {
   scrollChatToBottom();
 
   const loadingCard = createLoadingCard(responseContainer);
-  loadingCard.updateStatus({
-    label: 'Preparing context',
-    detail: promptMode ? 'Research mode' : 'Thinking mode',
+  const defaultStatusDetail = promptMode ? 'Research mode' : 'Thinking mode';
+  const pushAgentStatus = (status) => {
+    const formatted = describeAgentStatus(status, {
+      fallbackDetail: defaultStatusDetail,
+    });
+    loadingCard.updateStatus(formatted);
+  };
+
+  pushAgentStatus({
+    label: 'Processing',
+    detail: defaultStatusDetail,
   });
 
   const responseElement = appendChatElement(responseContainer, 'agent_response', '');
@@ -292,8 +423,8 @@ function handleChatResponse(question, promptMode = false, useStreaming = true) {
   // Check if streaming is available (not for MCP or RAG modes)
   const canStream = useStreaming && !useMCP && !useRAG;
   if (!canStream) {
-    loadingCard.updateStatus({
-      label: 'Processing request',
+    pushAgentStatus({
+      label: 'Processing',
       detail: useMCP ? 'MCP mode' : useRAG ? 'RAG mode' : 'Standard pipeline',
     });
   }
@@ -431,7 +562,7 @@ function handleChatResponse(question, promptMode = false, useStreaming = true) {
           loadingCard.fail('Streaming error');
         },
         onStatus: (status) => {
-          loadingCard.updateStatus(status);
+          pushAgentStatus(status);
         },
       }
     );
