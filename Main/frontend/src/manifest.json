@@ -31,7 +31,7 @@
     }
   ],
   "permissions": [
-
+    "storage"
   ],
   "host_permissions": [
     "https://agenticfinsearch.org/*",
