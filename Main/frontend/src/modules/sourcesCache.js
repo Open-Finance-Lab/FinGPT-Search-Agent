@@ -122,9 +122,14 @@ function setCachedSources(urls, searchQuery = '', metadataList = []) {
     const inputUrls = Array.isArray(urls) ? urls.filter(Boolean) : [];
     const filteredUrls = inputUrls.filter((url) => url !== currentPageUrl);
     const uniqueFilteredUrls = Array.from(new Set(filteredUrls));
+    const existingUrls = cachedSources.filter((url) => url !== currentPageUrl);
+    const mergedUrls = [
+        ...existingUrls,
+        ...uniqueFilteredUrls.filter((url) => !existingUrls.includes(url)),
+    ];
 
-    cachedSources = currentPageUrl ? [currentPageUrl, ...uniqueFilteredUrls] : [...uniqueFilteredUrls];
-    lastSearchQuery = searchQuery;
+    cachedSources = currentPageUrl ? [currentPageUrl, ...mergedUrls] : [...mergedUrls];
+    lastSearchQuery = searchQuery || lastSearchQuery;
 
     const allowedUrls = new Set(cachedSources);
     Array.from(cachedMetadata.keys()).forEach((url) => {

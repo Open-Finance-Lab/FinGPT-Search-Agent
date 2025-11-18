@@ -163,9 +163,6 @@ function get_adv_chat_response() {
         return;
     }
 
-    // Clear previous cached sources before making new advanced request
-    clearCachedSources();
-
     // Text Processing Mode
     handleChatResponse(question, true);
     logQuestion(question, 'Advanced Ask');
@@ -188,8 +185,6 @@ function submit_question(mode) {
         logQuestion(question, 'Thinking');
     } else if (mode === 'Research') {
         // Research mode - equivalent to old "Advanced Ask" button
-        // Clear previous cached sources before making new advanced request
-        clearCachedSources();
         handleChatResponse(question, true);
         logQuestion(question, 'Research');
     }
