@@ -4,6 +4,16 @@
 import markdownIt from 'markdown-it';
 import texmath from 'markdown-it-texmath';
 
+// Normalize math strings so KaTeX does not choke on uncommon unicode spacing/hyphen characters
+function normalizeMathInput(mathText) {
+  if (!mathText) {
+    return mathText;
+  }
+  return mathText
+    .replace(/\u202f/g, ' ') // narrow no-break space → regular space
+    .replace(/\u2011/g, '-'); // non-breaking hyphen → regular hyphen
+}
+
 // KaTeX render options for the final math rendering
 const KATEX_RENDER_OPTIONS = {
   delimiters: [
@@ -24,6 +34,7 @@ const KATEX_RENDER_OPTIONS = {
     '\\Γ': '\\Gamma',
     '\\Θ': '\\theta',
   },
+  preProcess: normalizeMathInput,
 };
 
 // Create and configure the markdown-it instance
@@ -32,7 +43,7 @@ function createMarkdownRenderer() {
     html: true,        // Enable HTML tags in source
     linkify: true,     // Autoconvert URL-like text to links
     typographer: false, // Disable typographic replacements to avoid conflicts
-    breaks: true,      // Convert '\n' to <br>
+    breaks: false,     // Don't convert single '\n' to <br> (use double \n for paragraphs)
   });
 
   // Add the texmath plugin - this handles math at tokenization level

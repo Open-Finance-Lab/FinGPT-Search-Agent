@@ -33,7 +33,7 @@ from datascraper import datascraper as ds
 from datascraper.preferred_links_manager import get_manager
 from datascraper.models_config import MODELS_CONFIG
 
-# Unified context manager imports (clean version - no legacy support)
+# New unified context manager imports
 from datascraper.unified_context_manager import (
     UnifiedContextManager,
     ContextMode,
@@ -219,14 +219,6 @@ def chat_response(request: HttpRequest) -> JsonResponse:
                 )
 
                 responses[model] = response
-                # Persist Playwright scraped context, if any
-                for entry in ds.get_last_playwright_context() or []:
-                    integration.add_playwright_content(
-                        session_id=session_id,
-                        content=entry.get("content", ""),
-                        url=entry.get("url") or current_url,
-                        action=entry.get("action")
-                    )
 
                 # Add response to context
                 response_time_ms = int((time.time() - start_time) * 1000)
@@ -442,14 +434,6 @@ def agent_chat_response(request: HttpRequest) -> JsonResponse:
                 )
 
                 responses[model] = response
-                # Persist Playwright scraped context, if any
-                for entry in ds.get_last_playwright_context() or []:
-                    integration.add_playwright_content(
-                        session_id=session_id,
-                        content=entry.get("content", ""),
-                        url=entry.get("url") or current_url,
-                        action=entry.get("action")
-                    )
 
                 # Add response to context
                 response_time_ms = int((time.time() - start_time) * 1000)
@@ -521,7 +505,6 @@ def chat_response_stream(request: HttpRequest) -> StreamingHttpResponse:
 
         # Initialize context
         context_mgr = get_context_manager()
-        integration = get_context_integration()
         context_mgr.update_metadata(
             session_id=session_id,
             mode=ContextMode.THINKING,
@@ -564,15 +547,6 @@ def chat_response_stream(request: HttpRequest) -> StreamingHttpResponse:
                 # Send response
                 yield _build_status_frame("Drafting answer")
                 yield f'data: {json.dumps({"content": response, "done": False})}\n\n'.encode('utf-8')
-
-                # Persist Playwright scraped context, if any
-                for entry in ds.get_last_playwright_context() or []:
-                    integration.add_playwright_content(
-                        session_id=session_id,
-                        content=entry.get("content", ""),
-                        url=entry.get("url") or current_url,
-                        action=entry.get("action")
-                    )
 
                 # Add to context
                 response_time_ms = int((time.time() - start_time) * 1000)
