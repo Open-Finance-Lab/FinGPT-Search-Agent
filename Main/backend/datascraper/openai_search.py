@@ -398,9 +398,10 @@ async def create_responses_api_search_async(
 
         # Build system instructions with timezone/time context
         system_instructions = (
-            "Instructions: You are a helpful assistant with access to web search. "
-            "Always search for current information when answering questions. "
-            "Cite your sources inline and provide comprehensive, accurate answers. "
+            "Instructions: You are an expert and a helpful financial assistant with access to web search. "
+            "Decide whether to search based on intent: use web_search when the question needs external or current information; "
+            "if the user asks to recap/summarize/clarify something from this conversation, answer from the existing messages and do NOT search. "
+            "Cite your sources inline and provide comprehensive, accurate answers based on calculations or fetched sources. "
             "Focus on factual information from reputable sources. "
             "\n\nIMPORTANT - Mathematical Formatting:\n"
             "Use LaTeX with $ for inline math and $$ for display equations.\n\n"
@@ -441,11 +442,47 @@ async def create_responses_api_search_async(
             if time_info_parts:
                 system_instructions += f"\n\n[TIME CONTEXT]: {' | '.join(time_info_parts)}"
 
-        # Combine system instructions with the user prompt (Responses API does not take system role yet)
-        combined_input = f"{system_instructions}\n\n{enhanced_prompt}"
+        # Build conversation context from message_history
+        conversation_context = ""
+
+        # Process message history to include full conversation
+        if message_history:
+            # Extract system message
+            system_msg = None
+            conversation_parts = []
+
+            for msg in message_history:
+                content = msg.get('content', '')
+
+                if content.startswith("[SYSTEM MESSAGE]:"):
+                    # Extract system message content
+                    system_msg = content.replace("[SYSTEM MESSAGE]:", "").strip()
+                elif content.startswith("[USER MESSAGE]:"):
+                    # Add user message
+                    user_content = content.replace("[USER MESSAGE]:", "").strip()
+                    conversation_parts.append(f"User: {user_content}")
+                elif content.startswith("[ASSISTANT MESSAGE]:"):
+                    # Add assistant message
+                    assistant_content = content.replace("[ASSISTANT MESSAGE]:", "").strip()
+                    conversation_parts.append(f"Assistant: {assistant_content}")
+
+            # Use extracted system message if available, otherwise use default
+            if system_msg:
+                system_instructions = system_msg + "\n\n" + system_instructions
+
+            # Add conversation history if it exists (excluding the current query which is the last user message)
+            if len(conversation_parts) > 1:  # More than just the current question
+                conversation_context = "\n\n[CONVERSATION HISTORY]:\n" + "\n".join(conversation_parts[:-1])
+
+        # Combine all parts: system instructions, conversation history, and current query
+        combined_input = system_instructions
+        if conversation_context:
+            combined_input += conversation_context
+        combined_input += f"\n\n[CURRENT QUERY]:\n{enhanced_prompt}"
 
         logger.info(f"Calling OpenAI Responses API with model: {model} (stream={stream})")
         logger.info(f"Web search enabled for query: {user_query[:100]}...")
+        logger.info(f"Including {len(message_history)} messages from conversation history")
 
         response = await async_client.responses.create(
             model=model,

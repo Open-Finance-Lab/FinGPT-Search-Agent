@@ -163,9 +163,6 @@ function get_adv_chat_response() {
         return;
     }
 
-    // Clear previous cached sources before making new advanced request
-    clearCachedSources();
-
     // Text Processing Mode
     handleChatResponse(question, true);
     logQuestion(question, 'Advanced Ask');
@@ -188,8 +185,6 @@ function submit_question(mode) {
         logQuestion(question, 'Thinking');
     } else if (mode === 'Research') {
         // Research mode - equivalent to old "Advanced Ask" button
-        // Clear previous cached sources before making new advanced request
-        clearCachedSources();
         handleChatResponse(question, true);
         logQuestion(question, 'Research');
     }
@@ -467,7 +462,7 @@ async function get_sources() {
 // Removed old preferred links functions - now handled by link_manager.js component
 
 // Function to make an element draggable and resizable
-function makeDraggableAndResizable(element, sourceWindowOffsetX = 10) {
+function makeDraggableAndResizable(element, sourceWindowOffsetX = 10, onLayoutChange = null) {
     const MIN_WIDTH = 360;
     const MIN_HEIGHT = 420;
 
@@ -483,6 +478,7 @@ function makeDraggableAndResizable(element, sourceWindowOffsetX = 10) {
     let startHeight = 0;
     let startLeft = 0;
     let startTop = 0;
+    let layoutChanged = false;
 
     const dragHandle = element.querySelector('.draggable');
     if (dragHandle) {
@@ -536,6 +532,7 @@ function makeDraggableAndResizable(element, sourceWindowOffsetX = 10) {
         element.style.left = `${newLeft}px`;
         element.style.top = `${newTop}px`;
         element.style.right = 'auto';
+        layoutChanged = true;
 
         updateSourcesWindowPosition();
     }
@@ -583,6 +580,7 @@ function makeDraggableAndResizable(element, sourceWindowOffsetX = 10) {
         let newWidth = startWidth;
         if (resizeDirections.right) {
             newWidth = Math.max(MIN_WIDTH, startWidth + deltaX);
+            layoutChanged = true;
         }
         if (resizeDirections.left) {
             const widthFromLeft = startWidth - deltaX;
@@ -590,12 +588,14 @@ function makeDraggableAndResizable(element, sourceWindowOffsetX = 10) {
             const appliedLeft = startLeft + (startWidth - newWidth);
             element.style.left = `${appliedLeft}px`;
             element.style.right = 'auto';
+            layoutChanged = true;
         }
         element.style.width = `${newWidth}px`;
 
         if (resizeDirections.bottom) {
             const nextHeight = Math.max(MIN_HEIGHT, startHeight + deltaY);
             element.style.height = `${nextHeight}px`;
+            layoutChanged = true;
         }
 
         if (resizeDirections.top) {
@@ -604,6 +604,7 @@ function makeDraggableAndResizable(element, sourceWindowOffsetX = 10) {
             const appliedTop = startTop + (startHeight - constrainedHeight);
             element.style.top = `${appliedTop}px`;
             element.style.height = `${constrainedHeight}px`;
+            layoutChanged = true;
         }
 
         updateSourcesWindowPosition();
@@ -634,6 +635,11 @@ function makeDraggableAndResizable(element, sourceWindowOffsetX = 10) {
         document.removeEventListener('mouseup', stopInteraction);
         isDragging = false;
         isResizing = false;
+
+        if (layoutChanged && typeof onLayoutChange === 'function') {
+            onLayoutChange();
+        }
+        layoutChanged = false;
     }
 }
 

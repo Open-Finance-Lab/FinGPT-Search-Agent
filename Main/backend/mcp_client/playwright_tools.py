@@ -5,8 +5,9 @@ Direct integration without MCP server overhead.
 
 from agents import function_tool
 from playwright.async_api import async_playwright, Page, Browser, Playwright
-from typing import Optional
+from typing import Optional, Callable, List, Dict, Any
 from urllib.parse import urlparse
+from datetime import datetime, timezone
 import logging
 import asyncio
 
@@ -24,6 +25,47 @@ _lock = asyncio.Lock()
 # Domain restriction state (set by agent)
 _RESTRICTED_DOMAIN: Optional[str] = None
 _CURRENT_URL: Optional[str] = None
+
+# Captured context from Playwright actions (set/reset by agent lifecycle)
+_context_log: List[Dict[str, Any]] = []
+_context_recorder: Optional[Callable[[Dict[str, Any]], None]] = None
+
+
+def start_context_capture() -> None:
+    """Reset Playwright context capture for a new agent run."""
+    global _context_log
+    _context_log = []
+
+
+def set_context_recorder(recorder: Optional[Callable[[Dict[str, Any]], None]]) -> None:
+    """Register a recorder callback that receives each captured context item."""
+    global _context_recorder
+    _context_recorder = recorder
+
+
+def _record_context(action: str, content: str, url: Optional[str] = None) -> None:
+    """Record scraped context for later persistence."""
+    entry = {
+        "action": action,
+        "content": content,
+        "url": url,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+    _context_log.append(entry)
+
+    # Allow the agent wrapper to mirror entries immediately
+    if _context_recorder:
+        try:
+            _context_recorder(entry)
+        except Exception as e:  # best-effort; don't break tools
+            logger.warning(f"Context recorder failed for {action}: {e}")
+
+
+def pop_context_log() -> List[Dict[str, Any]]:
+    """Return and clear the captured Playwright context log."""
+    global _context_log
+    log, _context_log = _context_log, []
+    return log
 
 
 async def get_page() -> Page:
@@ -142,6 +184,7 @@ async def get_page_text() -> str:
         if len(text) > 40000:
             text = text[:40000] + "... [truncated]"
 
+        _record_context("get_page_text", text, page.url)
         return text
 
     except Exception as e:
@@ -328,6 +371,7 @@ async def extract_links() -> str:
             href = link['href']
             result += f"{i}. {text}\n   URL: {href}\n"
 
+        _record_context("extract_links", result, page.url)
         return result
 
     except Exception as e:

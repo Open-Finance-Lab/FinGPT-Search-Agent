@@ -2,7 +2,7 @@ import os
 import logging
 import asyncio
 from collections.abc import AsyncIterator
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple, List
 
 import requests
 from dotenv import load_dotenv
@@ -36,6 +36,17 @@ BUFFET_AGENT_API_KEY = os.getenv("BUFFET_AGENT_API_KEY", "")
 BUFFET_AGENT_DEFAULT_ENDPOINT = "https://l7d6yqg7nzbkumx8.us-east-1.aws.endpoints.huggingface.cloud"
 BUFFET_AGENT_ENDPOINT = os.getenv("BUFFET_AGENT_ENDPOINT", BUFFET_AGENT_DEFAULT_ENDPOINT)
 BUFFET_AGENT_TIMEOUT = float(os.getenv("BUFFET_AGENT_TIMEOUT", "60"))
+
+_LAST_PLAYWRIGHT_CONTEXT: List[Dict[str, Any]] = []
+
+try:
+    from mcp_client.playwright_tools import (
+        start_context_capture,
+        pop_context_log,
+    )
+except Exception:
+    start_context_capture = None
+    pop_context_log = None
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -707,6 +718,9 @@ def create_agent_response(user_input: str, message_list: list[dict], model: str 
     Returns:
         Generated response from the agent
     """
+    global _LAST_PLAYWRIGHT_CONTEXT
+    _LAST_PLAYWRIGHT_CONTEXT = []
+
     # Resolve model ID to actual model name for logging
     model_config = get_model_config(model)
     actual_model_name = model_config.get("model_name") if model_config else model
@@ -725,14 +739,16 @@ def create_agent_response(user_input: str, message_list: list[dict], model: str 
 
         logging.info(f"[AGENT] Attempting agent response with {model} ({actual_model_name})")
 
-        return asyncio.run(_create_agent_response_async(user_input, message_list, model, use_playwright, restricted_domain, current_url, user_timezone, user_time))
+        response, context_log = asyncio.run(_create_agent_response_async(user_input, message_list, model, use_playwright, restricted_domain, current_url, user_timezone, user_time))
+        _LAST_PLAYWRIGHT_CONTEXT = context_log
+        return response
 
     except Exception as e:
         logging.error(f"Agent response failed for {model} ({actual_model_name}): {e}")
         logging.info(f"FALLBACK: Using regular response with {model} ({actual_model_name})")
         return create_response(user_input, message_list, model)
 
-async def _create_agent_response_async(user_input: str, message_list: list[dict], model: str, use_playwright: bool = False, restricted_domain: str = None, current_url: str = None, user_timezone: str = None, user_time: str = None) -> str:
+async def _create_agent_response_async(user_input: str, message_list: list[dict], model: str, use_playwright: bool = False, restricted_domain: str = None, current_url: str = None, user_timezone: str = None, user_time: str = None) -> Tuple[str, List[Dict[str, Any]]]:
     """
     Async helper for creating agent response with tools.
 
@@ -747,10 +763,12 @@ async def _create_agent_response_async(user_input: str, message_list: list[dict]
         user_time: User's current time in ISO format
 
     Returns:
-        Generated response from the agent
+        Tuple of (generated response, captured Playwright context)
     """
     from mcp_client.agent import create_fin_agent
     from agents import Runner
+
+    capture_context = bool(use_playwright and start_context_capture and pop_context_log)
 
     # Convert message list to context, parsing headers
     context = ""
@@ -778,6 +796,13 @@ async def _create_agent_response_async(user_input: str, message_list: list[dict]
 
     full_prompt = f"{context}User: {user_input}"
 
+    if capture_context:
+        try:
+            start_context_capture()
+        except Exception as e:
+            logging.warning(f"Failed to start Playwright context capture: {e}")
+            capture_context = False
+
     # Create agent with tools and domain restriction
     async with create_fin_agent(
         model=model,
@@ -795,8 +820,19 @@ async def _create_agent_response_async(user_input: str, message_list: list[dict]
 
         result = await Runner.run(agent, full_prompt)
 
-        logging.info(f"[AGENT] Result length: {len(result.final_output) if result.final_output else 0}")
-        return result.final_output
+        final_output = result.final_output if hasattr(result, "final_output") else None
+        if final_output is None:
+            final_output = ""
+        logging.info(f"[AGENT] Result length: {len(final_output)}")
+
+        context_log: List[Dict[str, Any]] = []
+        if capture_context:
+            try:
+                context_log = pop_context_log()
+            except Exception as e:
+                logging.warning(f"Failed to collect Playwright context log: {e}")
+
+        return final_output, context_log
 
 
 def create_agent_response_stream(
@@ -924,6 +960,13 @@ def get_sources(query: str, current_url: str | None = None) -> Dict[str, Any]:
     payload = format_sources_for_frontend(used_source_details, current_url)
     logging.info(f"Returning {len(payload.get('sources', []))} sources to frontend")
     return payload
+
+
+def get_last_playwright_context() -> List[Dict[str, Any]]:
+    """
+    Return the most recently captured Playwright context entries for agent responses.
+    """
+    return _LAST_PLAYWRIGHT_CONTEXT
 
 
 def get_website_icon(url):
