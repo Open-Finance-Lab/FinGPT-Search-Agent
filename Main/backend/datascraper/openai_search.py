@@ -398,9 +398,10 @@ async def create_responses_api_search_async(
 
         # Build system instructions with timezone/time context
         system_instructions = (
-            "Instructions: You are a helpful assistant with access to web search. "
-            "Always search for current information when answering questions. "
-            "Cite your sources inline and provide comprehensive, accurate answers. "
+            "Instructions: You are an expert and a helpful financial assistant with access to web search. "
+            "Decide whether to search based on intent: use web_search when the question needs external or current information; "
+            "if the user asks to recap/summarize/clarify something from this conversation, answer from the existing messages and do NOT search. "
+            "Cite your sources inline and provide comprehensive, accurate answers based on calculations or fetched sources. "
             "Focus on factual information from reputable sources. "
             "\n\nIMPORTANT - Mathematical Formatting:\n"
             "Use LaTeX with $ for inline math and $$ for display equations.\n\n"
