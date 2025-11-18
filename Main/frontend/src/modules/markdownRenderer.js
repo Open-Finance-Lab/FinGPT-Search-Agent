@@ -43,7 +43,7 @@ function createMarkdownRenderer() {
     html: true,        // Enable HTML tags in source
     linkify: true,     // Autoconvert URL-like text to links
     typographer: false, // Disable typographic replacements to avoid conflicts
-    breaks: true,      // Convert '\n' to <br>
+    breaks: false,     // Don't convert single '\n' to <br> (use double \n for paragraphs)
   });
 
   // Add the texmath plugin - this handles math at tokenization level
