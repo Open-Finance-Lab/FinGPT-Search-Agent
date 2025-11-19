@@ -1,12 +1,14 @@
 """
 Mem0 Context Manager for FinGPT Search Agent
 Implements production-ready memory layer using Mem0 for conversation context.
+Now with smart context compression for fetched context and conversation history.
 """
 
 import logging
 import os
-from typing import List, Dict, Optional
-from datetime import datetime, UTC
+from typing import List, Dict, Optional, Literal, Any
+from datetime import datetime, timezone
+UTC = timezone.utc
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from collections import defaultdict
 
@@ -18,6 +20,14 @@ except ImportError:
     MEM0_AVAILABLE = False
     logging.warning("Mem0 not installed. Install with: pip install mem0ai")
 
+# OpenAI for smart compression
+try:
+    from openai import OpenAI
+    OPENAI_AVAILABLE = True
+except ImportError:
+    OPENAI_AVAILABLE = False
+    logging.warning("OpenAI not installed. Install with: pip install openai")
+
 
 class Mem0ContextManager:
     """
@@ -28,13 +38,15 @@ class Mem0ContextManager:
     def __init__(
         self,
         api_key: Optional[str] = None,
+        openai_api_key: Optional[str] = None,
         max_recent_messages: int = 10,
     ):
         """
-        Initialize Mem0 Context Manager.
+        Initialize Mem0 Context Manager with smart compression support.
 
         Args:
             api_key: Mem0 API key (defaults to MEM0_API_KEY env var)
+            openai_api_key: OpenAI API key for smart compression (defaults to OPENAI_API_KEY env var)
             max_recent_messages: Number of recent messages to keep verbatim
         """
         if not MEM0_AVAILABLE:
@@ -51,14 +63,14 @@ class Mem0ContextManager:
             )
 
         self.max_recent_messages = max_recent_messages
+        # Updated to 100k tokens as per the plan
         self.max_session_tokens = max(
-            int(os.getenv("MEM0_CONTEXT_TOKEN_LIMIT", "50000")),
+            int(os.getenv("MEM0_CONTEXT_TOKEN_LIMIT", "100000")),
             2000,
         )
         target_ratio = float(os.getenv("MEM0_COMPRESSION_TARGET_RATIO", "0.7"))
         self.compression_target_ratio = min(max(target_ratio, 0.4), 0.9)
         self.max_compression_chars = max(int(os.getenv("MEM0_COMPRESSION_MAX_CHARS", "4000")), 500)
-        self.min_messages_before_compress = max(int(os.getenv("MEM0_MIN_MESSAGES_BEFORE_COMPRESS", "6")), 2)
 
         # Initialize Mem0 client
         try:
@@ -66,6 +78,19 @@ class Mem0ContextManager:
         except Exception as e:
             logging.error(f"Failed to initialize Mem0 client: {e}")
             raise
+
+        # Initialize OpenAI client for smart compression
+        self.llm_client = None
+        if OPENAI_AVAILABLE:
+            openai_key = openai_api_key or os.getenv("OPENAI_API_KEY")
+            if openai_key:
+                try:
+                    self.llm_client = OpenAI(api_key=openai_key)
+                    logging.info("OpenAI client initialized for smart compression")
+                except Exception as e:
+                    logging.warning(f"Failed to initialize OpenAI client: {e}")
+            else:
+                logging.warning("OPENAI_API_KEY not found. Smart compression will use basic fallback.")
 
         # Local session storage for per-worker short-term buffers and metadata
         self.sessions = defaultdict(self._session_factory)
@@ -78,9 +103,14 @@ class Mem0ContextManager:
         )
 
     def _session_factory(self) -> dict:
-        """Create new session storage."""
+        """Create new session storage with fetched context support."""
         return {
             "recent_messages": [],
+            "fetched_context": {
+                "web_search": [],
+                "playwright": [],
+                "js_scraping": []
+            },
             "message_count": 0,
             "token_count": 0,
             "current_webpage": None,
@@ -128,6 +158,47 @@ class Mem0ContextManager:
         session["message_count"] += 1
         session["token_count"] += token_estimate
 
+        self._check_context_limits(session_id)
+
+    def add_fetched_context(
+        self,
+        session_id: str,
+        source_type: Literal["web_search", "playwright", "js_scraping"],
+        content: str,
+        url: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None
+    ) -> None:
+        """
+        Add fetched context from various sources (web search, playwright, etc).
+
+        Args:
+            session_id: Unique session identifier
+            source_type: Type of source (web_search, playwright, js_scraping)
+            content: Content from the source
+            url: Optional URL associated with the content
+            metadata: Optional additional metadata
+        """
+        session = self.sessions[session_id]
+        session["last_used"] = datetime.now(UTC)
+
+        timestamp = datetime.now(UTC)
+        token_estimate = self.count_tokens(content)
+
+        context_item = {
+            "source_type": source_type,
+            "content": content,
+            "url": url,
+            "timestamp": timestamp,
+            "token_estimate": token_estimate,
+            "metadata": metadata or {}
+        }
+
+        session["fetched_context"][source_type].append(context_item)
+        session["token_count"] += token_estimate
+
+        logging.debug(f"[Mem0] Added {source_type} context to session {session_id}: {url}")
+
+        # Check if we need to compress after adding fetched context
         self._check_context_limits(session_id)
 
     def get_context(self, session_id: str, query: Optional[str] = None) -> List[Dict]:
@@ -196,6 +267,39 @@ class Mem0ContextManager:
             "content": system_prompt
         }]
 
+        # Add fetched context if available
+        fetched = session.get("fetched_context", {})
+
+        # Add web search results
+        if fetched.get("web_search"):
+            search_content = "\n\n[WEB SEARCH RESULTS]:"
+            for item in fetched["web_search"]:
+                search_content += f"\n- From {item.get('url', 'unknown')}: {item['content'][:500]}"
+            context.append({
+                "role": "user",
+                "content": search_content
+            })
+
+        # Add playwright scraped content
+        if fetched.get("playwright"):
+            playwright_content = "\n\n[PLAYWRIGHT SCRAPED CONTENT]:"
+            for item in fetched["playwright"]:
+                playwright_content += f"\n- From {item.get('url', 'page')}: {item['content'][:500]}"
+            context.append({
+                "role": "user",
+                "content": playwright_content
+            })
+
+        # Add JS scraped content
+        if fetched.get("js_scraping"):
+            js_content = "\n\n[WEB PAGE CONTENT]:"
+            for item in fetched["js_scraping"]:
+                js_content += f"\n- From {item.get('url', 'page')}: {item['content'][:500]}"
+            context.append({
+                "role": "user",
+                "content": js_content
+            })
+
         # Include compressed chunks only when they exist
         if session.get("has_compressed_chunks"):
             for chunk in self._get_compressed_chunks(session_id, query=query):
@@ -242,7 +346,7 @@ class Mem0ContextManager:
 
     def clear_session(self, session_id: str) -> None:
         """
-        Clear all messages and memories for a session.
+        Clear all messages, fetched context, and memories for a session.
 
         Args:
             session_id: Session identifier
@@ -250,6 +354,9 @@ class Mem0ContextManager:
         session = self.sessions.get(session_id)
         if session:
             session["recent_messages"].clear()
+            # Clear all fetched context
+            for source_type in session.get("fetched_context", {}):
+                session["fetched_context"][source_type] = []
             session["message_count"] = 0
             session["token_count"] = 0
             session["compressed_chunk_count"] = 0
@@ -339,36 +446,173 @@ class Mem0ContextManager:
         session = self.sessions[session_id]
         if session["token_count"] <= self.max_session_tokens:
             return
-        if len(session["recent_messages"]) < self.min_messages_before_compress:
-            return
         self._compress_session_history(session_id)
 
     def _compress_session_history(self, session_id: str) -> None:
+        """
+        Smart compression of session history using LLM when approaching token limits.
+        Compresses BOTH conversation history AND fetched context into Mem0 memory.
+        """
         session = self.sessions[session_id]
-        target_tokens = int(self.max_session_tokens * self.compression_target_ratio)
-        target_tokens = max(target_tokens, int(self.max_session_tokens * 0.5))
 
-        removed_messages = []
-        while session["token_count"] > target_tokens and session["recent_messages"]:
-            oldest = session["recent_messages"].pop(0)
-            session["token_count"] -= oldest.get("token_estimate", self.count_tokens(oldest.get("content", "")))
-            removed_messages.append(oldest)
+        # Log compression trigger
+        logging.info(f"[Mem0] Smart compression triggered for session {session_id}. Current tokens: {session['token_count']}/{self.max_session_tokens}")
 
-        if not removed_messages:
+        # Build context dump for compression
+        context_dump = []
+
+        # Add all fetched context
+        fetched = session.get("fetched_context", {})
+
+        if fetched.get("web_search"):
+            context_dump.append("=== WEB SEARCH RESULTS ===")
+            for item in fetched["web_search"]:
+                context_dump.append(f"URL: {item.get('url', 'N/A')}")
+                context_dump.append(f"Content: {item['content']}")
+                if item.get('metadata'):
+                    context_dump.append(f"Metadata: {item['metadata']}")
+                context_dump.append("---")
+
+        if fetched.get("playwright"):
+            context_dump.append("\n=== PLAYWRIGHT SCRAPED CONTENT ===")
+            for item in fetched["playwright"]:
+                context_dump.append(f"URL: {item.get('url', 'N/A')}")
+                context_dump.append(f"Content: {item['content']}")
+                if item.get('metadata'):
+                    context_dump.append(f"Action: {item['metadata'].get('action', 'N/A')}")
+                context_dump.append("---")
+
+        if fetched.get("js_scraping"):
+            context_dump.append("\n=== JS SCRAPED CONTENT ===")
+            for item in fetched["js_scraping"]:
+                context_dump.append(f"URL: {item.get('url', 'N/A')}")
+                context_dump.append(f"Content: {item['content']}")
+                context_dump.append("---")
+
+        # Add conversation history (keep last 2 messages for continuity)
+        messages_to_compress = session["recent_messages"][:-2] if len(session["recent_messages"]) > 2 else session["recent_messages"]
+
+        if messages_to_compress:
+            context_dump.append("\n=== CONVERSATION HISTORY ===")
+            for msg in messages_to_compress:
+                role = "User" if msg["role"] == "user" else "Assistant"
+                context_dump.append(f"{role}: {msg['content']}")
+                context_dump.append("---")
+
+        full_context = "\n".join(context_dump)
+
+        # If no content to compress, return
+        if not full_context.strip():
+            logging.info(f"[Mem0] No content to compress for session {session_id}")
             return
 
+        # Use smart compression with LLM if available, otherwise fallback
+        if self.llm_client:
+            compressed_summary = self._smart_compress_with_llm(full_context, session_id)
+        else:
+            compressed_summary = self._fallback_compress(full_context, session_id)
+
+        if not compressed_summary:
+            logging.error(f"[Mem0] Failed to generate compression summary for session {session_id}")
+            return
+
+        # Store the compressed summary in Mem0
         chunk_index = session.get("compressed_chunk_count", 0) + 1
-        chunk_text = self._summarize_messages_for_mem0(removed_messages, chunk_index)
         try:
-            self._store_compressed_chunk(session_id, chunk_text, chunk_index, removed_messages[-1]["timestamp"])
+            self._store_compressed_chunk(session_id, compressed_summary, chunk_index, datetime.now(UTC))
             session["compressed_chunk_count"] = chunk_index
             session["has_compressed_chunks"] = True
-            logging.info(f"[Mem0] Stored compressed chunk #{chunk_index} for session {session_id}")
+
+            # Clear the compressed content
+            # Clear fetched context
+            for source_type in session["fetched_context"]:
+                session["fetched_context"][source_type] = []
+
+            # Clear compressed messages (keep last 2 for continuity)
+            if len(session["recent_messages"]) > 2:
+                kept_messages = session["recent_messages"][-2:]
+                session["recent_messages"] = kept_messages
+                session["message_count"] = len(kept_messages)
+
+                # Recalculate token count for remaining messages
+                session["token_count"] = sum(
+                    msg.get("token_estimate", self.count_tokens(msg.get("content", "")))
+                    for msg in kept_messages
+                )
+            else:
+                # If 2 or fewer messages, don't remove any
+                pass
+
+            logging.info(f"[Mem0] Smart compression completed for session {session_id}. Chunk #{chunk_index} stored. Tokens reduced to {session['token_count']}")
+
         except Exception as e:
             logging.error(f"[Mem0] Failed to store compressed chunk: {e}")
-            # If storing fails, push removed messages back to preserve context
-            session["recent_messages"] = removed_messages + session["recent_messages"]
-            session["token_count"] += sum(m.get("token_estimate", self.count_tokens(m.get("content", ""))) for m in removed_messages)
+
+    def _smart_compress_with_llm(self, context_dump: str, session_id: str) -> Optional[str]:
+        """
+        Use gpt-5-chat-latest to intelligently compress the context.
+        """
+        try:
+            prompt = """You are an expert context compressor for a financial research assistant. I am providing you with the full state of a financial research session, including conversation history, web search results, and browser automation logs.
+
+Your task is to compress this into a single, comprehensive 'Memory Update' that preserves:
+
+1. All specific financial figures, dates, tickers, and entity names found in the search results/scrapes
+2. The user's specific questions, preferences, and research objectives
+3. The logical flow and progression of the investigation
+4. Key findings and insights discovered
+5. Any URLs that provided valuable information
+6. Important relationships between different pieces of information
+
+Discard:
+- Repetitive boilerplate text
+- Failed search attempts with no valuable information
+- Redundant information that appears multiple times
+- Navigation/UI elements from scraped content
+
+The output must be a dense, factual summary suitable for restoring the agent's understanding of the current research state. Structure it clearly with sections if needed.
+
+Context to compress:
+"""
+
+            response = self.llm_client.chat.completions.create(
+                model="gpt-5-chat-latest",
+                messages=[
+                    {"role": "system", "content": prompt},
+                    {"role": "user", "content": context_dump[:50000]}  # Limit input to avoid issues
+                ],
+                max_tokens=4000,
+                temperature=0.3  # Lower temperature for more factual compression
+            )
+
+            compressed = response.choices[0].message.content
+            return f"[COMPRESSED MEMORY - Session {session_id}]\n{compressed}"
+
+        except Exception as e:
+            logging.error(f"[Mem0] LLM compression failed: {e}")
+            return None
+
+    def _fallback_compress(self, context_dump: str, session_id: str) -> str:
+        """
+        Fallback compression when LLM is not available.
+        """
+        lines = context_dump.split('\n')
+        summary_lines = [f"[COMPRESSED MEMORY - Session {session_id} - Fallback]"]
+
+        # Keep section headers and first few lines of each section
+        for i, line in enumerate(lines):
+            if line.startswith("===") or i < 10:
+                summary_lines.append(line)
+            elif len("\n".join(summary_lines)) < self.max_compression_chars:
+                # Add important lines (those with URLs, numbers, etc.)
+                if any(keyword in line.lower() for keyword in ['http', 'www', '$', '%', 'stock', 'price']):
+                    summary_lines.append(line)
+
+        summary = "\n".join(summary_lines)
+        if len(summary) > self.max_compression_chars:
+            summary = summary[:self.max_compression_chars] + "... (truncated)"
+
+        return summary
 
     def _summarize_messages_for_mem0(self, messages: List[Dict], chunk_index: int) -> str:
         summary_lines = [f"[COMPRESSED CHUNK #{chunk_index}] Earlier conversation context:"]
