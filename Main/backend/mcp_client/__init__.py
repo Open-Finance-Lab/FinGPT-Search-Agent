@@ -1,1 +1,1 @@
-# MCP (Model Context Protocol) related components
+default_app_config = 'mcp_client.apps.MCPClientConfig'

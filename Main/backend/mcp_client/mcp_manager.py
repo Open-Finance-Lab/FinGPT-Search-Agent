@@ -1,0 +1,350 @@
+import asyncio
+import json
+import logging
+import os
+import shutil
+from contextlib import AsyncExitStack
+from pathlib import Path
+from typing import Dict, List, Optional, Any, Callable
+
+from mcp import ClientSession, StdioServerParameters
+from mcp.client.stdio import stdio_client
+from mcp.client.sse import sse_client
+from mcp.types import Tool as MCPTool, CallToolResult
+
+# Configure logging
+logger = logging.getLogger(__name__)
+
+class MCPClientManager:
+    """
+    Manages connections to multiple MCP servers and aggregates their tools.
+    """
+    def __init__(
+        self,
+        config_path: Optional[str] = None,
+        *,
+        verbose: bool = True,
+        printer: Optional[Callable[[str], None]] = None,
+    ):
+        self.exit_stack = AsyncExitStack()
+        self.sessions: Dict[str, ClientSession] = {}
+        self.tools_map: Dict[str, str] = {} # tool_name -> server_name
+        self.verbose = verbose
+        self._printer = printer or print
+
+        if config_path:
+            self.config_path = Path(config_path)
+        else:
+            # Default to mcp_server_config.json in the backend root
+            self.config_path = Path(__file__).resolve().parent.parent / "mcp_server_config.json"
+
+        self._stop_event = asyncio.Event()
+        self._connection_task: Optional[asyncio.Task] = None
+        self._servers_ready = asyncio.Event()
+        self._loop: Optional[asyncio.AbstractEventLoop] = None  # Store the event loop
+
+    def _log(self, message: str, *, force: bool = False):
+        """Print debug output only when verbose or forced."""
+        if self.verbose or force:
+            self._printer(message)
+
+    async def load_config(self) -> Dict[str, Any]:
+        if not self.config_path.exists():
+            self._log(f"[MCP DEBUG] Config file not found at {self.config_path}", force=True)
+            logger.warning(f"MCP config file not found at {self.config_path}")
+            return {}
+        
+        try:
+            self._log(f"[MCP DEBUG] Loading config from {self.config_path}")
+            with open(self.config_path, 'r') as f:
+                return json.load(f)
+        except Exception as e:
+            self._log(f"[MCP DEBUG] Failed to load MCP config: {e}", force=True)
+            logger.error(f"Failed to load MCP config: {e}")
+            return {}
+
+    async def connect_to_servers(self):
+        """Starts the background task to connect to all enabled servers."""
+        if self._connection_task and not self._connection_task.done():
+             self._log("[MCP DEBUG] MCP servers already connected or connecting.")
+             await self._servers_ready.wait()
+             return
+
+        self._log("[MCP DEBUG] Starting MCP server connection loop...")
+
+        # Store the current event loop
+        self._loop = asyncio.get_event_loop()
+
+        self._stop_event.clear()
+        self._servers_ready.clear()
+        self._connection_task = asyncio.create_task(self._run_servers())
+
+        # Wait for servers to be ready
+        await self._servers_ready.wait()
+        self._log("[MCP DEBUG] MCP servers ready.")
+
+    async def _run_servers(self):
+        """Background task to maintain server connections."""
+        try:
+            async with self.exit_stack:
+                config = await self.load_config()
+                mcp_servers = config.get("mcpServers", {})
+                
+                self._log(f"[MCP DEBUG] Found {len(mcp_servers)} servers in config")
+
+                for server_name, server_config in mcp_servers.items():
+                    if server_config.get("disabled", False):
+                        self._log(f"[MCP DEBUG] Server '{server_name}' is disabled, skipping.")
+                        continue
+                    
+                    try:
+                        self._log(f"[MCP DEBUG] Connecting to server: {server_name}...")
+                        await self._connect_server(server_name, server_config)
+                        self._log(f"[MCP DEBUG] Successfully connected to: {server_name}")
+                        logger.info(f"Connected to MCP server: {server_name}")
+                    except Exception as e:
+                        self._log(f"[MCP DEBUG] Failed to connect to {server_name}: {e}", force=True)
+                        logger.error(f"Failed to connect to MCP server {server_name}: {e}")
+                
+                # Signal that we are ready
+                self._servers_ready.set()
+                
+                # Keep running until stopped
+                await self._stop_event.wait()
+                
+        except Exception as e:
+             self._log(f"[MCP DEBUG] MCP Server loop crashed: {e}", force=True)
+             logger.error(f"MCP Server loop crashed: {e}")
+        finally:
+             self._servers_ready.clear()
+             self._log("[MCP DEBUG] MCP Server loop exited.", force=True)
+
+    async def _connect_server(self, server_name: str, config: Dict[str, Any]):
+        """Establishes a connection to a single MCP server."""
+        
+        # 1. Check for SSE (Server-Sent Events) configuration
+        # Assuming config format: {"url": "http://..."} for SSE
+        # or {"command": "...", "args": [...], "env": {...}} for Stdio
+        
+        if "url" in config:
+            # SSE Connection
+            url = config["url"]
+            self._log(f"[MCP DEBUG] {server_name} using SSE transport: {url}")
+            # We need to maintain the transport context
+            # sse_client is an async context manager
+            transport_ctx = sse_client(url)
+            read_stream, write_stream = await self.exit_stack.enter_async_context(transport_ctx)
+            
+            session = ClientSession(read_stream, write_stream)
+            await self.exit_stack.enter_async_context(session)
+            await session.initialize()
+            
+            self.sessions[server_name] = session
+            
+        elif "command" in config:
+            # Stdio Connection
+            command = config["command"]
+            args = config.get("args", [])
+            env = config.get("env", {})
+            
+            self._log(f"[MCP DEBUG] {server_name} using Stdio transport: {command} {args}")
+            
+            # Merge with current environment
+            full_env = os.environ.copy()
+            full_env.update(env)
+
+            # Ensure Playwright-based servers can find the shared browser cache
+            if "PLAYWRIGHT_BROWSERS_PATH" not in full_env:
+                default_cache = Path.home() / ".cache" / "ms-playwright"
+                if default_cache.exists():
+                    full_env["PLAYWRIGHT_BROWSERS_PATH"] = str(default_cache)
+                    full_env.setdefault("PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD", "1")
+
+            # Resolve command path if necessary (e.g. 'npx' or 'python')
+            executable = shutil.which(command) or command
+
+            server_params = StdioServerParameters(
+                command=executable,
+                args=args,
+                env=full_env
+            )
+            
+            transport_ctx = stdio_client(server_params)
+            read_stream, write_stream = await self.exit_stack.enter_async_context(transport_ctx)
+            
+            session = ClientSession(read_stream, write_stream)
+            await self.exit_stack.enter_async_context(session)
+            await session.initialize()
+            
+            self.sessions[server_name] = session
+            
+        else:
+            raise ValueError(f"Invalid config for server {server_name}: missing 'command' or 'url'")
+
+    def run_async_from_sync(self, coro):
+        """
+        Run an async coroutine from a synchronous context.
+        Uses the MCP manager's event loop (running in background thread).
+        """
+        if not self._loop:
+            raise RuntimeError("MCP event loop not available. Ensure connect_to_servers was called.")
+
+        # Submit the coroutine to the background thread's event loop
+        future = asyncio.run_coroutine_threadsafe(coro, self._loop)
+        # Wait for result (blocks current thread)
+        return future.result(timeout=30)  # 30 second timeout
+
+    async def get_all_tools(self) -> List[MCPTool]:
+        """Fetches tools from all connected servers."""
+        # Ensure we are connected
+        if not self._servers_ready.is_set():
+             # Try to connect if not running?
+             # For now assume connect_to_servers was called.
+             self._log("[MCP DEBUG] Warning: Servers not ready when fetching tools", force=True)
+
+        all_tools = []
+        self.tools_map.clear()
+
+        self._log(f"[MCP DEBUG] Fetching tools from {len(self.sessions)} connected servers...")
+
+        for server_name, session in self.sessions.items():
+            try:
+                result = await session.list_tools()
+                self._log(f"[MCP DEBUG] Server '{server_name}' provided {len(result.tools)} tools")
+
+                # Map tools without verbose logging
+                for tool in result.tools:
+                    if tool.name in self.tools_map:
+                        self._log(f"[MCP DEBUG] WARNING: Tool name collision: {tool.name} in {server_name}", force=True)
+                        logger.warning(f"Tool name collision: {tool.name} in {server_name} and {self.tools_map[tool.name]}")
+
+                    self.tools_map[tool.name] = server_name
+                    all_tools.append(tool)
+
+            except Exception as e:
+                self._log(f"[MCP DEBUG] Error listing tools for {server_name}: {e}", force=True)
+                logger.error(f"Error listing tools for {server_name}: {e}")
+
+        self._log(f"[MCP DEBUG] Total tools available: {len(all_tools)}")
+        return all_tools
+
+    async def execute_tool(self, tool_name: str, arguments: Dict[str, Any]) -> Any:
+        """Executes a tool on the appropriate server with very detailed logging."""
+        import json
+
+        # Detailed request logging
+        self._log("=" * 80, force=True)
+        self._log(f"[MCP TOOL REQUEST] Tool: {tool_name}", force=True)
+        self._log(f"[MCP TOOL REQUEST] Server: {self.tools_map.get(tool_name, 'unknown')}", force=True)
+        self._log(f"[MCP TOOL REQUEST] Timestamp: {__import__('datetime').datetime.now().isoformat()}", force=True)
+        self._log(f"[MCP TOOL REQUEST] Arguments ({len(arguments)} params):", force=True)
+        for key, value in arguments.items():
+            str_value = str(value)
+            if len(str_value) > 200:
+                self._log(f"[MCP TOOL REQUEST]   {key}: {str_value[:197]}... ({len(str_value)} chars)", force=True)
+            else:
+                self._log(f"[MCP TOOL REQUEST]   {key}: {str_value}", force=True)
+        self._log("-" * 80, force=True)
+
+        server_name = self.tools_map.get(tool_name)
+        if not server_name:
+            self._log(f"[MCP TOOL ERROR] Tool '{tool_name}' not found in tools map", force=True)
+            self._log(f"[MCP TOOL ERROR] Available tools: {list(self.tools_map.keys())[:5]}...", force=True)
+            self._log("=" * 80, force=True)
+            raise ValueError(f"Tool {tool_name} not found or not associated with any server.")
+
+        session = self.sessions.get(server_name)
+        if not session:
+            self._log(f"[MCP TOOL ERROR] Session for server '{server_name}' is not active", force=True)
+            self._log(f"[MCP TOOL ERROR] Active sessions: {list(self.sessions.keys())}", force=True)
+            self._log("=" * 80, force=True)
+            raise RuntimeError(f"Session for server {server_name} is not active.")
+
+        try:
+            # Execute the tool
+            self._log(f"[MCP TOOL EXEC] Calling {server_name} server...", force=True)
+            result: CallToolResult = await session.call_tool(tool_name, arguments)
+            self._log(f"[MCP TOOL EXEC] ✓ Server responded", force=True)
+
+            # Detailed response logging
+            self._log("-" * 80, force=True)
+            self._log(f"[MCP TOOL RESPONSE] Processing result from {tool_name}", force=True)
+
+            total_size = 0
+            item_count = 0
+
+            if hasattr(result, 'content') and isinstance(result.content, list):
+                self._log(f"[MCP TOOL RESPONSE] Response contains {len(result.content)} content items", force=True)
+
+                for idx, item in enumerate(result.content, 1):
+                    item_count += 1
+                    self._log(f"[MCP TOOL RESPONSE] Item {idx}/{len(result.content)}:", force=True)
+
+                    if item.type == 'text':
+                        item_size = len(item.text)
+                        total_size += item_size
+
+                        # Show first 300 chars for visibility
+                        if len(item.text) > 300:
+                            preview = item.text[:300] + f"... ({len(item.text)} total chars)"
+                        else:
+                            preview = item.text
+
+                        self._log(f"[MCP TOOL RESPONSE]   Type: text", force=True)
+                        self._log(f"[MCP TOOL RESPONSE]   Size: {item_size} bytes ({item_size/1024:.2f} KB)", force=True)
+                        self._log(f"[MCP TOOL RESPONSE]   Content: {preview}", force=True)
+
+                    elif item.type == 'image':
+                        self._log(f"[MCP TOOL RESPONSE]   Type: image", force=True)
+                        self._log(f"[MCP TOOL RESPONSE]   MIME: {item.mimeType}", force=True)
+                        if hasattr(item, 'data'):
+                            self._log(f"[MCP TOOL RESPONSE]   Data size: {len(str(item.data))} bytes", force=True)
+
+                    elif item.type == 'resource':
+                        self._log(f"[MCP TOOL RESPONSE]   Type: resource", force=True)
+                        self._log(f"[MCP TOOL RESPONSE]   URI: {item.uri}", force=True)
+                    else:
+                        self._log(f"[MCP TOOL RESPONSE]   Type: {item.type}", force=True)
+                        self._log(f"[MCP TOOL RESPONSE]   Data: {str(item)[:200]}", force=True)
+
+            # Summary
+            self._log("-" * 80, force=True)
+            self._log(f"[MCP TOOL SUMMARY] Total items: {item_count}", force=True)
+            self._log(f"[MCP TOOL SUMMARY] Total text size: {total_size} bytes ({total_size/1024:.2f} KB)", force=True)
+
+            # Warn if payload is large
+            if total_size > 10240:
+                self._log(f"[MCP TOOL WARNING] ⚠ Large payload: {total_size/1024:.1f} KB", force=True)
+                self._log(f"[MCP TOOL WARNING] ⚠ Exceeds OpenAI tracing limit (10KB)", force=True)
+                self._log(f"[MCP TOOL WARNING] ⚠ Tracing errors expected but tool execution will succeed", force=True)
+
+            # Success indicator
+            self._log(f"[MCP TOOL SUCCESS] ✓ {tool_name} completed successfully", force=True)
+            self._log("=" * 80, force=True)
+
+            return result
+
+        except Exception as e:
+            self._log("-" * 80, force=True)
+            self._log(f"[MCP TOOL ERROR] ✗ Execution failed for {tool_name}", force=True)
+            self._log(f"[MCP TOOL ERROR] ✗ Error type: {type(e).__name__}", force=True)
+            self._log(f"[MCP TOOL ERROR] ✗ Error message: {str(e)}", force=True)
+
+            # Try to get more details
+            if hasattr(e, '__dict__'):
+                self._log(f"[MCP TOOL ERROR] ✗ Error details: {e.__dict__}", force=True)
+
+            self._log("=" * 80, force=True)
+            raise
+
+    async def cleanup(self):
+        """Closes all sessions and transports."""
+        self._log("[MCP DEBUG] Cleaning up MCP connections...", force=True)
+        self._stop_event.set()
+        if self._connection_task:
+            try:
+                await self._connection_task
+            except asyncio.CancelledError:
+                pass
+        self.sessions.clear()
+        self.tools_map.clear()

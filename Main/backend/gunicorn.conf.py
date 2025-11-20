@@ -5,9 +5,13 @@ import multiprocessing
 # Bind to port from environment variable or default to 8000
 bind = f"0.0.0.0:{os.getenv('PORT', '8000')}"
 
-# Worker processes (default to a conservative 2 to keep memory bounded on small droplets)
-workers = int(os.getenv('GUNICORN_WORKERS', '2'))
-worker_class = 'sync'
+# Worker processes
+# NOTE: MCP connections (Playwright, filesystem) cannot be shared across workers.
+# Each worker creates its own connection pool. For deployments using MCP,
+# using 1 worker is recommended to avoid resource duplication.
+# You can override with GUNICORN_WORKERS env var if needed.
+workers = int(os.getenv('GUNICORN_WORKERS', '1'))
+worker_class = 'gthread'
 worker_connections = 1000
 max_requests = 1000
 max_requests_jitter = 50

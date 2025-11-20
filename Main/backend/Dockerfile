@@ -46,8 +46,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copy venv from builder
 COPY --from=builder /app/.venv /app/.venv
 
-# Install Playwright and Chromium
-RUN /app/.venv/bin/playwright install chromium --with-deps
+# Install Playwright browsers (chromium and chrome) with system dependencies
+# This runs as root, so --with-deps can install system packages
+RUN /app/.venv/bin/playwright install chromium chrome --with-deps
 
 # ==========================================
 # Stage 4: Final production image
@@ -78,12 +79,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpango-1.0-0 \
     libcairo2 \
     libasound2 \
+    nodejs \
+    npm \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
+# Install MCP servers globally to improve startup time and reliability
+RUN npm install -g @modelcontextprotocol/server-filesystem @playwright/mcp
+
 # Create non-root user
 RUN groupadd -r fingpt && useradd -r -g fingpt -u 1000 fingpt \
-    && mkdir -p /app && chown -R fingpt:fingpt /app
+    && mkdir -p /app /home/fingpt/.cache && chown -R fingpt:fingpt /app /home/fingpt
 
 WORKDIR /app
 
@@ -114,6 +120,9 @@ RUN mkdir -p /app/staticfiles /app/media /app/logs \
 # Switch to non-root user
 USER fingpt
 
+# Browsers already installed in playwright-installer stage and copied at line 96
+# No need to install again here
+
 # Entrypoint handles optional collectstatic before launching Gunicorn
 ENTRYPOINT ["/app/entrypoint.sh"]
 
@@ -126,12 +135,12 @@ HEALTHCHECK --interval=2m --timeout=10s --start-period=1m --retries=3 \
 
 # Use array form for better signal handling
 CMD ["gunicorn", \
-     "django_config.wsgi:application", \
-     "--bind", "0.0.0.0:8000", \
-     "--workers", "2", \
-     "--threads", "4", \
-     "--timeout", "120", \
-     "--access-logfile", "-", \
-     "--error-logfile", "-", \
-     "--worker-tmp-dir", "/dev/shm", \
-     "--worker-class", "sync"]
+    "django_config.wsgi:application", \
+    "--bind", "0.0.0.0:8000", \
+    "--workers", "2", \
+    "--threads", "4", \
+    "--timeout", "120", \
+    "--access-logfile", "-", \
+    "--error-logfile", "-", \
+    "--worker-tmp-dir", "/dev/shm", \
+    "--worker-class", "sync"]
