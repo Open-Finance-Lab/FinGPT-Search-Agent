@@ -1,15 +1,13 @@
 # backend/mcp_client/query_intent_analyzer.py
 
 """
-Query Intent Analyzer for Smart MCP Context Fetching
+Query Intent Analyzer for Smart MCP Context Fetching - DEPRECATED
 
-This module analyzes user queries to determine if they would benefit from
-automatic fetching of the current page content via Playwright MCP.
+This module was previously used to analyze user queries for auto-fetching context.
+It is now DEPRECATED as we have moved to an agentic model where the LLM decides
+when to fetch context based on available tools and metadata.
 
-Philosophy:
-- If the user is on a valid page, they likely want to ask about it.
-- We default to fetching context unless there is a clear signal NOT to (e.g. navigation).
-- "Good taste" means eliminating edge cases by making the common case (contextual) the default.
+This file is kept for reference but is no longer used in the main agent flow.
 """
 
 import re
