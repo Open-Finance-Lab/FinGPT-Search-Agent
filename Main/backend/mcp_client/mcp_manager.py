@@ -146,12 +146,21 @@ class MCPClientManager:
             command = config["command"]
             args = config.get("args", [])
             env = config.get("env", {})
-            
+
             self._log(f"[MCP DEBUG] {server_name} using Stdio transport: {command} {args}")
-            
-            # Merge with current environment
+
+            # Merge with current environment and substitute environment variables
             full_env = os.environ.copy()
-            full_env.update(env)
+            # Substitute ${VAR} or $VAR patterns in env values
+            for key, value in env.items():
+                if isinstance(value, str):
+                    # Simple substitution for ${VAR} and $VAR patterns
+                    import re
+                    def replace_var(match):
+                        var_name = match.group(1) or match.group(2)
+                        return os.environ.get(var_name, match.group(0))
+                    value = re.sub(r'\$\{([^}]+)\}|\$(\w+)', replace_var, value)
+                full_env[key] = value
 
             # Ensure Playwright-based servers can find the shared browser cache
             if "PLAYWRIGHT_BROWSERS_PATH" not in full_env:
