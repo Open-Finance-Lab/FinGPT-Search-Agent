@@ -18,23 +18,14 @@ import sys
 sys.path.insert(0, str(backend_dir))
 from datascraper.models_config import get_model_config
 
-# Import Playwright tools
-try:
-    from .playwright_tools import (
-        navigate_to_url,
-        get_page_text,
-        click_element,
-        fill_form_field,
-        press_enter,
-        get_current_url,
-        wait_for_element,
-        extract_links,
-        cleanup_browser
-    )
-    PLAYWRIGHT_AVAILABLE = True
-except ImportError:
-    logging.warning("Playwright tools not available. Install playwright to enable browser automation.")
-    PLAYWRIGHT_AVAILABLE = False
+# Playwright tools are now provided via MCP
+
+# Global MCP Manager is now initialized in apps.py on Django startup
+# We import it here for use in agent creation
+from .apps import get_global_mcp_manager
+
+# Fallback for backward compatibility (if global manager not initialized)
+_mcp_init_lock = None # Will be initialized as asyncio.Lock()
 
 USER_ONLY_MODELS = {"o3-mini"}
 
@@ -59,61 +50,20 @@ def apply_guardrails(prompt: str) -> str:
     return f"{prompt}\n\n{guardrails}"
 
 
-# Default prompt for standard usage
+# Single system prompt - tool-agnostic (MCP best practice)
 DEFAULT_PROMPT = (
     "You are a helpful financial assistant. "
-    "You have access to tools that can help you answer questions. "
-    "ALWAYS use the available tools when they are relevant to the user's request. "
-    "\n\nMATH: Use $ for inline, $$ for display equations.\n"
+    "You have access to various tools that can help you answer questions. "
+    "Use the available tools when they are relevant to the user's request.\n\n"
+    "When tools are available, prefer using them over making assumptions. "
+    "Always cite where information came from (e.g., 'Based on the current page...', 'After checking...').\n\n"
+    "Never fabricate information—if evidence is missing or uncertain, say so explicitly.\n\n"
+    "MATH: Use $ for inline, $$ for display equations.\n"
     "CORRECT: $$C = S_0 N(d_1) - K e^{-rT} N(d_2)$$\n"
     "WRONG: [...] or plain text\n"
     "CORRECT: where $S_0 = 100$\n"
     "WRONG: where S0 = 100"
 )
-
-# Enhanced prompt when Playwright tools are enabled
-PLAYWRIGHT_PROMPT = (
-    "You are a helpful financial assistant with web browsing capabilities. "
-    "You can navigate websites, extract information, click elements, and fill forms. "
-    "When asked to research financial information:\n"
-    "1. First, review the existing conversation and any provided web content for answers.\n"
-    "2. If the answer is present, respond using that context and mention where it came from.\n"
-    "3. Only navigate when additional, current, or corroborating information is required.\n"
-    "4. Use get_page_text to extract content after reaching a relevant page.\n"
-    "5. Use click_element, fill_form_field, and wait_for_element for interactive or dynamic elements.\n"
-    "6. Use extract_links to find additional pages within scope when necessary.\n"
-    "Never fabricate information—if evidence is missing or uncertain, say so explicitly. "
-    "\n\nMATH: Use $ for inline, $$ for display equations.\n"
-    "CORRECT: $$C = S_0 N(d_1) - K e^{-rT} N(d_2)$$\n"
-    "WRONG: [...] or plain text\n"
-    "CORRECT: where $S_0 = 100$\n"
-    "WRONG: where S0 = 100"
-)
-
-def create_domain_restricted_prompt(domain: str, current_url: str) -> str:
-    """Create a prompt for domain-restricted navigation."""
-    return (
-        f"You are a financial assistant helping the user navigate and understand: {domain}\n"
-        f"The user is currently on: {current_url}\n\n"
-        f"IMPORTANT - You can ONLY navigate within {domain}. Never attempt to visit external domains.\n\n"
-        "To answer user questions, follow this workflow:\n"
-        "1. Review the conversation history and any provided webpage text for the answer.\n"
-        "2. If the information is already available, respond using that context and note where it came from.\n"
-        f"3. If key details are missing or need confirmation, start by checking {current_url} with navigate_to_url().\n"
-        "4. Use get_page_text() to read the current page only when you need fresh details.\n"
-        "5. When the answer requires other pages on this domain:\n"
-        f"   - Use extract_links() to identify promising pages within {domain}\n"
-        "   - Navigate to the most relevant page using navigate_to_url()\n"
-        "   - Use get_page_text() and other tools to gather the required evidence\n"
-        "6. Continue navigating only while it adds verifiable information.\n\n"
-        "Do not guess. If you cannot find verified information after checking the provided context and allowed pages, explain what is missing.\n\n"
-        "Available tools:\n"
-        "- navigate_to_url(url): Visit a page within the domain\n"
-        "- get_page_text(): Read content from current page\n"
-        "- extract_links(): Get all links from current page\n"
-        "- click_element(selector): Click elements on the page\n"
-        "- fill_form_field(selector, value): Fill input fields\n"
-    )
 
 @asynccontextmanager
 async def create_fin_agent(model: str = "gpt-4o",
@@ -124,7 +74,7 @@ async def create_fin_agent(model: str = "gpt-4o",
                           user_timezone: Optional[str] = None,
                           user_time: Optional[str] = None):
     """
-    Create a financial agent with optional Playwright browser automation tools.
+    Create a financial agent with optional Playwright browser automation tools and MCP tools.
 
     Args:
         model: The OpenAI model to use (e.g., 'gpt-4o', 'o4-mini')
@@ -138,17 +88,29 @@ async def create_fin_agent(model: str = "gpt-4o",
     Yields:
         Agent instance configured with appropriate tools
     """
-    # Select appropriate prompt based on context
+    # Use single system prompt (MCP best practice - tool-agnostic)
     if system_prompt:
         instructions = system_prompt
-    elif use_playwright and PLAYWRIGHT_AVAILABLE and restricted_domain:
-        # Domain-restricted mode: emphasize staying on current website
-        instructions = create_domain_restricted_prompt(restricted_domain, current_url or restricted_domain)
-    elif use_playwright and PLAYWRIGHT_AVAILABLE:
-        # General Playwright mode
-        instructions = PLAYWRIGHT_PROMPT
     else:
         instructions = DEFAULT_PROMPT
+
+    # Add contextual metadata (not separate prompts)
+    context_additions = []
+
+    # Add current page context if available
+    if current_url:
+        context_additions.append(f"User is currently viewing: {current_url}")
+
+    # Add domain restriction as context (not as a different prompt)
+    if restricted_domain:
+        context_additions.append(
+            f"\nDOMAIN RESTRICTION: You can only navigate within {restricted_domain}. "
+            f"If the user requests external sites, suggest using Research mode instead."
+        )
+
+    # Append context additions to instructions
+    if context_additions:
+        instructions += "\n\n" + "\n".join(context_additions)
 
     # Add timezone and time information to instructions
     if user_timezone or user_time:
@@ -186,28 +148,116 @@ async def create_fin_agent(model: str = "gpt-4o",
         actual_model = model_config["model_name"]
         logging.info(f"Model resolution: {model} -> {actual_model}")
 
-    # Build tools list
+    # Build tools list - dynamically loaded from MCP (tool-agnostic)
     tools: List = []
-    if use_playwright and PLAYWRIGHT_AVAILABLE:
-        # Store domain restriction in global context for tools to access
-        from . import playwright_tools
-        playwright_tools._RESTRICTED_DOMAIN = restricted_domain
-        playwright_tools._CURRENT_URL = current_url
 
-        tools = [
-            navigate_to_url,
-            get_page_text,
-            click_element,
-            fill_form_field,
-            press_enter,
-            get_current_url,
-            wait_for_element,
-            extract_links
-        ]
-        domain_info = f" (restricted to {restricted_domain})" if restricted_domain else ""
-        logging.info(f"Playwright tools enabled{domain_info}: {len(tools)} tools available")
-    elif use_playwright and not PLAYWRIGHT_AVAILABLE:
-        logging.error("Playwright requested but not available. Running without browser tools.")
+    # MCP tools are always loaded if available (no special Playwright flag needed)
+    # The agent will see all available tools and decide which to use
+
+    # 2. Initialize and Add MCP Tools
+    # We import here to avoid circular dependencies or startup errors if mcp is not configured
+    from .mcp_manager import MCPClientManager
+    from .tool_wrapper import convert_mcp_tool_to_python_callable
+    import asyncio
+
+    global _mcp_init_lock
+
+    # Try to get the pre-initialized global MCP manager from Django startup
+    _mcp_manager = get_global_mcp_manager()
+
+    # Fallback: If global manager not available (e.g., during development or tests)
+    # initialize one on-demand
+    if _mcp_manager is None:
+        print("="*60)
+        print("[MCP DEBUG] ⚠ Global MCP manager not found!")
+        print("[MCP DEBUG] This should have been initialized on backend startup.")
+        print("[MCP DEBUG] Creating fallback instance for this request...")
+        print("="*60)
+
+        # Initialize lock if needed (per-process singleton)
+        if _mcp_init_lock is None:
+            _mcp_init_lock = asyncio.Lock()
+
+        async with _mcp_init_lock:
+            # Check again inside lock (another request might have initialized it)
+            _mcp_manager = get_global_mcp_manager()
+            if _mcp_manager is None:
+                print("[MCP DEBUG] Connecting to MCP servers (fallback mode)...")
+                manager = MCPClientManager()
+                try:
+                    # Connect to all configured MCP servers
+                    await manager.connect_to_servers()
+                    _mcp_manager = manager
+                    print("[MCP DEBUG] ✓ Fallback MCP Client Manager connected.")
+                    print("="*60)
+                except Exception as e:
+                    print(f"[MCP DEBUG] ✗ Failed to initialize MCP tools: {e}")
+                    print("="*60)
+                    logging.error(f"Failed to initialize MCP tools: {e}")
+                    # We don't fail the whole agent creation, just log and continue without MCP tools
+                    _mcp_manager = None
+    else:
+        print("[MCP DEBUG] ✓ Using pre-initialized global MCP manager")
+
+    # Use the manager if available
+    if _mcp_manager:
+        try:
+            # Fetch tools from the MCP manager's event loop
+            print("[MCP DEBUG] Fetching MCP tools...")
+
+            # Since we're in an async context but need to run on MCP's loop,
+            # we use run_coroutine_threadsafe to bridge the two event loops
+            if _mcp_manager._loop:
+                # Submit to MCP's event loop and wait for result
+                import concurrent.futures
+                future = asyncio.run_coroutine_threadsafe(
+                    _mcp_manager.get_all_tools(),
+                    _mcp_manager._loop
+                )
+                try:
+                    mcp_tools = future.result(timeout=10)  # 10 second timeout
+                except concurrent.futures.TimeoutError:
+                    print("[MCP DEBUG] ✗ Timeout fetching MCP tools")
+                    mcp_tools = []
+            else:
+                # Fallback: try direct await (might not work if sessions on different loop)
+                print("[MCP DEBUG] Warning: MCP loop not found, trying direct await")
+                mcp_tools = await _mcp_manager.get_all_tools()
+
+            if mcp_tools:
+                print(f"[MCP DEBUG] ✓ Agent configured with {len(mcp_tools)} MCP tools")
+                logging.info(f"Found {len(mcp_tools)} MCP tools from connected servers.")
+
+                # Convert MCP tools to Agent-compatible callables
+                for tool in mcp_tools:
+                    # We create a closure that calls _mcp_manager.execute_tool
+                    # The execute_tool must also run on MCP's event loop
+
+                    # Wrapper to bind the manager instance and handle cross-loop execution
+                    async def execute_mcp_tool(name, args, mgr=_mcp_manager):
+                        # Execute on MCP's event loop
+                        if mgr._loop:
+                            future = asyncio.run_coroutine_threadsafe(
+                                mgr.execute_tool(name, args),
+                                mgr._loop
+                            )
+                            return future.result(timeout=60)  # 60 second timeout for tool execution
+                        else:
+                            return await mgr.execute_tool(name, args)
+
+                    agent_tool = convert_mcp_tool_to_python_callable(tool, execute_mcp_tool)
+                    tools.append(agent_tool)
+
+                # Don't modify instructions based on which tools are loaded
+                # Agent discovers tools dynamically (MCP best practice)
+            else:
+                print("[MCP DEBUG] ⚠ No MCP tools found")
+
+        except Exception as e:
+            print(f"[MCP DEBUG] ✗ Error fetching/adding MCP tools: {e}")
+            logging.error(f"Error fetching/adding MCP tools: {e}", exc_info=True)
+
+    # Auto-fetch removed per user request - agent will decide when to navigate based on query
 
     try:
         # Create agent with or without tools
@@ -224,14 +274,13 @@ async def create_fin_agent(model: str = "gpt-4o",
         yield agent
 
     finally:
-        # Cleanup browser if it was used
-        if use_playwright and PLAYWRIGHT_AVAILABLE:
-            try:
-                # Clear domain restriction
-                from . import playwright_tools
-                playwright_tools._RESTRICTED_DOMAIN = None
-                playwright_tools._CURRENT_URL = None
+        # Cleanup
+        
+        # 1. Cleanup MCP connections
+        # We DO NOT cleanup the global MCP manager here, as it is shared across requests.
+        # It will be cleaned up when the process exits.
+        pass
 
-                await cleanup_browser()
-            except Exception as e:
-                logging.error(f"Browser cleanup error: {e}")
+        # 2. Cleanup browser if it was used
+        # 2. Cleanup browser (Handled by MCP server now)
+        pass

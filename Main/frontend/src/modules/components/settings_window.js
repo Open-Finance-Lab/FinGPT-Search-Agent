@@ -54,8 +54,7 @@ function createSettingsWindow(isFixedModeRef, settingsButton, positionModeButton
         modelContent.innerHTML = '';
 
         try {
-            // Fetch models from backend
-            await fetchAvailableModels();
+            // Use already-fetched models (fetched in main.js on startup)
             const models = getAvailableModels();
 
             const modelDetails = getModelDetails();
@@ -88,7 +87,9 @@ function createSettingsWindow(isFixedModeRef, settingsButton, positionModeButton
     }
 
     // Populate model list when settings window is created
+    // Models are already fetched in main.js, this just populates the UI
     populateModelList();
+
 
     modelContainer.appendChild(modelContent);
     settings_window.appendChild(modelContainer);
@@ -128,7 +129,7 @@ function createSettingsWindow(isFixedModeRef, settingsButton, positionModeButton
     // Set workerSrc to load PDF.js worker from CDN
     // pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.worker.min.js';
     async function extractTextFromPDF(file) {
-        
+
         // Access global libraries from window
         // Check if libraries are available
         // In newer versions of PDF.js, the library might be accessible as window.pdfjsLib or just pdf
@@ -137,7 +138,7 @@ function createSettingsWindow(isFixedModeRef, settingsButton, positionModeButton
         console.log("PDF.js loaded:", typeof pdfjsLib !== 'undefined');
         console.log("Mammoth loaded:", typeof window.mammoth !== 'undefined');
 
-        
+
         // Set worker path - this is crucial for PDF.js to work
         if (pdfjsLib) {
             pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
@@ -157,9 +158,9 @@ function createSettingsWindow(isFixedModeRef, settingsButton, positionModeButton
     }
 
     async function extractTextFromDocx(file) {
-    const arrayBuffer = await file.arrayBuffer();
-    const result = await mammoth.extractRawText({ arrayBuffer });
-    return result.value;
+        const arrayBuffer = await file.arrayBuffer();
+        const result = await mammoth.extractRawText({ arrayBuffer });
+        return result.value;
     }
 
 
@@ -375,7 +376,7 @@ function createSettingsWindow(isFixedModeRef, settingsButton, positionModeButton
     // Append elements to settings window
     // settings_window.appendChild(mcpLabel);
     // settings_window.appendChild(ragSectionContainer);
-    
+
     settingsButton.onclick = function (event) {
         event.stopPropagation();
         const rect = settingsButton.getBoundingClientRect();

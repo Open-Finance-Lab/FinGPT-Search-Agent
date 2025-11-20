@@ -25,6 +25,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.cache import cache_page
 from django.http import JsonResponse, StreamingHttpResponse, HttpRequest
 from django.conf import settings
 
@@ -894,6 +895,9 @@ def get_memory_stats(request: HttpRequest) -> JsonResponse:
     except Exception as e:
         logger.error(f"Get stats error: {e}", exc_info=True)
         return JsonResponse({'stats': {"error": str(e), "using_unified_context": False}}, status=500)
+
+
+# init_page_context endpoint removed - agent decides when to scrape based on query
 
 
 # ============================================================================
