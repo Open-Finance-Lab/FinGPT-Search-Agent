@@ -216,7 +216,8 @@ def chat_response(request: HttpRequest) -> JsonResponse:
                     model=model,
                     use_playwright=True,
                     restricted_domain=restricted_domain,
-                    current_url=current_url
+                    current_url=current_url,
+            auto_fetch_page=True
                 )
 
                 responses[model] = response
@@ -439,7 +440,8 @@ def agent_chat_response(request: HttpRequest) -> JsonResponse:
                     model=model,
                     use_playwright=use_playwright,
                     restricted_domain=None,  # No restriction in agent mode
-                    current_url=current_url
+                    current_url=current_url,
+                    auto_fetch_page=True
                 )
 
                 responses[model] = response
@@ -559,7 +561,8 @@ def chat_response_stream(request: HttpRequest) -> StreamingHttpResponse:
                     model=model,
                     use_playwright=True,
                     restricted_domain=restricted_domain,
-                    current_url=current_url
+                    current_url=current_url,
+                    auto_fetch_page=True
                 )
 
                 # Send response

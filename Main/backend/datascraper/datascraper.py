@@ -560,7 +560,7 @@ def create_advanced_response(
         if stream:
             # Return async generator for streaming
             return _create_advanced_response_stream_async(
-                user_input=user_input,
+            user_input=user_input,
                 message_list=message_list,
                 actual_model=actual_model,
                 preferred_urls=preferred_urls,
@@ -694,7 +694,7 @@ def create_advanced_response_streaming(
     return _stream(), state
 
 
-def create_agent_response(user_input: str, message_list: list[dict], model: str = "o4-mini", use_playwright: bool = False, restricted_domain: str = None, current_url: str = None, user_timezone: str = None, user_time: str = None) -> str:
+def create_agent_response(user_input: str, message_list: list[dict], model: str = "o4-mini", use_playwright: bool = False, restricted_domain: str = None, current_url: str = None, auto_fetch_page: bool = False, user_timezone: str = None, user_time: str = None) -> str:
     """
     Creates a response using the Agent with tools (Playwright, etc.).
 
@@ -708,6 +708,7 @@ def create_agent_response(user_input: str, message_list: list[dict], model: str 
         use_playwright: Whether to enable Playwright browser automation tools
         restricted_domain: Domain restriction for Playwright (e.g., "finance.yahoo.com")
         current_url: Current webpage URL for context
+        auto_fetch_page: Enable intelligent auto-fetching of current page content
         user_timezone: User's IANA timezone
         user_time: User's current time in ISO format
 
@@ -734,7 +735,7 @@ def create_agent_response(user_input: str, message_list: list[dict], model: str 
 
         logging.info(f"[AGENT] Attempting agent response with {model} ({actual_model_name})")
 
-        response = asyncio.run(_create_agent_response_async(user_input, message_list, model, use_playwright, restricted_domain, current_url, user_timezone, user_time))
+        response = asyncio.run(_create_agent_response_async(user_input, message_list, model, use_playwright, restricted_domain, current_url, auto_fetch_page, user_timezone, user_time))
         return response
 
     except Exception as e:
@@ -742,7 +743,7 @@ def create_agent_response(user_input: str, message_list: list[dict], model: str 
         logging.info(f"FALLBACK: Using regular response with {model} ({actual_model_name})")
         return create_response(user_input, message_list, model)
 
-async def _create_agent_response_async(user_input: str, message_list: list[dict], model: str, use_playwright: bool = False, restricted_domain: str = None, current_url: str = None, user_timezone: str = None, user_time: str = None) -> str:
+async def _create_agent_response_async(user_input: str, message_list: list[dict], model: str, use_playwright: bool = False, restricted_domain: str = None, current_url: str = None, auto_fetch_page: bool = False, user_timezone: str = None, user_time: str = None) -> str:
     """
     Async helper for creating agent response with tools.
 
@@ -753,6 +754,7 @@ async def _create_agent_response_async(user_input: str, message_list: list[dict]
         use_playwright: Whether to enable Playwright browser automation tools
         restricted_domain: Domain restriction for Playwright navigation
         current_url: Current webpage URL for context
+        auto_fetch_page: Enable intelligent auto-fetching of current page content
         user_timezone: User's IANA timezone
         user_time: User's current time in ISO format
 
@@ -791,9 +793,11 @@ async def _create_agent_response_async(user_input: str, message_list: list[dict]
     # Create agent with tools and domain restriction
     async with create_fin_agent(
         model=model,
+            user_input=user_input,
         use_playwright=use_playwright,
         restricted_domain=restricted_domain,
         current_url=current_url,
+            auto_fetch_page=auto_fetch_page,
         user_timezone=user_timezone,
         user_time=user_time
     ) as agent:
@@ -820,6 +824,7 @@ def create_agent_response_stream(
     use_playwright: bool = False,
     restricted_domain: str | None = None,
     current_url: str | None = None,
+    auto_fetch_page: bool = False,
     user_timezone: str | None = None,
     user_time: str | None = None
 ) -> Tuple[AsyncIterator[str], Dict[str, str]]:
@@ -875,9 +880,11 @@ def create_agent_response_stream(
 
         async with create_fin_agent(
             model=model,
+            user_input=user_input,
             use_playwright=use_playwright,
             restricted_domain=restricted_domain,
             current_url=current_url,
+            auto_fetch_page=auto_fetch_page,
             user_timezone=user_timezone,
             user_time=user_time
         ) as agent:

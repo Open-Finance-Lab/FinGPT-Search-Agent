@@ -3,6 +3,7 @@
     "browserName": "chromium",
     "headless": true,
     "launchOptions": {
+      "executablePath": "/usr/bin/chromium-bundled",
       "args": [
         "--no-sandbox",
         "--disable-setuid-sandbox",
