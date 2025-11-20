@@ -6,59 +6,42 @@ Query Intent Analyzer for Smart MCP Context Fetching
 This module analyzes user queries to determine if they would benefit from
 automatic fetching of the current page content via Playwright MCP.
 
-Key detection patterns:
-1. Vague queries lacking specific entities
-2. Contextual indicators (pronouns, demonstratives)
-3. Time-sensitive language
-4. Questions without clear scope
+Philosophy:
+- If the user is on a valid page, they likely want to ask about it.
+- We default to fetching context unless there is a clear signal NOT to (e.g. navigation).
+- "Good taste" means eliminating edge cases by making the common case (contextual) the default.
 """
 
 import re
-from typing import Optional
+from typing import Optional, Dict, Any
 import logging
 
 logger = logging.getLogger(__name__)
 
-# Patterns for detecting queries that likely need page context
-VAGUE_TIME_PATTERNS = [
-    r'\btoday\'?s?\b',
-    r'\bcurrent\b',
-    r'\bnow\b',
-    r'\blatest\b',
-    r'\brecent\b',
-    r'\bthis\s+(week|month|year|morning|afternoon)\b',
+# Patterns that indicate the user explicitly wants to IGNORE the current page
+IGNORE_CONTEXT_PATTERNS = [
+    r'^ignore\s+(?:this\s+)?(?:page|site|context)\b',
+    r'^don\'?t\s+use\s+(?:this\s+)?(?:page|site|context)\b',
 ]
 
-# Contextual indicators suggesting user is referring to current page
-CONTEXTUAL_INDICATORS = [
-    r'\bthis\s+(page|site|website|article)\b',
+# Patterns that indicate the user explicitly wants to go somewhere else
+NAVIGATION_INTENT_PATTERNS = [
+    r'^(?:please\s+)?(?:navigate|go)\s+to\b',
+    r'^(?:please\s+)?open\s+(?:url|website|page)\b',
+    r'^(?:please\s+)?search\s+(?:for|google|bing|web)\b',
+    r'^(?:please\s+)?google\b',
+]
+
+# Patterns that strongly suggest we MUST have the context (overrides navigation checks if ambiguous)
+CONTEXT_REQUIRED_PATTERNS = [
+    r'\bthis\s+(?:page|site|website|article)\b',
     r'\bhere\b',
     r'\bon\s+this\b',
-    r'\bwhat\'?s\s+this\b',
-    r'\bwhat\s+does\s+this\b',
-    r'\bsummarize\s+(this|it)\b',
-    r'\bexplain\s+(this|it)\b',
-    r'\btell\s+me\s+about\s+this\b',
-]
-
-# Vague question starters without clear entities
-VAGUE_QUESTION_PATTERNS = [
-    r'^how\'?s\s+(the\s+)?\w+\s*$',  # "how's the market", "how's stock"
-    r'^what\'?s\s+(the\s+)?\w+\s*$',  # "what's this", "what's the news"
-    r'^show\s+me\b',
-    r'^give\s+me\b',
-]
-
-# Specific entities that indicate a focused query (shouldn't auto-fetch)
-SPECIFIC_ENTITY_PATTERNS = [
-    r'\b[A-Z]{2,5}\b',  # Stock tickers (AAPL, TSLA, etc)
-    r'\$[\d,]+',  # Dollar amounts
-    r'\b\d+\.?\d*%',  # Percentages
-    r'\b(Apple|Microsoft|Google|Amazon|Tesla|Meta|Netflix)\b',  # Major companies
-    r'\bP/E\s+ratio\b',
-    r'\bmarket\s+cap\b',
-    r'\bEPS\b',
-    r'\bROI\b',
+    r'\bsummarize\b',
+    r'\bexplain\b',
+    r'\bread\b',
+    r'\banalyze\b',
+    r'\bwhat\s+is\s+this\b',
 ]
 
 def _has_pattern_match(text: str, patterns: list[str]) -> bool:
@@ -68,18 +51,7 @@ def _has_pattern_match(text: str, patterns: list[str]) -> bool:
             return True
     return False
 
-def _is_very_short_query(text: str) -> bool:
-    """Determine if query is very short (likely vague)."""
-    # Remove punctuation and whitespace
-    cleaned = re.sub(r'[^\w\s]', '', text).strip()
-    word_count = len(cleaned.split())
-    return word_count <= 4
-
-def _has_specific_entities(text: str) -> bool:
-    """Check if query contains specific financial entities."""
-    return _has_pattern_match(text, SPECIFIC_ENTITY_PATTERNS)
-
-def analyze_query_intent(query: str) -> dict:
+def analyze_query_intent(query: str) -> Dict[str, Any]:
     """
     Analyze a user query to determine its intent and context needs.
     
@@ -87,67 +59,58 @@ def analyze_query_intent(query: str) -> dict:
         query: The user's question/prompt
         
     Returns:
-        Dict with analysis results:
-        {
-            'is_vague': bool,
-            'has_contextual_indicators': bool,
-            'is_time_sensitive': bool,
-            'has_specific_entities': bool,
-            'needs_page_context': bool,
-            'confidence': float (0-1)
-        }
+        Dict with analysis results
     """
     query_lower = query.lower().strip()
     
-    # Analyze different aspects
-    is_vague_time = _has_pattern_match(query_lower, VAGUE_TIME_PATTERNS)
-    has_contextual = _has_pattern_match(query_lower, CONTEXTUAL_INDICATORS)
-    is_vague_question = _has_pattern_match(query_lower, VAGUE_QUESTION_PATTERNS)
-    is_short = _is_very_short_query(query)
-    has_entities = _has_specific_entities(query)
+    # 1. Check for explicit IGNORE intent (highest priority)
+    if _has_pattern_match(query_lower, IGNORE_CONTEXT_PATTERNS):
+        logger.debug(f"Query '{query[:50]}...' matched IGNORE pattern")
+        return {
+            'is_vague': False,
+            'has_contextual_indicators': False,
+            'is_time_sensitive': False,
+            'has_specific_entities': False,
+            'needs_page_context': False,
+            'confidence': 1.0,
+            'reasons': ["explicit_ignore"]
+        }
     
-    # Determine if vague overall
-    is_vague = (is_vague_question or is_short) and not has_entities
+    # 2. Check for explicit navigation/search intent
+    has_navigation_intent = _has_pattern_match(query_lower, NAVIGATION_INTENT_PATTERNS)
     
-    # Calculate confidence score
-    confidence = 0.0
+    # 3. Check for explicit context markers
+    has_context_markers = _has_pattern_match(query_lower, CONTEXT_REQUIRED_PATTERNS)
+    
+    # 4. Determine if we need context
+    # Default: YES, unless we are navigating away AND don't have explicit "this page" markers.
+    needs_page_context = True
+    
+    if has_navigation_intent and not has_context_markers:
+        needs_page_context = False
+        
+    # Confidence is high by default in this new model
+    confidence = 0.9 if needs_page_context else 0.9
+    
     reasons = []
-    
-    if has_contextual:
-        confidence += 0.5
-        reasons.append("contextual_indicators")
-    
-    if is_vague_time:
-        confidence += 0.3
-        reasons.append("time_sensitive")
-    
-    if is_vague:
-        confidence += 0.3
-        reasons.append("vague_query")
-    
-    # Reduce confidence if specific entities present
-    if has_entities:
-        confidence *= 0.3
-        reasons.append("has_specific_entities (reducing)")
-    
-    # Normalize confidence to 0-1
-    confidence = min(confidence, 1.0)
-    
-    # Decision: needs page context if confidence > 0.4
-    needs_context = confidence > 0.4
-    
+    if has_context_markers:
+        reasons.append("explicit_context_markers")
+    if has_navigation_intent:
+        reasons.append("navigation_intent")
+    if needs_page_context and not has_context_markers:
+        reasons.append("default_context_assumption")
+
     logger.debug(
         f"Query intent analysis: query='{query[:50]}...', "
-        f"needs_context={needs_context}, confidence={confidence:.2f}, "
-        f"reasons={reasons}"
+        f"needs_context={needs_page_context}, reasons={reasons}"
     )
     
     return {
-        'is_vague': is_vague,
-        'has_contextual_indicators': has_contextual,
-        'is_time_sensitive': is_vague_time,
-        'has_specific_entities': has_entities,
-        'needs_page_context': needs_context,
+        'is_vague': False,
+        'has_contextual_indicators': has_context_markers,
+        'is_time_sensitive': False,
+        'has_specific_entities': False,
+        'needs_page_context': needs_page_context,
         'confidence': confidence,
         'reasons': reasons
     }
@@ -168,29 +131,24 @@ def should_fetch_page_context(
     Returns:
         True if we should auto-fetch the current page via Playwright MCP
     """
-    # Only auto-fetch in thinking mode with a valid URL
-    if mode.lower() != "thinking":
-        logger.debug(f"Not fetching - mode is {mode}, not thinking")
-        return False
-    
+    # 1. Basic Validity Checks
     if not current_url or current_url == "about:blank":
         logger.debug("Not fetching - no valid current URL")
         return False
-    
-    # Analyze the query
+        
+    # 2. Mode Check
+    if mode.lower() not in ["thinking", "normal", "agent"]:
+        pass
+
+    # 3. Analyze Query
     analysis = analyze_query_intent(query)
     
     should_fetch = analysis['needs_page_context']
     
     if should_fetch:
         logger.info(
-            f"Will auto-fetch page context: confidence={analysis['confidence']:.2f}, "
-            f"reasons={analysis['reasons']}"
-        )
-    else:
-        logger.debug(
-            f"Will NOT auto-fetch: confidence={analysis['confidence']:.2f}, "
-            f"reasons={analysis['reasons']}"
+            f"Will auto-fetch page context: {current_url} "
+            f"(Reasons: {analysis['reasons']})"
         )
     
     return should_fetch
