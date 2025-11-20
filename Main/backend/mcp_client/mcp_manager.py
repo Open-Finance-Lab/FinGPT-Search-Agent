@@ -273,7 +273,7 @@ class MCPClientManager:
             # Execute the tool
             self._log(f"[MCP TOOL EXEC] Calling {server_name} server...", force=True)
             result: CallToolResult = await session.call_tool(tool_name, arguments)
-            self._log(f"[MCP TOOL EXEC] ✓ Server responded", force=True)
+            self._log(f"[MCP TOOL EXEC] Server responded", force=True)
 
             # Detailed response logging
             self._log("-" * 80, force=True)
@@ -323,25 +323,25 @@ class MCPClientManager:
 
             # Warn if payload is large
             if total_size > 10240:
-                self._log(f"[MCP TOOL WARNING] ⚠ Large payload: {total_size/1024:.1f} KB", force=True)
-                self._log(f"[MCP TOOL WARNING] ⚠ Exceeds OpenAI tracing limit (10KB)", force=True)
-                self._log(f"[MCP TOOL WARNING] ⚠ Tracing errors expected but tool execution will succeed", force=True)
+                self._log(f"[MCP TOOL WARNING] Large payload: {total_size/1024:.1f} KB", force=True)
+                self._log(f"[MCP TOOL WARNING] Exceeds OpenAI tracing limit (10KB)", force=True)
+                self._log(f"[MCP TOOL WARNING] Tracing errors expected but tool execution will succeed", force=True)
 
             # Success indicator
-            self._log(f"[MCP TOOL SUCCESS] ✓ {tool_name} completed successfully", force=True)
+            self._log(f"[MCP TOOL SUCCESS] {tool_name} completed successfully", force=True)
             self._log("=" * 80, force=True)
 
             return result
 
         except Exception as e:
             self._log("-" * 80, force=True)
-            self._log(f"[MCP TOOL ERROR] ✗ Execution failed for {tool_name}", force=True)
-            self._log(f"[MCP TOOL ERROR] ✗ Error type: {type(e).__name__}", force=True)
-            self._log(f"[MCP TOOL ERROR] ✗ Error message: {str(e)}", force=True)
+            self._log(f"[MCP TOOL ERROR] Execution failed for {tool_name}", force=True)
+            self._log(f"[MCP TOOL ERROR] Error type: {type(e).__name__}", force=True)
+            self._log(f"[MCP TOOL ERROR] Error message: {str(e)}", force=True)
 
             # Try to get more details
             if hasattr(e, '__dict__'):
-                self._log(f"[MCP TOOL ERROR] ✗ Error details: {e.__dict__}", force=True)
+                self._log(f"[MCP TOOL ERROR] Error details: {e.__dict__}", force=True)
 
             self._log("=" * 80, force=True)
             raise
