@@ -273,7 +273,7 @@ class MCPClientManager:
             # Execute the tool
             self._log(f"[MCP TOOL EXEC] Calling {server_name} server...", force=True)
             result: CallToolResult = await session.call_tool(tool_name, arguments)
-            self._log(f"[MCP TOOL EXEC] ✓ Server responded", force=True)
+            self._log(f"[MCP TOOL EXEC] Server responded", force=True)
 
             # Detailed response logging
             self._log("-" * 80, force=True)
