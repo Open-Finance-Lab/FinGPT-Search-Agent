@@ -25,6 +25,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.cache import cache_page
 from django.http import JsonResponse, StreamingHttpResponse, HttpRequest
 from django.conf import settings
 
@@ -215,7 +216,8 @@ def chat_response(request: HttpRequest) -> JsonResponse:
                     model=model,
                     use_playwright=True,
                     restricted_domain=restricted_domain,
-                    current_url=current_url
+                    current_url=current_url,
+            auto_fetch_page=True
                 )
 
                 responses[model] = response
@@ -438,7 +440,8 @@ def agent_chat_response(request: HttpRequest) -> JsonResponse:
                     model=model,
                     use_playwright=use_playwright,
                     restricted_domain=None,  # No restriction in agent mode
-                    current_url=current_url
+                    current_url=current_url,
+                    auto_fetch_page=True
                 )
 
                 responses[model] = response
@@ -519,6 +522,9 @@ def chat_response_stream(request: HttpRequest) -> StreamingHttpResponse:
         # Get session ID
         session_id = _get_session_id(request)
 
+        user_timezone = request.GET.get('user_timezone')
+        user_time = request.GET.get('user_time')
+
         # Initialize context
         context_mgr = get_context_manager()
         integration = get_context_integration()
@@ -526,8 +532,8 @@ def chat_response_stream(request: HttpRequest) -> StreamingHttpResponse:
             session_id=session_id,
             mode=ContextMode.THINKING,
             current_url=current_url,
-            user_timezone=request.GET.get('user_timezone'),
-            user_time=request.GET.get('user_time')
+            user_timezone=user_timezone,
+            user_time=user_time
         )
 
         # Add user message
@@ -550,20 +556,57 @@ def chat_response_stream(request: HttpRequest) -> StreamingHttpResponse:
 
                 import time
                 start_time = time.time()
+                aggregated_chunks: List[str] = []
 
-                # Generate response (non-streaming for now)
-                response = ds.create_agent_response(
+                stream_generator, stream_state = ds.create_agent_response_stream(
                     user_input=question,
                     message_list=messages,
                     model=model,
                     use_playwright=True,
                     restricted_domain=restricted_domain,
-                    current_url=current_url
+                    current_url=current_url,
+                    auto_fetch_page=True,
+                    user_timezone=user_timezone,
+                    user_time=user_time
                 )
 
-                # Send response
-                yield _build_status_frame("Drafting answer")
-                yield f'data: {json.dumps({"content": response, "done": False})}\n\n'.encode('utf-8')
+                previous_loop = None
+                try:
+                    previous_loop = asyncio.get_event_loop()
+                except RuntimeError:
+                    previous_loop = None
+
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                stream_iter = stream_generator.__aiter__()
+                drafting_sent = False
+
+                try:
+                    while True:
+                        chunk = loop.run_until_complete(stream_iter.__anext__())
+                        if not chunk:
+                            continue
+
+                        aggregated_chunks.append(chunk)
+                        if not drafting_sent:
+                            drafting_sent = True
+                            yield _build_status_frame("Drafting answer")
+
+                        yield f'data: {json.dumps({"content": chunk, "done": False})}\n\n'.encode('utf-8')
+                except StopAsyncIteration:
+                    pass
+                finally:
+                    loop.close()
+                    if previous_loop is not None:
+                        asyncio.set_event_loop(previous_loop)
+                    else:
+                        asyncio.set_event_loop(None)
+
+                final_response = ""
+                if stream_state:
+                    final_response = stream_state.get("final_output") or ""
+                if not final_response and aggregated_chunks:
+                    final_response = "".join(aggregated_chunks)
 
                 # Persist Playwright scraped context, if any
                 for entry in ds.get_last_playwright_context() or []:
@@ -578,9 +621,9 @@ def chat_response_stream(request: HttpRequest) -> StreamingHttpResponse:
                 response_time_ms = int((time.time() - start_time) * 1000)
                 context_mgr.add_assistant_message(
                     session_id=session_id,
-                    content=response,
+                    content=final_response,
                     model=model,
-                    tools_used=["playwright"],
+                    tools_used=["playwright"] if restricted_domain else [],
                     response_time_ms=response_time_ms
                 )
 
@@ -602,7 +645,7 @@ def chat_response_stream(request: HttpRequest) -> StreamingHttpResponse:
                 yield f'data: {json.dumps(final_data)}\n\n'.encode('utf-8')
 
                 # Log interaction
-                _log_interaction("normal_stream", current_url, question, response)
+                _log_interaction("normal_stream", current_url, question, final_response)
 
             except Exception as e:
                 logger.error(f"Streaming error: {e}", exc_info=True)
@@ -894,6 +937,9 @@ def get_memory_stats(request: HttpRequest) -> JsonResponse:
     except Exception as e:
         logger.error(f"Get stats error: {e}", exc_info=True)
         return JsonResponse({'stats': {"error": str(e), "using_unified_context": False}}, status=500)
+
+
+# init_page_context endpoint removed - agent decides when to scrape based on query
 
 
 # ============================================================================

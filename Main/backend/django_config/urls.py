@@ -35,5 +35,4 @@ urlpatterns = [
     path('log_question/', views.log_question, name='log_question'),
     path('api/get_memory_stats/', views.get_memory_stats, name='get_memory_stats'),
     path('api/get_available_models/', views.get_available_models, name='get_available_models'),
-
 ]
