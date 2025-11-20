@@ -69,11 +69,35 @@ async def fetch_current_page_content(url: str, mcp_manager) -> Optional[str]:
         
         snapshot_tool = None
         navigate_tool = None
-        for tool in tools:
-            if 'snapshot' in tool.name.lower():
-                snapshot_tool = tool.name
-            if 'navigate' in tool.name.lower():
-                navigate_tool = tool.name
+        
+        # Debug available tools
+        tool_names = [t.name for t in tools]
+        logging.info(f"[SMART CONTEXT] Available tools: {tool_names}")
+
+        # 1. Try exact standard names (Deterministic)
+        # This avoids "forcing whatever tool" by explicitly picking the correct ones if available
+        tool_map = {t.name: t for t in tools}
+        if "browser_navigate" in tool_map:
+            navigate_tool = "browser_navigate"
+        if "browser_snapshot" in tool_map:
+            snapshot_tool = "browser_snapshot"
+
+        # 2. Fallback to fuzzy search if standard tools are missing
+        if not navigate_tool or not snapshot_tool:
+            logging.info("[SMART CONTEXT] Standard tools not found, falling back to fuzzy search...")
+            for tool in tools:
+                name = tool.name.lower()
+                
+                # Find snapshot tool
+                if not snapshot_tool and 'snapshot' in name:
+                    snapshot_tool = tool.name
+                
+                # Find navigate tool
+                if not navigate_tool and 'navigate' in name:
+                    # Exclude back/forward navigation tools
+                    if 'back' in name or 'forward' in name:
+                        continue
+                    navigate_tool = tool.name
         
         if not snapshot_tool or not navigate_tool:
             logging.warning("[SMART CONTEXT] Missing Playwright tools (navigate or snapshot)")
@@ -91,27 +115,59 @@ async def fetch_current_page_content(url: str, mcp_manager) -> Optional[str]:
         else:
             await mcp_manager.execute_tool(navigate_tool, nav_args)
 
-        # 2. Take snapshot
-        logging.info(f"[SMART CONTEXT] Taking snapshot...")
-        args = {}
-        if mcp_manager._loop:
-            future = asyncio.run_coroutine_threadsafe(
-                mcp_manager.execute_tool(snapshot_tool, args), mcp_manager._loop
-            )
-            result = future.result(timeout=30)
-        else:
-            result = await mcp_manager.execute_tool(snapshot_tool, args)
+        # 2. Wait for SPA hydration (critical for sites like Yahoo Finance)
+        # The 'navigate' tool usually waits for 'load' event, but dynamic content comes later.
+        logging.info("[SMART CONTEXT] Waiting for page hydration...")
+        await asyncio.sleep(2)
+
+        # 3. Take snapshot with retry logic
+        # Sometimes the first snapshot is blank or incomplete
+        max_retries = 3
+        final_content = None
+
+        for attempt in range(max_retries):
+            logging.info(f"[SMART CONTEXT] Taking snapshot (attempt {attempt+1}/{max_retries})...")
+            args = {}
+            if mcp_manager._loop:
+                future = asyncio.run_coroutine_threadsafe(
+                    mcp_manager.execute_tool(snapshot_tool, args), mcp_manager._loop
+                )
+                result = future.result(timeout=30)
+            else:
+                result = await mcp_manager.execute_tool(snapshot_tool, args)
+            
+            content_text = ""
+            if hasattr(result, 'content') and isinstance(result.content, list):
+                text_parts = []
+                for item in result.content:
+                    if item.type == 'text':
+                        text_parts.append(item.text)
+                if text_parts:
+                    content_text = "\\n".join(text_parts)
+            
+            # Validate content
+            # Check if it's "about:blank" or too short to be useful
+            is_valid = True
+            if not content_text:
+                is_valid = False
+            elif len(content_text) < 200: # Arbitrary threshold for "empty-ish" page
+                is_valid = False
+            elif "about:blank" in content_text[:100]: # Check start of content
+                is_valid = False
+            
+            if is_valid:
+                final_content = content_text
+                break
+            
+            logging.warning(f"[SMART CONTEXT] Snapshot attempt {attempt+1} was poor (len={len(content_text)}), retrying...")
+            await asyncio.sleep(2) # Wait before retry
+
+        if final_content:
+            return final_content
         
-        if hasattr(result, 'content') and isinstance(result.content, list):
-            text_parts = []
-            for item in result.content:
-                if item.type == 'text':
-                    text_parts.append(item.text)
-            if text_parts:
-                return "\\n".join(text_parts)
-        
-        logging.warning(f"[SMART CONTEXT] Unexpected result format: {type(result)}")
+        logging.warning(f"[SMART CONTEXT] Failed to get valid content after {max_retries} attempts")
         return None
+
     except Exception as e:
         logging.error(f"[SMART CONTEXT] Error fetching page {url}: {e}", exc_info=True)
         return None
@@ -265,7 +321,7 @@ async def create_fin_agent(model: str = "gpt-4o",
     # initialize one on-demand
     if _mcp_manager is None:
         print("="*60)
-        print("[MCP DEBUG] ⚠ Global MCP manager not found!")
+        print("[MCP DEBUG] Global MCP manager not found!")
         print("[MCP DEBUG] This should have been initialized on backend startup.")
         print("[MCP DEBUG] Creating fallback instance for this request...")
         print("="*60)
@@ -284,16 +340,16 @@ async def create_fin_agent(model: str = "gpt-4o",
                     # Connect to all configured MCP servers
                     await manager.connect_to_servers()
                     _mcp_manager = manager
-                    print("[MCP DEBUG] ✓ Fallback MCP Client Manager connected.")
+                    print("[MCP DEBUG] Fallback MCP Client Manager connected.")
                     print("="*60)
                 except Exception as e:
-                    print(f"[MCP DEBUG] ✗ Failed to initialize MCP tools: {e}")
+                    print(f"[MCP DEBUG] Failed to initialize MCP tools: {e}")
                     print("="*60)
                     logging.error(f"Failed to initialize MCP tools: {e}")
                     # We don't fail the whole agent creation, just log and continue without MCP tools
                     _mcp_manager = None
     else:
-        print("[MCP DEBUG] ✓ Using pre-initialized global MCP manager")
+        print("[MCP DEBUG] Using pre-initialized global MCP manager")
 
     # Use the manager if available
     if _mcp_manager:
@@ -313,7 +369,7 @@ async def create_fin_agent(model: str = "gpt-4o",
                 try:
                     mcp_tools = future.result(timeout=10)  # 10 second timeout
                 except concurrent.futures.TimeoutError:
-                    print("[MCP DEBUG] ✗ Timeout fetching MCP tools")
+                    print("[MCP DEBUG] Timeout fetching MCP tools")
                     mcp_tools = []
             else:
                 # Fallback: try direct await (might not work if sessions on different loop)
@@ -321,7 +377,7 @@ async def create_fin_agent(model: str = "gpt-4o",
                 mcp_tools = await _mcp_manager.get_all_tools()
 
             if mcp_tools:
-                print(f"[MCP DEBUG] ✓ Agent configured with {len(mcp_tools)} MCP tools")
+                print(f"[MCP DEBUG] Agent configured with {len(mcp_tools)} MCP tools")
                 logging.info(f"Found {len(mcp_tools)} MCP tools from connected servers.")
 
                 # Convert MCP tools to Agent-compatible callables
@@ -347,10 +403,10 @@ async def create_fin_agent(model: str = "gpt-4o",
                 # Don't modify instructions based on which tools are loaded
                 # Agent discovers tools dynamically (MCP best practice)
             else:
-                print("[MCP DEBUG] ⚠ No MCP tools found")
+                print("[MCP DEBUG] No MCP tools found")
 
         except Exception as e:
-            print(f"[MCP DEBUG] ✗ Error fetching/adding MCP tools: {e}")
+            print(f"[MCP DEBUG] Error fetching/adding MCP tools: {e}")
             logging.error(f"Error fetching/adding MCP tools: {e}", exc_info=True)
 
     # Auto-fetch removed per user request - agent will decide when to navigate based on query

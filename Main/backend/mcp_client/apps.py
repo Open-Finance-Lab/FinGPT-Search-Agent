@@ -103,39 +103,15 @@ class MCPClientConfig(AppConfig):
                 log(f"[MCP DEBUG] Found {server_count} MCP servers in config")
 
                 if server_count > 0:
-                    log("[MCP DEBUG] Initiating connections to MCP servers...")
-                    await manager.connect_to_servers()
-
-                    tools = await manager.get_all_tools()
-                    if verbose:
-                        print("-" * 60)
-                        print(f"[MCP DEBUG] ✓ Successfully connected to all MCP servers!")
-                        print(f"[MCP DEBUG] ✓ Total tools discovered: {len(tools)}")
-                        print("-" * 60)
-
-                    # Store the manager globally
-                    with _global_mcp_lock:
-                        set_global_mcp_manager(manager)
-
-                    if verbose:
-                        print("-" * 60)
-                        print("[MCP DEBUG] ✓ Global MCP Manager initialized and ready!")
-                        print("[MCP DEBUG] ✓ MCP connections will persist for process lifetime")
-                        print("=" * 60 + "\n")
-                    else:
-                        print(f"[MCP DEBUG] ✓ MCP ready ({len(tools)} tools)")
-                else:
-                    log("[MCP DEBUG] ⚠ No MCP servers configured. MCP is disabled.")
-                    if verbose:
                         print("=" * 60 + "\n")
 
             except Exception as e:
                 if verbose:
                     print("=" * 60)
-                    print(f"[MCP DEBUG] ✗ Failed to initialize global MCP manager: {e}")
+                    print(f"[MCP DEBUG] Failed to initialize global MCP manager: {e}")
                     print("=" * 60 + "\n")
                 else:
-                    print(f"[MCP DEBUG] ✗ MCP init failed: {e}")
+                    print(f"[MCP DEBUG] MCP init failed: {e}")
                 logger.error(f"MCP initialization failed: {e}", exc_info=True)
 
         # Run the async initialization in a background thread
@@ -161,7 +137,7 @@ class MCPClientConfig(AppConfig):
                 loop.run_forever()
 
             except Exception as e:
-                print(f"[MCP DEBUG] ✗ Error in MCP initialization thread: {e}")
+                print(f"[MCP DEBUG] Error in MCP initialization thread: {e}")
                 logger.error(f"Error in MCP initialization thread: {e}", exc_info=True)
             finally:
                 # Cleanup when thread exits

@@ -386,6 +386,12 @@ function createSettingsWindow(isFixedModeRef, settingsButton, positionModeButton
         settings_window.style.left = `${x}px`;
         settings_window.style.display = settings_window.style.display === 'none' ? 'block' : 'none';
         settings_window.style.position = isFixedModeRef.value ? 'fixed' : 'absolute';
+
+        // Refresh model list when opening settings
+        if (settings_window.style.display === 'block') {
+            populateModelList();
+        }
+
         //if (settings_window.style.display === 'block') loadPreferredLinks();
     };
 
