@@ -24,6 +24,9 @@ from datascraper.models_config import get_model_config
 # We import it here for use in agent creation
 from .apps import get_global_mcp_manager
 
+# Import query intent analyzer for smart context fetching
+from .query_intent_analyzer import should_fetch_page_context
+
 # Fallback for backward compatibility (if global manager not initialized)
 _mcp_init_lock = None # Will be initialized as asyncio.Lock()
 
@@ -50,11 +53,79 @@ def apply_guardrails(prompt: str) -> str:
     return f"{prompt}\n\n{guardrails}"
 
 
+# Helper function to fetch page content via Playwright MCP
+# Helper function to fetch page content via Playwright MCP
+async def fetch_current_page_content(url: str, mcp_manager) -> Optional[str]:
+    """Fetch current page content using Playwright MCP."""
+    import asyncio
+    try:
+        if mcp_manager._loop:
+            future = asyncio.run_coroutine_threadsafe(
+                mcp_manager.get_all_tools(), mcp_manager._loop
+            )
+            tools = future.result(timeout=5)
+        else:
+            tools = await mcp_manager.get_all_tools()
+        
+        snapshot_tool = None
+        navigate_tool = None
+        for tool in tools:
+            if 'snapshot' in tool.name.lower():
+                snapshot_tool = tool.name
+            if 'navigate' in tool.name.lower():
+                navigate_tool = tool.name
+        
+        if not snapshot_tool or not navigate_tool:
+            logging.warning("[SMART CONTEXT] Missing Playwright tools (navigate or snapshot)")
+            return None
+        
+        # 1. Navigate to the URL
+        logging.info(f"[SMART CONTEXT] Navigating to {url}...")
+        nav_args = {"url": url}
+        if mcp_manager._loop:
+            future = asyncio.run_coroutine_threadsafe(
+                mcp_manager.execute_tool(navigate_tool, nav_args), mcp_manager._loop
+            )
+            # Wait for navigation to complete
+            future.result(timeout=30)
+        else:
+            await mcp_manager.execute_tool(navigate_tool, nav_args)
+
+        # 2. Take snapshot
+        logging.info(f"[SMART CONTEXT] Taking snapshot...")
+        args = {}
+        if mcp_manager._loop:
+            future = asyncio.run_coroutine_threadsafe(
+                mcp_manager.execute_tool(snapshot_tool, args), mcp_manager._loop
+            )
+            result = future.result(timeout=30)
+        else:
+            result = await mcp_manager.execute_tool(snapshot_tool, args)
+        
+        if hasattr(result, 'content') and isinstance(result.content, list):
+            text_parts = []
+            for item in result.content:
+                if item.type == 'text':
+                    text_parts.append(item.text)
+            if text_parts:
+                return "\\n".join(text_parts)
+        
+        logging.warning(f"[SMART CONTEXT] Unexpected result format: {type(result)}")
+        return None
+    except Exception as e:
+        logging.error(f"[SMART CONTEXT] Error fetching page {url}: {e}", exc_info=True)
+        return None
+
 # Single system prompt - tool-agnostic (MCP best practice)
 DEFAULT_PROMPT = (
     "You are a helpful financial assistant. "
     "You have access to various tools that can help you answer questions. "
     "Use the available tools when they are relevant to the user's request.\n\n"
+    "CONTEXT AWARENESS:\n"
+    "- When page content is provided below, USE IT FIRST to answer questions\n"
+    "- The provided page content is from the user's currently active browser tab\n"
+    "- Only navigate to other pages if current page doesn't have the answer\n"
+    "- Always cite the current page when answering from its content\n\n"
     "When tools are available, prefer using them over making assumptions. "
     "Always cite where information came from (e.g., 'Based on the current page...', 'After checking...').\n\n"
     "Never fabricate information—if evidence is missing or uncertain, say so explicitly.\n\n"
@@ -71,6 +142,8 @@ async def create_fin_agent(model: str = "gpt-4o",
                           use_playwright: bool = False,
                           restricted_domain: Optional[str] = None,
                           current_url: Optional[str] = None,
+                          user_input: Optional[str] = None,
+                          auto_fetch_page: bool = False,
                           user_timezone: Optional[str] = None,
                           user_time: Optional[str] = None):
     """
@@ -82,6 +155,8 @@ async def create_fin_agent(model: str = "gpt-4o",
         use_playwright: Whether to enable Playwright browser automation tools
         restricted_domain: Restrict navigation to this domain (e.g., "finance.yahoo.com")
         current_url: Current webpage URL for context
+        user_input: User's query (used for intent analysis if auto_fetch_page=True)
+        auto_fetch_page: Enable intelligent auto-fetching of current page content
         user_timezone: User's IANA timezone (e.g., "America/New_York")
         user_time: User's current time in ISO format
 
@@ -97,9 +172,30 @@ async def create_fin_agent(model: str = "gpt-4o",
     # Add contextual metadata (not separate prompts)
     context_additions = []
 
-    # Add current page context if available
+    # Smart page context fetching
+    page_content_fetched = None
+    if auto_fetch_page and current_url and user_input:
+        mode = "thinking" if not restricted_domain else "normal"
+        if should_fetch_page_context(user_input, current_url, mode):
+            logging.info(f"[SMART CONTEXT] Auto-fetching: {current_url}")
+            try:
+                _mcp_manager = get_global_mcp_manager()
+                if _mcp_manager:
+                    page_content_fetched = await fetch_current_page_content(current_url, _mcp_manager)
+                    if page_content_fetched:
+                        logging.info(f"[SMART CONTEXT] Fetched {len(page_content_fetched)} chars")
+            except Exception as e:
+                logging.error(f"[SMART CONTEXT] Error: {e}", exc_info=True)
+    
+    # Add current page context
     if current_url:
         context_additions.append(f"User is currently viewing: {current_url}")
+        if page_content_fetched:
+            max_len = 8000
+            preview = page_content_fetched[:max_len]
+            if len(page_content_fetched) > max_len:
+                preview += f"\\n[truncated, {len(page_content_fetched)} total chars]"
+            context_additions.append(f"\\n[CURRENT PAGE CONTENT]:\\n{preview}\\n[END]\\n")
 
     # Add domain restriction as context (not as a different prompt)
     if restricted_domain:
