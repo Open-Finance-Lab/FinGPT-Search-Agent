@@ -16,6 +16,19 @@
         "/app/playwright_mcp_config.json"
       ],
       "disabled": false
+    },
+    "sec-edgar": {
+      "command": "python",
+      "args": [
+        "-m",
+        "sec_edgar_mcp.server"
+      ],
+      "env": {
+        "SEC_EDGAR_USER_AGENT": "${SEC_EDGAR_USER_AGENT}",
+        "SEC_EDGAR_RATE_LIMIT": "8",
+        "SEC_EDGAR_TIMEOUT": "120"
+      },
+      "disabled": false
     }
   }
 }
