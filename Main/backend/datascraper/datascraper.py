@@ -853,6 +853,7 @@ def create_agent_response_stream(
 
     async def _stream() -> AsyncIterator[str]:
         from agents import Runner
+        import asyncio
 
         context = ""
         for msg in message_list:
@@ -875,51 +876,80 @@ def create_agent_response_stream(
             context += f"User: {content}\n"
 
         full_prompt = f"{context}User: {user_input}"
-        aggregated_chunks: list[str] = []
-        result = None
-
-        async with create_fin_agent(
-            model=model,
-            user_input=user_input,
-            use_playwright=use_playwright,
-            restricted_domain=restricted_domain,
-            current_url=current_url,
-            auto_fetch_page=auto_fetch_page,
-            user_timezone=user_timezone,
-            user_time=user_time
-        ) as agent:
-            logging.info("[AGENT STREAM] Starting streamed agent run")
-            logging.info(f"[AGENT STREAM] Prompt preview: {full_prompt[:150]}...")
-            result = Runner.run_streamed(agent, full_prompt)
-
+        
+        MAX_RETRIES = 2
+        retry_count = 0
+        
+        while True:
+            aggregated_chunks: list[str] = []
+            has_yielded = False
+            result = None
+            
             try:
-                async for event in result.stream_events():
-                    event_type = getattr(event, "type", "")
-                    if event_type == "raw_response_event":
-                        data = getattr(event, "data", None)
-                        data_type = getattr(data, "type", "")
-                        if data_type == "response.output_text.delta":
-                            chunk = getattr(data, "delta", "")
-                            if chunk:
-                                aggregated_chunks.append(chunk)
-                                yield chunk
-                    elif event_type == "run_item_stream_event":
-                        event_name = getattr(event, "name", "")
-                        if event_name in {"tool_called", "tool_output"}:
-                            tool_item = getattr(event, "item", None)
-                            tool_type = getattr(tool_item, "type", "")
-                            logging.debug(f"[AGENT STREAM] Tool event: {event_name} ({tool_type})")
+                async with create_fin_agent(
+                    model=model,
+                    user_input=user_input,
+                    use_playwright=use_playwright,
+                    restricted_domain=restricted_domain,
+                    current_url=current_url,
+                    auto_fetch_page=auto_fetch_page,
+                    user_timezone=user_timezone,
+                    user_time=user_time
+                ) as agent:
+                    if retry_count > 0:
+                        logging.info(f"[AGENT STREAM] Retry attempt {retry_count}/{MAX_RETRIES}")
+                    else:
+                        logging.info("[AGENT STREAM] Starting streamed agent run")
+                        logging.info(f"[AGENT STREAM] Prompt preview: {full_prompt[:150]}...")
+                    
+                    result = Runner.run_streamed(agent, full_prompt)
+
+                    async for event in result.stream_events():
+                        event_type = getattr(event, "type", "")
+                        if event_type == "raw_response_event":
+                            data = getattr(event, "data", None)
+                            data_type = getattr(data, "type", "")
+                            if data_type == "response.output_text.delta":
+                                chunk = getattr(data, "delta", "")
+                                if chunk:
+                                    aggregated_chunks.append(chunk)
+                                    yield chunk
+                                    has_yielded = True
+                        elif event_type == "run_item_stream_event":
+                            event_name = getattr(event, "name", "")
+                            if event_name in {"tool_called", "tool_output"}:
+                                tool_item = getattr(event, "item", None)
+                                tool_type = getattr(tool_item, "type", "")
+                                logging.debug(f"[AGENT STREAM] Tool event: {event_name} ({tool_type})")
+                
+                # If we complete successfully, break the retry loop
+                break
+
             except Exception as stream_error:
-                logging.error(f"[AGENT STREAM] Error during streaming: {stream_error}")
-                raise
+                if has_yielded:
+                    logging.error(f"[AGENT STREAM] Error during streaming after content sent. Cannot retry. Error: {stream_error}")
+                    raise stream_error
+                
+                retry_count += 1
+                if retry_count > MAX_RETRIES:
+                    logging.error(f"[AGENT STREAM] Max retries ({MAX_RETRIES}) reached. Error: {stream_error}")
+                    raise stream_error
+                
+                logging.warning(f"[AGENT STREAM] Error encountered: {stream_error}. Retrying ({retry_count}/{MAX_RETRIES})...")
+                await asyncio.sleep(1)
+
             finally:
-                final_text = ""
-                if result and isinstance(result.final_output, str) and result.final_output:
-                    final_text = result.final_output
-                elif aggregated_chunks:
-                    final_text = "".join(aggregated_chunks)
-                state["final_output"] = final_text
-                logging.info(f"[AGENT STREAM] Completed with {len(final_text)} characters")
+                # Only update state if we are done or if we failed and can't retry
+                if retry_count > MAX_RETRIES or has_yielded or result:
+                    final_text = ""
+                    if result and isinstance(result.final_output, str) and result.final_output:
+                        final_text = result.final_output
+                    elif aggregated_chunks:
+                        final_text = "".join(aggregated_chunks)
+                    # Only update final output if it's better than what we have (e.g. from a successful run)
+                    if final_text:
+                        state["final_output"] = final_text
+                    logging.info(f"[AGENT STREAM] Completed with {len(final_text)} characters")
 
     return _stream(), state
 

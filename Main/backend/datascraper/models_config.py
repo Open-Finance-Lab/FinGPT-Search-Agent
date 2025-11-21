@@ -7,7 +7,7 @@ MODELS_CONFIG = {
     # OpenAI Models
     "FinGPT-Light": {
         "provider": "openai",
-        "model_name": "gpt-4o-mini",
+        "model_name": "gpt-5-mini",
         "supports_mcp": True,
         "supports_advanced": True,
         "max_tokens": 128000,
@@ -31,11 +31,11 @@ MODELS_CONFIG = {
     # },
     "FinGPT": {
         "provider": "openai",
-        "model_name": "gpt-5-chat-latest",
+        "model_name": "gpt-5.1-chat-latest",
         "supports_mcp": True,
         "supports_advanced": True,
         "max_tokens": 128000,
-        "description": "The FinGPT model"
+        "description": "State-of-the-art financial model"
     },
     "Buffet-Agent": {
         "provider": "buffet",
