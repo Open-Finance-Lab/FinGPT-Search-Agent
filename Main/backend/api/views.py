@@ -49,7 +49,7 @@ from datascraper.context_integration import (
 logger = logging.getLogger(__name__)
 
 # Constants
-QUESTION_LOG_PATH = os.path.join(os.path.dirname(__file__), 'questionLog.csv')
+# QUESTION_LOG_PATH removed - using console logging instead
 
 # ============================================================================
 # Helper Functions
@@ -110,44 +110,8 @@ def _build_status_frame(label: str, detail: Optional[str] = None, url: Optional[
     return f'data: {json.dumps(status_payload)}\n\n'.encode('utf-8')
 
 
-def _ensure_log_file_exists():
-    """Create log file with headers if it doesn't exist, using UTF-8 encoding."""
-    if not os.path.isfile(QUESTION_LOG_PATH):
-        with open(QUESTION_LOG_PATH, 'w', newline='', encoding='utf-8') as log_file:
-            writer = csv.writer(log_file)
-            writer.writerow(['Button', 'URL', 'Question', 'Date', 'Time', 'Response_Preview'])
+# Logging helper removed - using standard logger
 
-
-def _log_interaction(button_clicked: str, current_url: str, question: str, response: Optional[str] = None):
-    """
-    Log interaction details with timestamp and response preview.
-    Uses UTF-8 with `errors="replace"`
-    """
-    _ensure_log_file_exists()
-
-    now = datetime.now()
-    date_str = now.strftime('%Y-%m-%d')
-    time_str = now.strftime('%H:%M:%S')
-
-    # Handles invalid chars
-    def safe_str(s):
-        return str(s).encode('utf-8', errors='replace').decode('utf-8')
-
-    # Only record first 80 chars of the response
-    response_preview = response[:80] if response else "N/A"
-
-    # Clean each field before writing
-    button_clicked = safe_str(button_clicked)
-    current_url = safe_str(current_url)
-    question = safe_str(question)
-    response_preview = safe_str(response_preview)
-
-    try:
-        with open(QUESTION_LOG_PATH, 'a', newline='', encoding='utf-8', errors='replace') as log_file:
-            writer = csv.writer(log_file)
-            writer.writerow([button_clicked, current_url, question, date_str, time_str, response_preview])
-    except Exception as e:
-        logger.error(f"Failed to log interaction: {e}")
 
 
 # ============================================================================
@@ -249,7 +213,7 @@ def chat_response(request: HttpRequest) -> JsonResponse:
 
         # Log interaction
         first_response = next(iter(responses.values()), "No response")
-        _log_interaction("normal_chat", current_url, question, first_response)
+        logger.info(f"Interaction [normal_chat]: URL={current_url}, Q='{question[:50]}...', Resp='{str(first_response)[:50]}...'")
 
         # Build response
         result = {
@@ -365,7 +329,7 @@ def adv_response(request: HttpRequest) -> JsonResponse:
 
         # Log interaction
         first_response = next(iter(responses.values()), "No response")
-        _log_interaction("advanced_search", current_url, question, first_response)
+        logger.info(f"Interaction [advanced_search]: URL={current_url}, Q='{question[:50]}...', Resp='{str(first_response)[:50]}...'")
 
         # Build response
         result = {
@@ -474,7 +438,7 @@ def agent_chat_response(request: HttpRequest) -> JsonResponse:
 
         # Log interaction
         first_response = next(iter(responses.values()), "No response")
-        _log_interaction("agent_chat", current_url, question, first_response)
+        logger.info(f"Interaction [agent_chat]: URL={current_url}, Q='{question[:50]}...', Resp='{str(first_response)[:50]}...'")
 
         # Build response
         result = {
@@ -645,7 +609,7 @@ def chat_response_stream(request: HttpRequest) -> StreamingHttpResponse:
                 yield f'data: {json.dumps(final_data)}\n\n'.encode('utf-8')
 
                 # Log interaction
-                _log_interaction("normal_stream", current_url, question, final_response)
+                logger.info(f"Interaction [normal_stream]: URL={current_url}, Q='{question[:50]}...', Resp='{final_response[:50]}...'")
 
             except Exception as e:
                 logger.error(f"Streaming error: {e}", exc_info=True)
@@ -788,7 +752,7 @@ def adv_response_stream(request: HttpRequest) -> StreamingHttpResponse:
                 yield f'data: {json.dumps(final_data)}\n\n'.encode('utf-8')
 
                 # Log interaction
-                _log_interaction("advanced_stream", current_url, question, full_response)
+                logger.info(f"Interaction [advanced_stream]: URL={current_url}, Q='{question[:50]}...', Resp='{full_response[:50]}...'")
 
             except Exception as e:
                 logger.error(f"Advanced streaming error: {e}", exc_info=True)
@@ -854,7 +818,8 @@ def add_webtext(request: HttpRequest) -> JsonResponse:
         stats = integration.get_context_stats(session_id)
 
         # Log interaction
-        _log_interaction("web_content", current_url, "Web content received", None)
+        # Log interaction
+        logger.info(f"Interaction [web_content]: URL={current_url}, Msg='Web content received'")
 
         return JsonResponse({
             'status': 'success',
@@ -892,7 +857,8 @@ def clear(request: HttpRequest) -> JsonResponse:
         integration.clear_messages(request, preserve_web_content=preserve_web)
 
         # Log interaction
-        _log_interaction("clear", "N/A", "Cleared messages", None)
+        # Log interaction
+        logger.info(f"Interaction [clear]: Msg='Cleared messages'")
 
         return JsonResponse({
             'status': 'success',
@@ -968,7 +934,7 @@ def get_sources(request: HttpRequest) -> JsonResponse:
     sources = ds.get_sources(query, current_url=current_url)
 
     # Log the source request
-    _log_interaction("sources", current_url or 'N/A', f"Source request: {query}", None)
+    logger.info(f"Interaction [sources]: URL={current_url or 'N/A'}, Q='Source request: {query}'")
 
     return JsonResponse({'resp': sources})
 
@@ -980,7 +946,7 @@ def log_question(request: HttpRequest) -> JsonResponse:
     current_url = request.GET.get('current_url', '')
 
     if question and button_clicked and current_url:
-        _log_interaction(button_clicked, current_url, question, None)
+        logger.info(f"Interaction [{button_clicked}]: URL={current_url}, Q='{question}'")
 
     return JsonResponse({'status': 'success'})
 
@@ -1009,7 +975,7 @@ def add_preferred_url(request: HttpRequest) -> JsonResponse:
 
                 if success:
                     # Log the action
-                    _log_interaction("add_url", new_url, f"Added preferred URL: {new_url}", None)
+                    logger.info(f"Interaction [add_url]: URL={new_url}, Msg='Added preferred URL: {new_url}'")
                     return JsonResponse({'status': 'success'})
                 else:
                     return JsonResponse({'status': 'exists'})

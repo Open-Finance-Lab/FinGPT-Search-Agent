@@ -94,10 +94,8 @@ def _strip_any_prefix(content: str, prefixes: tuple[str, ...]) -> tuple[bool, st
             return True, content[len(prefix):]
     return False, content
 
-# A module-level set to keep track of used URLs
-used_urls: set[str] = set()
-used_source_details: list[dict[str, Any]] = []
-used_urls_ordered: list[str] = []
+# Global variables removed to prevent memory leaks
+
 
 
 def _prepare_advanced_search_inputs(model: str, preferred_links: list[str] | None) -> tuple[str, list[str]]:
@@ -500,23 +498,8 @@ def _create_response_stream(client, provider: str, model_name: str, model_config
                 yield chunk.choices[0].delta.content
 
 
-def _update_used_sources(source_entries: list[dict[str, Any]]) -> None:
-    """
-    Synchronize module-level caches for used sources.
-    """
-    global used_source_details, used_urls_ordered
-    # defensive copy so downstream mutations do not leak into cache state
-    sanitized_entries: list[dict[str, Any]] = []
-    for entry in source_entries or []:
-        if not entry:
-            continue
-        sanitized_entries.append(dict(entry))
+# _update_used_sources removed
 
-    used_source_details = sanitized_entries
-    used_urls_ordered = [entry.get("url") for entry in used_source_details if entry.get("url")]
-
-    used_urls.clear()
-    used_urls.update(used_urls_ordered)
 
 
 def create_advanced_response(
@@ -552,8 +535,6 @@ def create_advanced_response(
     """
     logging.info(f"Starting advanced response with model ID: {model} (stream={stream})")
 
-    used_urls.clear()
-
     actual_model, preferred_urls = _prepare_advanced_search_inputs(model, preferred_links)
 
     try:
@@ -579,7 +560,7 @@ def create_advanced_response(
             )
 
             # Update cached sources for compatibility with frontend queries
-            _update_used_sources(source_entries)
+            # _update_used_sources(source_entries) # Removed to prevent memory leaks
 
             logging.info(f"Advanced response generated with {len(source_entries)} sources")
             for idx, entry in enumerate(source_entries, 1):
@@ -630,8 +611,8 @@ async def _create_advanced_response_stream_async(
         # Yield chunks from the stream
         async for text_chunk, source_entries in stream_gen:
             # Update global caches when we get sources
-            if source_entries:
-                _update_used_sources(source_entries)
+            # if source_entries:
+            #     _update_used_sources(source_entries)
             yield text_chunk, source_entries
 
     except Exception as e:
@@ -652,7 +633,6 @@ def create_advanced_response_streaming(
     """
     logging.info(f"Starting advanced streaming response with model ID: {model}")
 
-    used_urls.clear()
     actual_model, preferred_urls = _prepare_advanced_search_inputs(model, preferred_links)
 
     state: Dict[str, Any] = {
@@ -688,7 +668,7 @@ def create_advanced_response_streaming(
             state["final_output"] = final_text
             state["used_sources"] = latest_entries
             state["used_urls"] = [entry.get("url") for entry in latest_entries if entry.get("url")]
-            _update_used_sources(latest_entries)
+            # _update_used_sources(latest_entries)
             logging.info(f"[ADVANCED STREAM] Completed with {len(final_text)} characters and {len(latest_entries)} sources")
 
     return _stream(), state
@@ -956,25 +936,18 @@ def create_agent_response_stream(
 
 def get_sources(query: str, current_url: str | None = None) -> Dict[str, Any]:
     """
-    Return structured metadata for sources used in the most recent advanced response.
+    Return structured metadata for sources.
+    DEPRECATED: Global source tracking has been removed to prevent memory leaks.
+    Sources are now returned directly in the response object.
     """
-    logging.info(f"get_sources called with query: '{query}'")
-    if current_url:
-        logging.info(f"Context current_url: {current_url}")
-    logging.info(f"Current used_source_details contains {len(used_source_details)} entries")
-
-    # Also log URLs for debugging
-    if used_urls:
-        logging.info(f"Current used_urls contains {len(used_urls)} URLs:")
-        for idx, url in enumerate(used_urls, 1):
-            logging.info(f"  [{idx}] {url}")
-
-    # Log number of source details
-    logging.info(f"Returning {len(used_source_details)} source details")
-
-    payload = format_sources_for_frontend(used_source_details, current_url)
-    logging.info(f"Returning {len(payload.get('sources', []))} sources to frontend")
-    return payload
+    logging.info(f"get_sources called with query: '{query}' (DEPRECATED)")
+    
+    # Return empty structure to satisfy frontend contract
+    return {
+        "sources": [],
+        "query": query,
+        "current_url": current_url
+    }
 
 
 def get_last_playwright_context() -> List[Dict[str, Any]]:
