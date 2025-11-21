@@ -113,16 +113,22 @@ class UnifiedContextManager:
     def __init__(self):
         """Initialize the unified context manager"""
         self.sessions: Dict[str, Dict[str, Any]] = {}
+        self.session_ttl = 3600  # 1 hour default TTL
+        self.max_sessions = 100  # Max 100 concurrent sessions
         logger.info("UnifiedContextManager initialized (no compression, no legacy support)")
 
     def _get_or_create_session(self, session_id: str) -> Dict[str, Any]:
         """Get existing session or create new one"""
         if session_id not in self.sessions:
+            # Enforce session limit before creating new session
+            self._enforce_session_limit()
+
+            now = datetime.now(timezone.utc)
             self.sessions[session_id] = {
                 "system_prompt": self._get_default_system_prompt(),
                 "metadata": ContextMetadata(
                     session_id=session_id,
-                    timestamp=datetime.now(timezone.utc).isoformat(),
+                    timestamp=now.isoformat(),
                     mode=ContextMode.NORMAL
                 ),
                 "fetched_context": {
@@ -130,9 +136,14 @@ class UnifiedContextManager:
                     "playwright": [],
                     "js_scraping": []
                 },
-                "conversation_history": []
+                "conversation_history": [],
+                "last_accessed": now.timestamp()
             }
             logger.debug(f"Created new session: {session_id}")
+        else:
+            # Update last accessed time
+            self.sessions[session_id]["last_accessed"] = datetime.now(timezone.utc).timestamp()
+
         return self.sessions[session_id]
 
     def _get_default_system_prompt(self) -> str:
@@ -147,6 +158,40 @@ class UnifiedContextManager:
     def _estimate_tokens(self, text: str) -> int:
         """Rough token estimation (~4 chars per token)"""
         return len(text) // 4
+
+    def cleanup_expired_sessions(self) -> int:
+        """Remove sessions that exceed TTL"""
+        now = datetime.now(timezone.utc).timestamp()
+        expired = []
+
+        for session_id, session in self.sessions.items():
+            last_accessed = session.get("last_accessed", now)
+            if now - last_accessed > self.session_ttl:
+                expired.append(session_id)
+
+        for session_id in expired:
+            del self.sessions[session_id]
+            logger.info(f"Cleaned up expired session: {session_id}")
+
+        return len(expired)
+
+    def _enforce_session_limit(self) -> None:
+        """Enforce max session limit using LRU eviction"""
+        if len(self.sessions) < self.max_sessions:
+            return
+
+        # Remove oldest 10% of sessions (min 1)
+        num_to_remove = max(1, int(self.max_sessions * 0.1))
+
+        # Sort by last_accessed (LRU)
+        sorted_sessions = sorted(
+            self.sessions.items(),
+            key=lambda x: x[1].get("last_accessed", 0)
+        )
+
+        for session_id, _ in sorted_sessions[:num_to_remove]:
+            del self.sessions[session_id]
+            logger.info(f"Evicted session due to limit: {session_id}")
 
     def update_metadata(
         self,
