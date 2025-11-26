@@ -121,9 +121,9 @@ def _build_status_frame(label: str, detail: Optional[str] = None, url: Optional[
 @csrf_exempt
 def chat_response(request: HttpRequest) -> JsonResponse:
     """
-    Normal Mode: Help user understand the CURRENT website using Playwright navigation.
-    Agent stays within the current domain and navigates to find information.
-    Now uses Unified Context Manager for full conversation history.
+    Thinking Mode: Process user questions using LLM with available MCP tools.
+    Note: Browser automation has been removed. For web research, use Research mode.
+    Uses Unified Context Manager for full conversation history.
     """
     try:
         question = request.GET.get('question', '')
@@ -134,13 +134,7 @@ def chat_response(request: HttpRequest) -> JsonResponse:
         if not question:
             return JsonResponse({'error': 'No question provided'}, status=400)
 
-        # Extract domain from current URL for restriction
-        restricted_domain = None
-        if current_url:
-            parsed = urlparse(current_url)
-            restricted_domain = parsed.netloc
-
-        logger.info(f"Chat request: question='{question[:50]}...', domain={restricted_domain}")
+        logger.info(f"Chat request: question='{question[:50]}...'")
 
         # Get session ID
         session_id = _get_session_id(request)
@@ -173,26 +167,15 @@ def chat_response(request: HttpRequest) -> JsonResponse:
                 import time
                 start_time = time.time()
 
-                # Use agent with Playwright for domain navigation
+                # Use agent with MCP tools (SEC-EDGAR, filesystem)
                 response = ds.create_agent_response(
                     user_input=question,
                     message_list=messages,
                     model=model,
-                    use_playwright=True,
-                    restricted_domain=restricted_domain,
-                    current_url=current_url,
-            auto_fetch_page=True
+                    current_url=current_url
                 )
 
                 responses[model] = response
-                # Persist Playwright scraped context, if any
-                for entry in ds.get_last_playwright_context() or []:
-                    integration.add_playwright_content(
-                        session_id=session_id,
-                        content=entry.get("content", ""),
-                        url=entry.get("url") or current_url,
-                        action=entry.get("action")
-                    )
 
                 # Add response to context
                 response_time_ms = int((time.time() - start_time) * 1000)
@@ -200,7 +183,7 @@ def chat_response(request: HttpRequest) -> JsonResponse:
                     session_id=session_id,
                     content=response,
                     model=model,
-                    tools_used=["playwright"] if restricted_domain else [],
+                    tools_used=[],
                     response_time_ms=response_time_ms
                 )
 
@@ -354,14 +337,14 @@ def adv_response(request: HttpRequest) -> JsonResponse:
 @csrf_exempt
 def agent_chat_response(request: HttpRequest) -> JsonResponse:
     """
-    Process chat response via Agent with optional tools (Playwright, etc.)
-    Now uses Unified Context Manager for full conversation history.
+    Process chat response via Agent with MCP tools (SEC-EDGAR, filesystem).
+    Note: Browser automation has been removed. For web research, use Research mode.
+    Uses Unified Context Manager for full conversation history.
     """
     try:
         question = request.GET.get('question', '')
         selected_models = request.GET.get('models', 'gpt-4o-mini')
         current_url = request.GET.get('current_url', '')
-        use_playwright = request.GET.get('use_playwright', 'false').lower() == 'true'
 
         if not question:
             return JsonResponse({'error': 'No question provided'}, status=400)
@@ -397,35 +380,23 @@ def agent_chat_response(request: HttpRequest) -> JsonResponse:
                 import time
                 start_time = time.time()
 
-                # Create agent response
+                # Create agent response with MCP tools
                 response = ds.create_agent_response(
                     user_input=question,
                     message_list=messages,
                     model=model,
-                    use_playwright=use_playwright,
-                    restricted_domain=None,  # No restriction in agent mode
-                    current_url=current_url,
-                    auto_fetch_page=True
+                    current_url=current_url
                 )
 
                 responses[model] = response
-                # Persist Playwright scraped context, if any
-                for entry in ds.get_last_playwright_context() or []:
-                    integration.add_playwright_content(
-                        session_id=session_id,
-                        content=entry.get("content", ""),
-                        url=entry.get("url") or current_url,
-                        action=entry.get("action")
-                    )
 
                 # Add response to context
                 response_time_ms = int((time.time() - start_time) * 1000)
-                tools_used = ["playwright"] if use_playwright else []
                 context_mgr.add_assistant_message(
                     session_id=session_id,
                     content=response,
                     model=model,
-                    tools_used=tools_used,
+                    tools_used=[],
                     response_time_ms=response_time_ms
                 )
 
@@ -466,8 +437,8 @@ def agent_chat_response(request: HttpRequest) -> JsonResponse:
 @csrf_exempt
 def chat_response_stream(request: HttpRequest) -> StreamingHttpResponse:
     """
-    Normal Mode Streaming: Help user understand the CURRENT website using Playwright navigation.
-    Agent stays within the current domain and navigates to find information.
+    Thinking Mode Streaming: Process user questions using LLM with available MCP tools.
+    Note: Browser automation has been removed. For web research, use Research mode.
     """
     try:
         question = request.GET.get('question', '')
@@ -476,12 +447,6 @@ def chat_response_stream(request: HttpRequest) -> StreamingHttpResponse:
 
         if not question:
             return JsonResponse({'error': 'No question provided'}, status=400)
-
-        # Extract domain
-        restricted_domain = None
-        if current_url:
-            parsed = urlparse(current_url)
-            restricted_domain = parsed.netloc
 
         # Get session ID
         session_id = _get_session_id(request)
@@ -515,9 +480,6 @@ def chat_response_stream(request: HttpRequest) -> StreamingHttpResponse:
                 yield b'event: connected\ndata: {"status": "connected"}\n\n'
                 yield _build_status_frame("Preparing context")
 
-                if restricted_domain:
-                    yield _build_status_frame("Navigating site", restricted_domain)
-
                 import time
                 start_time = time.time()
                 aggregated_chunks: List[str] = []
@@ -526,10 +488,7 @@ def chat_response_stream(request: HttpRequest) -> StreamingHttpResponse:
                     user_input=question,
                     message_list=messages,
                     model=model,
-                    use_playwright=True,
-                    restricted_domain=restricted_domain,
                     current_url=current_url,
-                    auto_fetch_page=True,
                     user_timezone=user_timezone,
                     user_time=user_time
                 )
@@ -572,22 +531,13 @@ def chat_response_stream(request: HttpRequest) -> StreamingHttpResponse:
                 if not final_response and aggregated_chunks:
                     final_response = "".join(aggregated_chunks)
 
-                # Persist Playwright scraped context, if any
-                for entry in ds.get_last_playwright_context() or []:
-                    integration.add_playwright_content(
-                        session_id=session_id,
-                        content=entry.get("content", ""),
-                        url=entry.get("url") or current_url,
-                        action=entry.get("action")
-                    )
-
                 # Add to context
                 response_time_ms = int((time.time() - start_time) * 1000)
                 context_mgr.add_assistant_message(
                     session_id=session_id,
                     content=final_response,
                     model=model,
-                    tools_used=["playwright"] if restricted_domain else [],
+                    tools_used=[],
                     response_time_ms=response_time_ms
                 )
 
