@@ -54,7 +54,7 @@ class ConversationMessage:
 @dataclass
 class FetchedContextItem:
     """Item of fetched context from various sources"""
-    source_type: Literal["web_search", "playwright", "js_scraping"]
+    source_type: Literal["web_search", "js_scraping"]
     content: str
     url: Optional[str] = None
     timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
@@ -133,7 +133,6 @@ class UnifiedContextManager:
                 ),
                 "fetched_context": {
                     "web_search": [],
-                    "playwright": [],
                     "js_scraping": []
                 },
                 "conversation_history": [],
@@ -274,7 +273,7 @@ class UnifiedContextManager:
     def add_fetched_context(
         self,
         session_id: str,
-        source_type: Literal["web_search", "playwright", "js_scraping"],
+        source_type: Literal["web_search", "js_scraping"],
         content: str,
         url: Optional[str] = None,
         extracted_data: Optional[Dict[str, Any]] = None
@@ -305,7 +304,6 @@ class UnifiedContextManager:
             "metadata": session["metadata"].to_dict() if isinstance(session["metadata"], ContextMetadata) else session["metadata"],
             "fetched_context": {
                 "web_search": [item.to_dict() if hasattr(item, 'to_dict') else item for item in session["fetched_context"]["web_search"]],
-                "playwright": [item.to_dict() if hasattr(item, 'to_dict') else item for item in session["fetched_context"]["playwright"]],
                 "js_scraping": [item.to_dict() if hasattr(item, 'to_dict') else item for item in session["fetched_context"]["js_scraping"]]
             },
             "conversation_history": [
@@ -346,11 +344,6 @@ class UnifiedContextManager:
             system_content += "\n\n[WEB SEARCH RESULTS]:"
             for item in fetched["web_search"]:
                 system_content += f"\n- From {item.get('url', 'unknown')}: {item['content'][:200]}"
-
-        if fetched.get("playwright"):
-            system_content += "\n\n[PLAYWRIGHT SCRAPED CONTENT]:"
-            for item in fetched["playwright"]:
-                system_content += f"\n- From {item.get('url', 'page')}: {item['content'][:200]}"
 
         if fetched.get("js_scraping"):
             system_content += "\n\n[WEB PAGE CONTENT]:"

@@ -37,7 +37,6 @@ BUFFET_AGENT_DEFAULT_ENDPOINT = "https://l7d6yqg7nzbkumx8.us-east-1.aws.endpoint
 BUFFET_AGENT_ENDPOINT = os.getenv("BUFFET_AGENT_ENDPOINT", BUFFET_AGENT_DEFAULT_ENDPOINT)
 BUFFET_AGENT_TIMEOUT = float(os.getenv("BUFFET_AGENT_TIMEOUT", "60"))
 
-# Playwright context capture removed (now handled by MCP)
 
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -674,21 +673,16 @@ def create_advanced_response_streaming(
     return _stream(), state
 
 
-def create_agent_response(user_input: str, message_list: list[dict], model: str = "o4-mini", use_playwright: bool = False, restricted_domain: str = None, current_url: str = None, auto_fetch_page: bool = False, user_timezone: str = None, user_time: str = None) -> str:
+def create_agent_response(user_input: str, message_list: list[dict], model: str = "o4-mini", current_url: str = None, user_timezone: str = None, user_time: str = None) -> str:
     """
-    Creates a response using the Agent with tools (Playwright, etc.).
-
-    This is the primary response method - tools are always available.
+    Creates a response using the Agent with tools (URL scraping, SEC-EDGAR, filesystem).
     Falls back to create_response() (direct LLM) only if agent fails.
 
     Args:
         user_input: The user's question
         message_list: Previous conversation history
         model: Model ID to use
-        use_playwright: Whether to enable Playwright browser automation tools
-        restricted_domain: Domain restriction for Playwright (e.g., "finance.yahoo.com")
         current_url: Current webpage URL for context
-        auto_fetch_page: Enable intelligent auto-fetching of current page content
         user_timezone: User's IANA timezone
         user_time: User's current time in ISO format
 
@@ -715,7 +709,7 @@ def create_agent_response(user_input: str, message_list: list[dict], model: str 
 
         logging.info(f"[AGENT] Attempting agent response with {model} ({actual_model_name})")
 
-        response = asyncio.run(_create_agent_response_async(user_input, message_list, model, use_playwright, restricted_domain, current_url, auto_fetch_page, user_timezone, user_time))
+        response = asyncio.run(_create_agent_response_async(user_input, message_list, model, current_url, user_timezone, user_time))
         return response
 
     except Exception as e:
@@ -723,18 +717,15 @@ def create_agent_response(user_input: str, message_list: list[dict], model: str 
         logging.info(f"FALLBACK: Using regular response with {model} ({actual_model_name})")
         return create_response(user_input, message_list, model)
 
-async def _create_agent_response_async(user_input: str, message_list: list[dict], model: str, use_playwright: bool = False, restricted_domain: str = None, current_url: str = None, auto_fetch_page: bool = False, user_timezone: str = None, user_time: str = None) -> str:
+async def _create_agent_response_async(user_input: str, message_list: list[dict], model: str, current_url: str = None, user_timezone: str = None, user_time: str = None) -> str:
     """
-    Async helper for creating agent response with tools.
+    Async helper for creating agent response with MCP tools.
 
     Args:
         user_input: The user's question
         message_list: Previous conversation history
         model: Model ID to use
-        use_playwright: Whether to enable Playwright browser automation tools
-        restricted_domain: Domain restriction for Playwright navigation
-        current_url: Current webpage URL for context
-        auto_fetch_page: Enable intelligent auto-fetching of current page content
+        current_url: Current webpage URL for context (informational only)
         user_timezone: User's IANA timezone
         user_time: User's current time in ISO format
 
@@ -770,20 +761,16 @@ async def _create_agent_response_async(user_input: str, message_list: list[dict]
 
     full_prompt = f"{context}User: {user_input}"
 
-    # Create agent with tools and domain restriction
+    # Create agent with MCP tools (SEC-EDGAR, filesystem)
     async with create_fin_agent(
         model=model,
-            user_input=user_input,
-        use_playwright=use_playwright,
-        restricted_domain=restricted_domain,
+        user_input=user_input,
         current_url=current_url,
-            auto_fetch_page=auto_fetch_page,
         user_timezone=user_timezone,
         user_time=user_time
     ) as agent:
         # Run the agent with the full prompt
-        tool_status = f"with Playwright (domain: {restricted_domain})" if use_playwright and restricted_domain else "with Playwright" if use_playwright else "without tools"
-        logging.info(f"[AGENT] Running agent {tool_status}")
+        logging.info(f"[AGENT] Running agent with MCP tools")
         logging.info(f"[AGENT] Current URL: {current_url}")
         logging.info(f"[AGENT] Prompt preview: {full_prompt[:150]}...")
 
@@ -801,15 +788,12 @@ def create_agent_response_stream(
     user_input: str,
     message_list: list[dict],
     model: str = "o4-mini",
-    use_playwright: bool = False,
-    restricted_domain: str | None = None,
     current_url: str | None = None,
-    auto_fetch_page: bool = False,
     user_timezone: str | None = None,
     user_time: str | None = None
 ) -> Tuple[AsyncIterator[str], Dict[str, str]]:
     """
-    Create a streaming agent response, returning an async iterator and final state.
+    Create a streaming agent response with tools, returning an async iterator and final state.
     """
     state: Dict[str, str] = {"final_output": ""}
 
@@ -869,17 +853,14 @@ def create_agent_response_stream(
                 async with create_fin_agent(
                     model=model,
                     user_input=user_input,
-                    use_playwright=use_playwright,
-                    restricted_domain=restricted_domain,
                     current_url=current_url,
-                    auto_fetch_page=auto_fetch_page,
                     user_timezone=user_timezone,
                     user_time=user_time
                 ) as agent:
                     if retry_count > 0:
                         logging.info(f"[AGENT STREAM] Retry attempt {retry_count}/{MAX_RETRIES}")
                     else:
-                        logging.info("[AGENT STREAM] Starting streamed agent run")
+                        logging.info("[AGENT STREAM] Starting streamed agent run with MCP tools")
                         logging.info(f"[AGENT STREAM] Prompt preview: {full_prompt[:150]}...")
                     
                     result = Runner.run_streamed(agent, full_prompt)
@@ -935,33 +916,12 @@ def create_agent_response_stream(
 
 
 def get_sources(query: str, current_url: str | None = None) -> Dict[str, Any]:
-    """
-    Return structured metadata for sources.
-    DEPRECATED: Global source tracking has been removed to prevent memory leaks.
-    Sources are now returned directly in the response object.
-    """
-    logging.info(f"get_sources called with query: '{query}' (DEPRECATED)")
-    
-    # Return empty structure to satisfy frontend contract
-    return {
-        "sources": [],
-        "query": query,
-        "current_url": current_url
-    }
-
-
-def get_last_playwright_context() -> List[Dict[str, Any]]:
-    """
-    DEPRECATED: Returns empty list.
-    """
-    return []
+    """Return empty sources structure (sources returned in response object)."""
+    return {"sources": [], "query": query, "current_url": current_url}
 
 
 def get_website_icon(url):
-    """
-    DEPRECATED: No longer scraping websites for icons.
-    Returns None for all URLs.
-    """
+    """Returns None (icon fetching removed)."""
     return None
 
 

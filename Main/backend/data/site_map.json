@@ -1,0 +1,131 @@
+{
+  "version": "1.0",
+  "description": "Route definitions for financial data sources - used by resolve_url tool",
+  "routes": {
+    "yahoo_quote": {
+      "description": "Yahoo Finance stock quote page - shows current price, daily change, volume, market cap",
+      "url_pattern": "https://finance.yahoo.com/quote/{ticker}",
+      "params": ["ticker"],
+      "example": "yahoo_quote with ticker=AAPL"
+    },
+    "yahoo_news": {
+      "description": "Yahoo Finance news page for a company - shows latest news articles",
+      "url_pattern": "https://finance.yahoo.com/quote/{ticker}/news",
+      "params": ["ticker"],
+      "example": "yahoo_news with ticker=AAPL"
+    },
+    "yahoo_financials": {
+      "description": "Yahoo Finance financials page - shows income statement, balance sheet, cash flow",
+      "url_pattern": "https://finance.yahoo.com/quote/{ticker}/financials",
+      "params": ["ticker"],
+      "example": "yahoo_financials with ticker=AAPL"
+    },
+    "yahoo_holders": {
+      "description": "Yahoo Finance holders page - shows major institutional and mutual fund holders",
+      "url_pattern": "https://finance.yahoo.com/quote/{ticker}/holders",
+      "params": ["ticker"],
+      "example": "yahoo_holders with ticker=AAPL"
+    },
+    "yahoo_analysis": {
+      "description": "Yahoo Finance analysis page - shows analyst recommendations, price targets, EPS estimates",
+      "url_pattern": "https://finance.yahoo.com/quote/{ticker}/analysis",
+      "params": ["ticker"],
+      "example": "yahoo_analysis with ticker=AAPL"
+    },
+    "yahoo_history": {
+      "description": "Yahoo Finance historical data page - shows historical prices and dividends",
+      "url_pattern": "https://finance.yahoo.com/quote/{ticker}/history",
+      "params": ["ticker"],
+      "example": "yahoo_history with ticker=AAPL"
+    },
+    "yahoo_options": {
+      "description": "Yahoo Finance options page - shows options chain with calls and puts",
+      "url_pattern": "https://finance.yahoo.com/quote/{ticker}/options",
+      "params": ["ticker"],
+      "example": "yahoo_options with ticker=AAPL"
+    },
+    "yahoo_profile": {
+      "description": "Yahoo Finance company profile - shows company description, sector, industry, executives",
+      "url_pattern": "https://finance.yahoo.com/quote/{ticker}/profile",
+      "params": ["ticker"],
+      "example": "yahoo_profile with ticker=AAPL"
+    },
+    "yahoo_statistics": {
+      "description": "Yahoo Finance statistics page - shows valuation metrics, financial highlights, trading info",
+      "url_pattern": "https://finance.yahoo.com/quote/{ticker}/key-statistics",
+      "params": ["ticker"],
+      "example": "yahoo_statistics with ticker=AAPL"
+    },
+    "sec_filings_search": {
+      "description": "SEC EDGAR filing search - search for company filings by CIK or ticker",
+      "url_pattern": "https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK={ticker}&type={filing_type}&dateb=&owner=include&count=40",
+      "params": ["ticker", "filing_type"],
+      "param_defaults": {
+        "filing_type": ""
+      },
+      "example": "sec_filings_search with ticker=AAPL and filing_type=10-K"
+    },
+    "sec_full_text_search": {
+      "description": "SEC EDGAR full-text search - search filing content",
+      "url_pattern": "https://efts.sec.gov/LATEST/search-index?q={query}&dateRange=custom&startdt=2020-01-01&enddt=2025-12-31",
+      "params": ["query"],
+      "example": "sec_full_text_search with query=revenue guidance"
+    },
+    "bloomberg_quote": {
+      "description": "Bloomberg quote page - shows stock price and basic info",
+      "url_pattern": "https://www.bloomberg.com/quote/{ticker}:US",
+      "params": ["ticker"],
+      "example": "bloomberg_quote with ticker=AAPL"
+    },
+    "marketwatch_quote": {
+      "description": "MarketWatch stock quote page - shows price, news, analysis",
+      "url_pattern": "https://www.marketwatch.com/investing/stock/{ticker}",
+      "params": ["ticker"],
+      "example": "marketwatch_quote with ticker=AAPL"
+    },
+    "marketwatch_financials": {
+      "description": "MarketWatch financials page - shows income statement, balance sheet",
+      "url_pattern": "https://www.marketwatch.com/investing/stock/{ticker}/financials",
+      "params": ["ticker"],
+      "example": "marketwatch_financials with ticker=AAPL"
+    },
+    "finviz_quote": {
+      "description": "Finviz stock quote page - shows technical chart, fundamentals, news",
+      "url_pattern": "https://finviz.com/quote.ashx?t={ticker}",
+      "params": ["ticker"],
+      "example": "finviz_quote with ticker=AAPL"
+    },
+    "cnbc_quote": {
+      "description": "CNBC stock quote page - shows price, news, analysis",
+      "url_pattern": "https://www.cnbc.com/quotes/{ticker}",
+      "params": ["ticker"],
+      "example": "cnbc_quote with ticker=AAPL"
+    },
+    "seeking_alpha": {
+      "description": "Seeking Alpha stock page - shows analysis, news, earnings",
+      "url_pattern": "https://seekingalpha.com/symbol/{ticker}",
+      "params": ["ticker"],
+      "example": "seeking_alpha with ticker=AAPL"
+    },
+    "tipranks_stock": {
+      "description": "TipRanks stock page - shows analyst ratings, price targets, insider trades",
+      "url_pattern": "https://www.tipranks.com/stocks/{ticker}",
+      "params": ["ticker"],
+      "example": "tipranks_stock with ticker=aapl (lowercase)"
+    },
+    "generic_url": {
+      "description": "Fallback for any custom URL - use when no predefined route matches",
+      "url_pattern": "{url}",
+      "params": ["url"],
+      "example": "generic_url with url=https://example.com/page"
+    }
+  },
+  "route_categories": {
+    "stock_price": ["yahoo_quote", "bloomberg_quote", "marketwatch_quote", "finviz_quote", "cnbc_quote"],
+    "company_news": ["yahoo_news", "seeking_alpha"],
+    "financials": ["yahoo_financials", "marketwatch_financials"],
+    "analysis": ["yahoo_analysis", "tipranks_stock", "seeking_alpha"],
+    "sec_filings": ["sec_filings_search", "sec_full_text_search"],
+    "company_info": ["yahoo_profile", "yahoo_holders", "yahoo_statistics"]
+  }
+}
