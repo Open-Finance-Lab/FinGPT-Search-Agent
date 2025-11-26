@@ -108,7 +108,6 @@ class Mem0ContextManager:
             "recent_messages": [],
             "fetched_context": {
                 "web_search": [],
-                "playwright": [],
                 "js_scraping": []
             },
             "message_count": 0,
@@ -163,17 +162,17 @@ class Mem0ContextManager:
     def add_fetched_context(
         self,
         session_id: str,
-        source_type: Literal["web_search", "playwright", "js_scraping"],
+        source_type: Literal["web_search", "js_scraping"],
         content: str,
         url: Optional[str] = None,
         metadata: Optional[Dict[str, Any]] = None
     ) -> None:
         """
-        Add fetched context from various sources (web search, playwright, etc).
+        Add fetched context from various sources.
 
         Args:
             session_id: Unique session identifier
-            source_type: Type of source (web_search, playwright, js_scraping)
+            source_type: Type of source (web_search, js_scraping)
             content: Content from the source
             url: Optional URL associated with the content
             metadata: Optional additional metadata
@@ -278,16 +277,6 @@ class Mem0ContextManager:
             context.append({
                 "role": "user",
                 "content": search_content
-            })
-
-        # Add playwright scraped content
-        if fetched.get("playwright"):
-            playwright_content = "\n\n[PLAYWRIGHT SCRAPED CONTENT]:"
-            for item in fetched["playwright"]:
-                playwright_content += f"\n- From {item.get('url', 'page')}: {item['content'][:500]}"
-            context.append({
-                "role": "user",
-                "content": playwright_content
             })
 
         # Add JS scraped content
@@ -473,17 +462,8 @@ class Mem0ContextManager:
                     context_dump.append(f"Metadata: {item['metadata']}")
                 context_dump.append("---")
 
-        if fetched.get("playwright"):
-            context_dump.append("\n=== PLAYWRIGHT SCRAPED CONTENT ===")
-            for item in fetched["playwright"]:
-                context_dump.append(f"URL: {item.get('url', 'N/A')}")
-                context_dump.append(f"Content: {item['content']}")
-                if item.get('metadata'):
-                    context_dump.append(f"Action: {item['metadata'].get('action', 'N/A')}")
-                context_dump.append("---")
-
         if fetched.get("js_scraping"):
-            context_dump.append("\n=== JS SCRAPED CONTENT ===")
+            context_dump.append("\n=== SCRAPED CONTENT ===")
             for item in fetched["js_scraping"]:
                 context_dump.append(f"URL: {item.get('url', 'N/A')}")
                 context_dump.append(f"Content: {item['content']}")
@@ -553,11 +533,11 @@ class Mem0ContextManager:
         Use gpt-5-chat-latest to intelligently compress the context.
         """
         try:
-            prompt = """You are an expert context compressor for a financial research assistant. I am providing you with the full state of a financial research session, including conversation history, web search results, and browser automation logs.
+            prompt = """You are an expert context compressor for a financial research assistant. I am providing you with the full state of a financial research session, including conversation history, web search results, and scraped content.
 
 Your task is to compress this into a single, comprehensive 'Memory Update' that preserves:
 
-1. All specific financial figures, dates, tickers, and entity names found in the search results/scrapes
+1. All specific financial figures, dates, tickers, and entity names found in the search results
 2. The user's specific questions, preferences, and research objectives
 3. The logical flow and progression of the investigation
 4. Key findings and insights discovered
