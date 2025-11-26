@@ -162,13 +162,6 @@ class MCPClientManager:
                     value = re.sub(r'\$\{([^}]+)\}|\$(\w+)', replace_var, value)
                 full_env[key] = value
 
-            # Ensure Playwright-based servers can find the shared browser cache
-            if "PLAYWRIGHT_BROWSERS_PATH" not in full_env:
-                default_cache = Path.home() / ".cache" / "ms-playwright"
-                if default_cache.exists():
-                    full_env["PLAYWRIGHT_BROWSERS_PATH"] = str(default_cache)
-                    full_env.setdefault("PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD", "1")
-
             # Resolve command path if necessary (e.g. 'npx' or 'python')
             executable = shutil.which(command) or command
 
