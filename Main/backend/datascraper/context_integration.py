@@ -58,7 +58,7 @@ class ContextIntegration:
         # Determine based on endpoint
         if 'adv' in endpoint or 'advanced' in endpoint:
             return ContextMode.RESEARCH
-        elif 'agent' in endpoint or request.GET.get('use_playwright') == 'true':
+        elif 'agent' in endpoint:
             return ContextMode.THINKING
         else:
             return ContextMode.NORMAL
@@ -164,26 +164,6 @@ class ContextIntegration:
                     'published_date': result.get('published_date')
                 }
             )
-
-    def add_playwright_content(
-        self,
-        session_id: str,
-        content: str,
-        url: str,
-        action: Optional[str] = None
-    ) -> None:
-        """Add content scraped by Playwright"""
-        extracted_data = {}
-        if action:
-            extracted_data['action'] = action
-
-        self.context_manager.add_fetched_context(
-            session_id=session_id,
-            source_type="playwright",
-            content=content,
-            url=url,
-            extracted_data=extracted_data
-        )
 
     def clear_messages(
         self,
