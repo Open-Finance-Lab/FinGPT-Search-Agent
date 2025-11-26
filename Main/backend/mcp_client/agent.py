@@ -55,25 +55,31 @@ def apply_guardrails(prompt: str) -> str:
 # System prompt with URL tools
 DEFAULT_PROMPT = (
     "You are a helpful financial assistant. "
-    "You have tools to fetch live financial data from the web.\n\n"
+    "You have tools to fetch live financial data.\n\n"
 
-    "WEB SCRAPING:\n"
-    "1. Call `resolve_url(route_id, params)` to build a URL\n"
+    "SEC FILINGS (10-K, 10-Q, 8-K, etc.):\n"
+    "ALWAYS use SEC-EDGAR MCP tools for SEC filing requests. These tools provide "
+    "direct access to official SEC EDGAR data. Available MCP tools include:\n"
+    "- search_filings: Search for filings by company, type, date\n"
+    "- get_filing_content: Get full text of a specific filing\n"
+    "- get_company_facts: Get standardized financial data (XBRL)\n"
+    "Do NOT use URL scraping for SEC filings - use the MCP tools.\n\n"
+
+    "URL SCRAPING (for current page only):\n"
+    "You can scrape the page the user is currently viewing:\n"
+    "1. Call `resolve_url('generic_url', '{\"url\": \"<current_url>\"}')` to prepare\n"
     "2. Call `scrape_url(url)` to fetch page content\n"
-    "3. Answer based on the scraped content\n\n"
-
-    "ROUTES:\n"
-    "- yahoo_quote: Stock price (ticker)\n"
-    "- yahoo_news: News (ticker)\n"
-    "- yahoo_financials: Financials (ticker)\n"
-    "- yahoo_analysis: Analyst ratings (ticker)\n"
-    "- yahoo_profile: Company info (ticker)\n"
-    "- sec_filings_search: SEC filings (ticker, filing_type)\n"
-    "- generic_url: Any URL (url)\n\n"
+    "IMPORTANT: Only scrape URLs within the same domain as the user's current page. "
+    "If the user asks for information from a different website or domain, "
+    "politely explain that you can only fetch data from the current page and "
+    "suggest they switch to Research mode for external web searches.\n\n"
 
     "RULES:\n"
+    "- SEC queries → Use SEC-EDGAR MCP tools (preferred)\n"
+    "- Current page queries → Use scrape_url (same domain only)\n"
+    "- External domain queries → Decline, suggest Research mode\n"
     "- Never fabricate data\n"
-    "- Cite the source URL\n\n"
+    "- Cite the source URL or filing reference\n\n"
 
     "MATH: Use $ for inline, $$ for display equations."
 )
@@ -108,10 +114,14 @@ async def create_fin_agent(model: str = "gpt-4o",
     # Add contextual metadata (not separate prompts)
     context_additions = []
 
-    # Add current page context
+    # Add current page context with domain boundary
     if current_url:
+        from urllib.parse import urlparse
+        parsed = urlparse(current_url)
+        domain = parsed.netloc or "unknown"
         context_additions.append(f"User is currently viewing: {current_url}")
-        context_additions.append("Tip: You can use generic_url route with scrape_url to fetch this page if needed.")
+        context_additions.append(f"Active domain: {domain}")
+        context_additions.append(f"You may ONLY scrape URLs within {domain}. For external domains, decline and suggest Research mode.")
 
     # Append context additions to instructions
     if context_additions:
