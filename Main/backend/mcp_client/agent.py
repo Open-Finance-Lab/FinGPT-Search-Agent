@@ -85,7 +85,7 @@ DEFAULT_PROMPT = (
 )
 
 @asynccontextmanager
-async def create_fin_agent(model: str = "gpt-4o",
+async def create_fin_agent(model: str = "gpt-4o-mini",
                           system_prompt: Optional[str] = None,
                           current_url: Optional[str] = None,
                           user_input: Optional[str] = None,
