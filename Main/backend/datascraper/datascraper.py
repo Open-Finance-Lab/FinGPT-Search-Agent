@@ -110,7 +110,7 @@ def _prepare_advanced_search_inputs(model: str, preferred_links: list[str] | Non
         logging.warning(f"No config found for model {model}, using as-is")
 
     if not is_responses_api_available(actual_model):
-        fallback_model = "gpt-4o"
+        fallback_model = "gpt-4o-mini"
         logging.warning(f"Model {actual_model} (from {model}) doesn't support Responses API")
         logging.info(f"FALLBACK: Using {fallback_model} for web search instead")
         actual_model = fallback_model

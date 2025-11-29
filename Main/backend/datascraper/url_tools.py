@@ -136,9 +136,11 @@ def _smart_compress(text: str, url: str) -> str:
             max_tokens=6000, # Allow enough space for a detailed summary
             temperature=0.3
         )
-        return response.choices[0].message.content
+        compressed_text = response.choices[0].message.content
+        logger.info(f"[SMART COMPRESSION] Success for {url}. Reduced {len(text)} chars -> {len(compressed_text)} chars ({(len(compressed_text)/len(text))*100:.1f}%)")
+        return compressed_text
     except Exception as e:
-        logger.error(f"Smart compression failed: {e}")
+        logger.error(f"[SMART COMPRESSION] Failed for {url}: {e}")
         return text[:15000] + f"\n[Compression failed: {str(e)}]"
 
 
