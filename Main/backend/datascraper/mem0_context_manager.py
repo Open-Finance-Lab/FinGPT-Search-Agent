@@ -110,6 +110,7 @@ class Mem0ContextManager:
                 "web_search": [],
                 "js_scraping": []
             },
+            "content_hashes": set(), # For deduplication
             "message_count": 0,
             "token_count": 0,
             "current_webpage": None,
@@ -179,6 +180,14 @@ class Mem0ContextManager:
         """
         session = self.sessions[session_id]
         session["last_used"] = datetime.now(UTC)
+
+        # Deduplication check
+        content_hash = hash(content)
+        if content_hash in session["content_hashes"]:
+            logging.info(f"[Mem0] Skipping duplicate context for session {session_id} (URL: {url})")
+            return
+        
+        session["content_hashes"].add(content_hash)
 
         timestamp = datetime.now(UTC)
         token_estimate = self.count_tokens(content)
