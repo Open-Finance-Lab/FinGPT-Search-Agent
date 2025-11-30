@@ -144,10 +144,55 @@ def _smart_compress(text: str, url: str) -> str:
         return text[:15000] + f"\n[Compression failed: {str(e)}]"
 
 
+
+def scrape_with_playwright(url: str) -> str:
+    """Fallback scraping using Playwright for SPAs."""
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        logger.warning("Playwright not installed, skipping fallback")
+        return ""
+
+    try:
+        with sync_playwright() as p:
+            # Launch options compatible with the Docker environment
+            browser = p.chromium.launch(headless=True, args=['--no-sandbox', '--disable-setuid-sandbox'])
+            
+            # Create context with user agent to avoid detection
+            context = browser.new_context(
+                user_agent=HEADERS['User-Agent'],
+                viewport={'width': 1280, 'height': 800}
+            )
+            
+            page = context.new_page()
+            
+            # Navigate with timeout
+            logger.info(f"Playwright scraping: {url}")
+            page.goto(url, timeout=30000, wait_until="domcontentloaded")
+            
+            # Wait a bit for JS to execute (simple heuristic)
+            try:
+                page.wait_for_load_state("networkidle", timeout=5000)
+            except Exception:
+                pass # Continue if network doesn't settle
+                
+            # Get text content
+            # We use evaluate to get innerText which is closer to rendered text
+            text = page.evaluate("document.body.innerText")
+            
+            browser.close()
+            return _clean_text(text)
+            
+    except Exception as e:
+        logger.error(f"Playwright scraping failed for {url}: {e}")
+        return ""
+
+
 @function_tool
 def scrape_url(url: str) -> str:
     """
     Fetch a URL and return the visible text content.
+    Uses requests first, falls back to Playwright for SPAs.
     Uses smart compression for long pages.
 
     Args:
@@ -159,6 +204,9 @@ def scrape_url(url: str) -> str:
     if not url.startswith(('http://', 'https://')):
         return json.dumps({"error": "Invalid URL"})
 
+    text = ""
+    used_method = "requests"
+
     try:
         response = requests.get(url, headers=HEADERS, timeout=15)
         response.raise_for_status()
@@ -166,24 +214,44 @@ def scrape_url(url: str) -> str:
         soup = BeautifulSoup(response.text, 'html.parser')
 
         # Remove script and style elements
-        # Added header, footer, nav, aside to remove more noise
         for tag in soup(['script', 'style', 'noscript', 'iframe', 'svg', 'header', 'footer', 'nav', 'aside']):
             tag.decompose()
 
-        # Get text (equivalent to document.body.innerText)
+        # Get text
         text = soup.get_text(separator='\n', strip=True)
         text = _clean_text(text)
-
-        # Smart compression threshold
-        # 4000 chars is roughly 1000 tokens. If it's smaller, it's cheap enough to pass through.
-        if len(text) > 4000:
-            logger.info(f"Compressing content for {url} (Length: {len(text)})")
-            text = _smart_compress(text, url)
         
-        return json.dumps({"url": url, "content": text})
+        # Check if content is suspicious (too short or JS required)
+        is_suspicious = len(text) < 500 or "javascript" in text.lower() or "enable js" in text.lower()
+        
+        if is_suspicious:
+            logger.info(f"Content suspicious (len={len(text)}), attempting Playwright fallback for {url}")
+            pw_text = scrape_with_playwright(url)
+            if len(pw_text) > len(text):
+                text = pw_text
+                used_method = "playwright"
+                logger.info(f"Playwright fallback successful (len={len(text)})")
 
     except Exception as e:
-        return json.dumps({"error": str(e), "url": url})
+        logger.warning(f"Requests scraping failed for {url}: {e}. Attempting Playwright fallback.")
+        # Fallback to Playwright on error
+        text = scrape_with_playwright(url)
+        if text:
+            used_method = "playwright"
+        else:
+            return json.dumps({"error": f"Failed to scrape {url}: {str(e)}", "url": url})
+
+    # Smart compression threshold
+    if len(text) > 4000:
+        logger.info(f"Compressing content for {url} (Length: {len(text)})")
+        text = _smart_compress(text, url)
+    
+    return json.dumps({
+        "url": url, 
+        "content": text, 
+        "method": used_method,
+        "length": len(text)
+    })
 
 
 def get_url_tools():
