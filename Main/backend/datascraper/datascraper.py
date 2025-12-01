@@ -24,6 +24,7 @@ from .openai_search import (
     format_sources_for_frontend,
     is_responses_api_available
 )
+from .unified_context_manager import get_context_manager
 
 # Load .env from the backend root directory
 from pathlib import Path
@@ -915,9 +916,51 @@ def create_agent_response_stream(
     return _stream(), state
 
 
-def get_sources(query: str, current_url: str | None = None) -> Dict[str, Any]:
-    """Return empty sources structure (sources returned in response object)."""
-    return {"sources": [], "query": query, "current_url": current_url}
+def get_sources(query: str, current_url: str | None = None, session_id: str | None = None) -> Dict[str, Any]:
+    """
+    Get sources for a query from the Unified Context Manager.
+    Retrieves sources from the last assistant message in the session.
+    """
+    sources = []
+    
+    if session_id:
+        try:
+            manager = get_context_manager()
+            session = manager._get_or_create_session(session_id)
+            
+            # Find the last assistant message with sources
+            for msg in reversed(session["conversation_history"]):
+                if msg.role == "assistant" and msg.metadata and msg.metadata.sources_used:
+                    # Convert source dicts to the format expected by frontend
+                    for source in msg.metadata.sources_used:
+                        # Handle both dictionary and object access
+                        url = source.get("url") if isinstance(source, dict) else getattr(source, "url", None)
+                        title = source.get("title") if isinstance(source, dict) else getattr(source, "title", None)
+                        
+                        if url:
+                            sources.append({
+                                "url": url,
+                                "title": title or url,
+                                "icon": None # Icon fetching removed
+                            })
+                    break
+            
+            # If no sources in messages, check fetched_context (fallback)
+            if not sources and session["fetched_context"]["web_search"]:
+                logging.info(f"Fallback: Using {len(session['fetched_context']['web_search'])} web search items from context")
+                for item in session["fetched_context"]["web_search"]:
+                    url = item.url
+                    if url:
+                        sources.append({
+                            "url": url,
+                            "title": item.extracted_data.get("title") if item.extracted_data else url,
+                            "icon": None
+                        })
+                        
+        except Exception as e:
+            logging.error(f"Error retrieving sources for session {session_id}: {e}")
+            
+    return {"sources": sources, "query": query, "current_url": current_url}
 
 
 def get_website_icon(url):
