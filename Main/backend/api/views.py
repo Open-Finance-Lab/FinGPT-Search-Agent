@@ -881,7 +881,9 @@ def get_sources(request: HttpRequest) -> JsonResponse:
     """Get sources for a query"""
     query = request.GET.get('query', '')
     current_url = request.GET.get('current_url')
-    sources = ds.get_sources(query, current_url=current_url)
+    session_id = _get_session_id(request)
+    
+    sources = ds.get_sources(query, current_url=current_url, session_id=session_id)
 
     # Log the source request
     logger.info(f"Interaction [sources]: URL={current_url or 'N/A'}, Q='Source request: {query}'")
