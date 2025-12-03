@@ -12,7 +12,6 @@ from mcp.client.stdio import stdio_client
 from mcp.client.sse import sse_client
 from mcp.types import Tool as MCPTool, CallToolResult
 
-# Configure logging
 logger = logging.getLogger(__name__)
 
 class MCPClientManager:
@@ -28,20 +27,19 @@ class MCPClientManager:
     ):
         self.exit_stack = AsyncExitStack()
         self.sessions: Dict[str, ClientSession] = {}
-        self.tools_map: Dict[str, str] = {} # tool_name -> server_name
+        self.tools_map: Dict[str, str] = {}
         self.verbose = verbose
         self._printer = printer or print
 
         if config_path:
             self.config_path = Path(config_path)
         else:
-            # Default to mcp_server_config.json in the backend root
             self.config_path = Path(__file__).resolve().parent.parent / "mcp_server_config.json"
 
         self._stop_event = asyncio.Event()
         self._connection_task: Optional[asyncio.Task] = None
         self._servers_ready = asyncio.Event()
-        self._loop: Optional[asyncio.AbstractEventLoop] = None  # Store the event loop
+        self._loop: Optional[asyncio.AbstractEventLoop] = None
 
     def _log(self, message: str, *, force: bool = False):
         """Print debug output only when verbose or forced."""
@@ -72,14 +70,12 @@ class MCPClientManager:
 
         self._log("[MCP DEBUG] Starting MCP server connection loop...")
 
-        # Store the current event loop
         self._loop = asyncio.get_event_loop()
 
         self._stop_event.clear()
         self._servers_ready.clear()
         self._connection_task = asyncio.create_task(self._run_servers())
 
-        # Wait for servers to be ready
         await self._servers_ready.wait()
         self._log("[MCP DEBUG] MCP servers ready.")
 
@@ -106,10 +102,8 @@ class MCPClientManager:
                         self._log(f"[MCP DEBUG] Failed to connect to {server_name}: {e}", force=True)
                         logger.error(f"Failed to connect to MCP server {server_name}: {e}")
                 
-                # Signal that we are ready
                 self._servers_ready.set()
                 
-                # Keep running until stopped
                 await self._stop_event.wait()
                 
         except Exception as e:
@@ -122,16 +116,10 @@ class MCPClientManager:
     async def _connect_server(self, server_name: str, config: Dict[str, Any]):
         """Establishes a connection to a single MCP server."""
         
-        # 1. Check for SSE (Server-Sent Events) configuration
-        # Assuming config format: {"url": "http://..."} for SSE
-        # or {"command": "...", "args": [...], "env": {...}} for Stdio
         
         if "url" in config:
-            # SSE Connection
             url = config["url"]
             self._log(f"[MCP DEBUG] {server_name} using SSE transport: {url}")
-            # We need to maintain the transport context
-            # sse_client is an async context manager
             transport_ctx = sse_client(url)
             read_stream, write_stream = await self.exit_stack.enter_async_context(transport_ctx)
             
@@ -142,19 +130,15 @@ class MCPClientManager:
             self.sessions[server_name] = session
             
         elif "command" in config:
-            # Stdio Connection
             command = config["command"]
             args = config.get("args", [])
             env = config.get("env", {})
 
             self._log(f"[MCP DEBUG] {server_name} using Stdio transport: {command} {args}")
 
-            # Merge with current environment and substitute environment variables
             full_env = os.environ.copy()
-            # Substitute ${VAR} or $VAR patterns in env values
             for key, value in env.items():
                 if isinstance(value, str):
-                    # Simple substitution for ${VAR} and $VAR patterns
                     import re
                     def replace_var(match):
                         var_name = match.group(1) or match.group(2)
@@ -162,7 +146,6 @@ class MCPClientManager:
                     value = re.sub(r'\$\{([^}]+)\}|\$(\w+)', replace_var, value)
                 full_env[key] = value
 
-            # Resolve command path if necessary (e.g. 'npx' or 'python')
             executable = shutil.which(command) or command
 
             server_params = StdioServerParameters(
@@ -191,17 +174,12 @@ class MCPClientManager:
         if not self._loop:
             raise RuntimeError("MCP event loop not available. Ensure connect_to_servers was called.")
 
-        # Submit the coroutine to the background thread's event loop
         future = asyncio.run_coroutine_threadsafe(coro, self._loop)
-        # Wait for result (blocks current thread)
-        return future.result(timeout=30)  # 30 second timeout
+        return future.result(timeout=30)
 
     async def get_all_tools(self) -> List[MCPTool]:
         """Fetches tools from all connected servers."""
-        # Ensure we are connected
         if not self._servers_ready.is_set():
-             # Try to connect if not running?
-             # For now assume connect_to_servers was called.
              self._log("[MCP DEBUG] Warning: Servers not ready when fetching tools", force=True)
 
         all_tools = []
@@ -214,7 +192,6 @@ class MCPClientManager:
                 result = await session.list_tools()
                 self._log(f"[MCP DEBUG] Server '{server_name}' provided {len(result.tools)} tools")
 
-                # Map tools without verbose logging
                 for tool in result.tools:
                     if tool.name in self.tools_map:
                         self._log(f"[MCP DEBUG] WARNING: Tool name collision: {tool.name} in {server_name}", force=True)
@@ -234,7 +211,6 @@ class MCPClientManager:
         """Executes a tool on the appropriate server with very detailed logging."""
         import json
 
-        # Detailed request logging
         self._log("=" * 80, force=True)
         self._log(f"[MCP TOOL REQUEST] Tool: {tool_name}", force=True)
         self._log(f"[MCP TOOL REQUEST] Server: {self.tools_map.get(tool_name, 'unknown')}", force=True)
@@ -263,12 +239,10 @@ class MCPClientManager:
             raise RuntimeError(f"Session for server {server_name} is not active.")
 
         try:
-            # Execute the tool
             self._log(f"[MCP TOOL EXEC] Calling {server_name} server...", force=True)
             result: CallToolResult = await session.call_tool(tool_name, arguments)
             self._log(f"[MCP TOOL EXEC] Server responded", force=True)
 
-            # Detailed response logging
             self._log("-" * 80, force=True)
             self._log(f"[MCP TOOL RESPONSE] Processing result from {tool_name}", force=True)
 
@@ -286,7 +260,6 @@ class MCPClientManager:
                         item_size = len(item.text)
                         total_size += item_size
 
-                        # Show first 300 chars for visibility
                         if len(item.text) > 300:
                             preview = item.text[:300] + f"... ({len(item.text)} total chars)"
                         else:
@@ -309,18 +282,15 @@ class MCPClientManager:
                         self._log(f"[MCP TOOL RESPONSE]   Type: {item.type}", force=True)
                         self._log(f"[MCP TOOL RESPONSE]   Data: {str(item)[:200]}", force=True)
 
-            # Summary
             self._log("-" * 80, force=True)
             self._log(f"[MCP TOOL SUMMARY] Total items: {item_count}", force=True)
             self._log(f"[MCP TOOL SUMMARY] Total text size: {total_size} bytes ({total_size/1024:.2f} KB)", force=True)
 
-            # Warn if payload is large
             if total_size > 10240:
                 self._log(f"[MCP TOOL WARNING] ⚠ Large payload: {total_size/1024:.1f} KB", force=True)
                 self._log(f"[MCP TOOL WARNING] ⚠ Exceeds OpenAI tracing limit (10KB)", force=True)
                 self._log(f"[MCP TOOL WARNING] ⚠ Tracing errors expected but tool execution will succeed", force=True)
 
-            # Success indicator
             self._log(f"[MCP TOOL SUCCESS] ✓ {tool_name} completed successfully", force=True)
             self._log("=" * 80, force=True)
 
@@ -332,7 +302,6 @@ class MCPClientManager:
             self._log(f"[MCP TOOL ERROR] ✗ Error type: {type(e).__name__}", force=True)
             self._log(f"[MCP TOOL ERROR] ✗ Error message: {str(e)}", force=True)
 
-            # Try to get more details
             if hasattr(e, '__dict__'):
                 self._log(f"[MCP TOOL ERROR] ✗ Error details: {e.__dict__}", force=True)
 

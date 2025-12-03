@@ -24,7 +24,6 @@ def convert_mcp_tool_to_python_callable(tool: MCPTool, execute_fn: Callable) -> 
     properties = input_schema.get("properties", {})
     required = input_schema.get("required", [])
     
-    # Construct the docstring
     docstring = f"{description}\n\nArgs:\n"
     for prop_name, prop_schema in properties.items():
         prop_desc = prop_schema.get("description", "")
@@ -32,10 +31,6 @@ def convert_mcp_tool_to_python_callable(tool: MCPTool, execute_fn: Callable) -> 
         is_required = " (required)" if prop_name in required else " (optional)"
         docstring += f"    {prop_name} ({prop_type}): {prop_desc}{is_required}\n"
     
-    # Map JSON schema types to Python type strings
-    # We map 'object' and 'array' to 'str' to avoid Pydantic/OpenAI strict mode issues
-    # with complex schemas (e.g. "additionalProperties should not be set").
-    # The agent is capable of passing JSON strings.
     type_str_mapping = {
         "string": "str",
         "integer": "int",
@@ -45,16 +40,11 @@ def convert_mcp_tool_to_python_callable(tool: MCPTool, execute_fn: Callable) -> 
         "array": "str" 
     }
     
-    # Build parameter type strings dynamically
     param_type_strs = {}
     for prop_name, prop_schema in properties.items():
         json_type = prop_schema.get("type", "string")
         
-        # Special handling for arrays of simple types if we want to support them natively
-        # But to be absolutely safe against schema errors, we default to str for everything complex.
-        # If we want to support List[str], we can try, but 'array' -> 'str' is safest.
         
-        # Let's try to support List[str] for simple arrays, as it's much better for the agent.
         if json_type == "array":
             items_schema = prop_schema.get("items", {})
             item_type = items_schema.get("type", "string")
@@ -62,26 +52,20 @@ def convert_mcp_tool_to_python_callable(tool: MCPTool, execute_fn: Callable) -> 
                 mapped_item_type = type_str_mapping.get(item_type, "str")
                 param_type_strs[prop_name] = f"List[{mapped_item_type}]"
             else:
-                # Array of objects or arrays -> use JSON string
                 param_type_strs[prop_name] = "str"
         else:
             param_type_strs[prop_name] = type_str_mapping.get(json_type, "str")
             
-    # Create the dynamic function with proper signature
     
     param_names = list(properties.keys())
     param_str = ", ".join(f"{name}: {param_type_strs[name]}" for name in param_names)
     
-    # Build function code
-    # We need to handle parsing of JSON strings if we forced them
     func_code = f"""
 async def {tool_name}({param_str}) -> str:
     '''Dynamic wrapper for MCP tool.'''
-    # Construct kwargs, parsing JSON strings if necessary
     kwargs = {{}}
     import json
     
-    # Helper to parse if it's a JSON string
     def parse_if_needed(val, expected_type):
         if expected_type == 'object' or expected_type == 'array':
             if isinstance(val, str):
@@ -92,14 +76,11 @@ async def {tool_name}({param_str}) -> str:
                     pass
         return val
 
-    # Populate kwargs
 """
     
-    # Add kwargs population logic
     for name in param_names:
         prop_schema = properties.get(name, {})
         json_type = prop_schema.get("type", "string")
-        # Check if we forced it to be a string but it should be an object/array
         is_forced_string = False
         if json_type == "object":
             is_forced_string = True
@@ -118,7 +99,6 @@ async def {tool_name}({param_str}) -> str:
     try:
         result = await execute_fn(tool_name_var, kwargs)
         
-        # The result from MCP is typically a list of content objects
         if hasattr(result, 'content') and isinstance(result.content, list):
             text_output = []
             for item in result.content:
@@ -135,7 +115,6 @@ async def {tool_name}({param_str}) -> str:
         return f"Error executing tool {{tool_name_var}}: {{str(e)}}"
 """
     
-    # Execute the function definition
     local_vars = {
         "execute_fn": execute_fn,
         "tool_name_var": tool_name,
@@ -151,13 +130,10 @@ async def {tool_name}({param_str}) -> str:
     }
     exec(func_code, local_vars)
     
-    # Get the created function
     dynamic_func = local_vars[tool_name]
     
-    # Set the docstring
     dynamic_func.__doc__ = docstring
     
-    # Apply the function_tool decorator
     wrapped_func = function_tool(dynamic_func)
     
     return wrapped_func

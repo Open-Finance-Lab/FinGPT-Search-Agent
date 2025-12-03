@@ -1,4 +1,3 @@
-# backend/mcp_client/agent.py
 
 import os
 from typing import Optional, List
@@ -8,26 +7,20 @@ from agents import Agent
 from agents.model_settings import ModelSettings
 import logging
 
-# Load .env from the backend root directory
 from pathlib import Path
 backend_dir = Path(__file__).resolve().parent.parent
 load_dotenv(backend_dir / '.env')
 
-# Import model configuration resolver
 import sys
 sys.path.insert(0, str(backend_dir))
 from datascraper.models_config import get_model_config
 
-# URL tools for controlled web scraping (resolve_url + scrape_url)
 from datascraper.url_tools import get_url_tools
 
-# Global MCP Manager is now initialized in apps.py on Django startup
-# We import it here for use in agent creation
 from .apps import get_global_mcp_manager
 
 
-# Fallback for backward compatibility (if global manager not initialized)
-_mcp_init_lock = None # Will be initialized as asyncio.Lock()
+_mcp_init_lock = None
 
 USER_ONLY_MODELS = {"o3-mini"}
 
@@ -52,7 +45,6 @@ def apply_guardrails(prompt: str) -> str:
     return f"{prompt}\n\n{guardrails}"
 
 
-# System prompt with URL tools
 DEFAULT_PROMPT = (
     "You are a helpful financial assistant. "
     "You have tools to fetch live financial data.\n\n"
@@ -105,16 +97,13 @@ async def create_fin_agent(model: str = "gpt-4o-mini",
     Yields:
         Agent instance configured with tools
     """
-    # Use single system prompt (MCP best practice - tool-agnostic)
     if system_prompt:
         instructions = system_prompt
     else:
         instructions = DEFAULT_PROMPT
 
-    # Add contextual metadata (not separate prompts)
     context_additions = []
 
-    # Add current page context with domain boundary
     if current_url:
         from urllib.parse import urlparse
         parsed = urlparse(current_url)
@@ -123,11 +112,9 @@ async def create_fin_agent(model: str = "gpt-4o-mini",
         context_additions.append(f"Active domain: {domain}")
         context_additions.append(f"You may ONLY scrape URLs within {domain}. For external domains, decline and suggest Research mode.")
 
-    # Append context additions to instructions
     if context_additions:
         instructions += "\n\n" + "\n".join(context_additions)
 
-    # Add timezone and time information to instructions
     if user_timezone or user_time:
         from datetime import datetime
         import pytz
@@ -135,7 +122,6 @@ async def create_fin_agent(model: str = "gpt-4o-mini",
         time_info_parts = []
         if user_timezone and user_time:
             try:
-                # Parse ISO time and convert to user's timezone
                 utc_time = datetime.fromisoformat(user_time.replace('Z', '+00:00'))
                 user_tz = pytz.timezone(user_timezone)
                 local_time = utc_time.astimezone(user_tz)
@@ -154,7 +140,6 @@ async def create_fin_agent(model: str = "gpt-4o-mini",
 
     instructions = apply_guardrails(instructions)
 
-    # Resolve model ID to actual model name via models_config
     model_config = get_model_config(model)
     if not model_config:
         logging.warning(f"Model ID '{model}' not found in config, using as-is")
@@ -163,27 +148,20 @@ async def create_fin_agent(model: str = "gpt-4o-mini",
         actual_model = model_config["model_name"]
         logging.info(f"Model resolution: {model} -> {actual_model}")
 
-    # Build tools list
     tools: List = []
 
-    # 1. Add URL tools (resolve_url + scrape_url) for web scraping
     url_tools = get_url_tools()
     tools.extend(url_tools)
     print(f"[AGENT DEBUG] Added {len(url_tools)} URL tools (resolve_url, scrape_url)")
 
-    # 3. Initialize and Add MCP Tools (SEC-EDGAR, filesystem)
-    # We import here to avoid circular dependencies or startup errors if mcp is not configured
     from .mcp_manager import MCPClientManager
     from .tool_wrapper import convert_mcp_tool_to_python_callable
     import asyncio
 
     global _mcp_init_lock
 
-    # Try to get the pre-initialized global MCP manager from Django startup
     _mcp_manager = get_global_mcp_manager()
 
-    # Fallback: If global manager not available (e.g., during development or tests)
-    # initialize one on-demand
     if _mcp_manager is None:
         print("="*60)
         print("[MCP DEBUG] ⚠ Global MCP manager not found!")
@@ -191,18 +169,15 @@ async def create_fin_agent(model: str = "gpt-4o-mini",
         print("[MCP DEBUG] Creating fallback instance for this request...")
         print("="*60)
 
-        # Initialize lock if needed (per-process singleton)
         if _mcp_init_lock is None:
             _mcp_init_lock = asyncio.Lock()
 
         async with _mcp_init_lock:
-            # Check again inside lock (another request might have initialized it)
             _mcp_manager = get_global_mcp_manager()
             if _mcp_manager is None:
                 print("[MCP DEBUG] Connecting to MCP servers (fallback mode)...")
                 manager = MCPClientManager()
                 try:
-                    # Connect to all configured MCP servers
                     await manager.connect_to_servers()
                     _mcp_manager = manager
                     print("[MCP DEBUG] ✓ Fallback MCP Client Manager connected.")
@@ -211,33 +186,26 @@ async def create_fin_agent(model: str = "gpt-4o-mini",
                     print(f"[MCP DEBUG] ✗ Failed to initialize MCP tools: {e}")
                     print("="*60)
                     logging.error(f"Failed to initialize MCP tools: {e}")
-                    # We don't fail the whole agent creation, just log and continue without MCP tools
                     _mcp_manager = None
     else:
         print("[MCP DEBUG] ✓ Using pre-initialized global MCP manager")
 
-    # Use the manager if available
     if _mcp_manager:
         try:
-            # Fetch tools from the MCP manager's event loop
             print("[MCP DEBUG] Fetching MCP tools...")
 
-            # Since we're in an async context but need to run on MCP's loop,
-            # we use run_coroutine_threadsafe to bridge the two event loops
             if _mcp_manager._loop:
-                # Submit to MCP's event loop and wait for result
                 import concurrent.futures
                 future = asyncio.run_coroutine_threadsafe(
                     _mcp_manager.get_all_tools(),
                     _mcp_manager._loop
                 )
                 try:
-                    mcp_tools = future.result(timeout=10)  # 10 second timeout
+                    mcp_tools = future.result(timeout=10)
                 except concurrent.futures.TimeoutError:
                     print("[MCP DEBUG] ✗ Timeout fetching MCP tools")
                     mcp_tools = []
             else:
-                # Fallback: try direct await (might not work if sessions on different loop)
                 print("[MCP DEBUG] Warning: MCP loop not found, trying direct await")
                 mcp_tools = await _mcp_manager.get_all_tools()
 
@@ -245,28 +213,21 @@ async def create_fin_agent(model: str = "gpt-4o-mini",
                 print(f"[MCP DEBUG] ✓ Agent configured with {len(mcp_tools)} MCP tools")
                 logging.info(f"Found {len(mcp_tools)} MCP tools from connected servers.")
 
-                # Convert MCP tools to Agent-compatible callables
                 for tool in mcp_tools:
-                    # We create a closure that calls _mcp_manager.execute_tool
-                    # The execute_tool must also run on MCP's event loop
 
-                    # Wrapper to bind the manager instance and handle cross-loop execution
                     async def execute_mcp_tool(name, args, mgr=_mcp_manager):
-                        # Execute on MCP's event loop
                         if mgr._loop:
                             future = asyncio.run_coroutine_threadsafe(
                                 mgr.execute_tool(name, args),
                                 mgr._loop
                             )
-                            return future.result(timeout=60)  # 60 second timeout for tool execution
+                            return future.result(timeout=60)
                         else:
                             return await mgr.execute_tool(name, args)
 
                     agent_tool = convert_mcp_tool_to_python_callable(tool, execute_mcp_tool)
                     tools.append(agent_tool)
 
-                # Don't modify instructions based on which tools are loaded
-                # Agent discovers tools dynamically (MCP best practice)
             else:
                 print("[MCP DEBUG] ⚠ No MCP tools found")
 
@@ -275,11 +236,10 @@ async def create_fin_agent(model: str = "gpt-4o-mini",
             logging.error(f"Error fetching/adding MCP tools: {e}", exc_info=True)
 
     try:
-        # Create agent with or without tools
         agent = Agent(
             name="FinGPT Search Agent",
             instructions=instructions,
-            model=actual_model,  # Remember to use resolved model name, not frontend ID
+            model=actual_model,
             tools=tools if tools else [],
             model_settings=ModelSettings(
                 tool_choice="auto" if tools else None
@@ -289,9 +249,5 @@ async def create_fin_agent(model: str = "gpt-4o-mini",
         yield agent
 
     finally:
-        # Cleanup
         
-        # 1. Cleanup MCP connections
-        # We DO NOT cleanup the global MCP manager here, as it is shared across requests.
-        # It will be cleaned up when the process exits.
         pass

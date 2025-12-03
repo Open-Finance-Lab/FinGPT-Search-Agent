@@ -1,5 +1,5 @@
 // main.js
-import { postWebTextToServer, setSessionId } from './modules/api.js';
+import { postWebTextToServer, setSessionId, triggerAutoScrape, setAutoScrapePromise } from './modules/api.js';
 import { createUI } from './modules/ui.js';
 import { fetchAvailableModels } from './modules/config.js';
 import { initializeWithCurrentPage } from './modules/sourcesCache.js';
@@ -28,18 +28,23 @@ fetchAvailableModels().then(() => {
     alert(`Failed to connect to Agentic FinSearch backend: ${error.message}\n\nPlease ensure the backend server at ${getBackendBaseUrl()} is reachable.`);
 });
 
-// Legacy JS scraping DISABLED to verify Playwright MCP functionality
-// The agent will now ONLY use Playwright MCP tools to scrape webpages
-console.log("[MCP MODE] Legacy JS scraping disabled - agent will use Playwright MCP for page content");
-
-// POST JSON to the server endpoint
-// postWebTextToServer(textContent, currentUrl)
-//     .then(data => {
-//         console.log("Response from server:", data);
-//     })
-//     .catch(error => {
-//         console.error("There was a problem with your fetch operation:", error);
-//     });
 
 // Initialize UI
 const { popup, settings_window, sources_window, searchQuery } = createUI();
+
+// Trigger auto-scraping of the current page
+console.log("Triggering auto-scrape for:", currentUrl);
+
+// Show loading indicator
+const loadingIndicator = document.getElementById('auto-scrape-loading');
+if (loadingIndicator) {
+    loadingIndicator.style.display = 'flex';
+}
+
+// Store the promise so chat requests can wait for it to complete
+setAutoScrapePromise(triggerAutoScrape(currentUrl)).finally(() => {
+    // Hide loading indicator
+    if (loadingIndicator) {
+        loadingIndicator.style.display = 'none';
+    }
+});

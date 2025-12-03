@@ -31,9 +31,6 @@ from datascraper.datascraper import (
 logger = logging.getLogger(__name__)
 
 
-# ============================================================================
-# Core Chat Endpoints
-# ============================================================================
 
 @csrf_exempt
 @require_http_methods(["GET"])
@@ -43,7 +40,6 @@ def chat_response(request: HttpRequest) -> JsonResponse:
     Uses unified context manager for full conversation history.
     """
     try:
-        # Extract parameters
         question = request.GET.get('question', '')
         models = request.GET.get('models', 'gpt-4o-mini').split(',')
         current_url = request.GET.get('current_url', '')
@@ -52,7 +48,6 @@ def chat_response(request: HttpRequest) -> JsonResponse:
         if not question:
             return JsonResponse({'error': 'No question provided'}, status=400)
 
-        # Extract domain from current URL for restriction
         restricted_domain = None
         if current_url:
             from urllib.parse import urlparse
@@ -61,7 +56,6 @@ def chat_response(request: HttpRequest) -> JsonResponse:
 
         logger.info(f"Chat request: models={models}, domain={restricted_domain}, unified={use_unified}")
 
-        # Prepare context with full conversation history
         messages, session_id = prepare_context_messages(
             request=request,
             question=question,
@@ -73,10 +67,8 @@ def chat_response(request: HttpRequest) -> JsonResponse:
         responses = {}
         start_time = time.time()
 
-        # Get response from each model
         for model in models:
             try:
-                # Use agent with Playwright for domain navigation
                 response = create_agent_response(
                     user_input=question,
                     message_list=messages,
@@ -88,7 +80,6 @@ def chat_response(request: HttpRequest) -> JsonResponse:
 
                 responses[model] = response
 
-                # Add response to context with metadata
                 response_time_ms = int((time.time() - start_time) * 1000)
                 add_response_to_context(
                     session_id=session_id,
@@ -102,10 +93,8 @@ def chat_response(request: HttpRequest) -> JsonResponse:
                 logger.error(f"Error with model {model}: {e}")
                 responses[model] = f"Error: {str(e)}"
 
-        # Get context statistics
         stats = get_context_stats(session_id)
 
-        # Build response
         result = {
             'resp': responses,
             'context_stats': {
@@ -133,7 +122,6 @@ def adv_response(request: HttpRequest) -> JsonResponse:
     Uses unified context manager with RESEARCH mode.
     """
     try:
-        # Extract parameters
         question = request.GET.get('question', '')
         models = request.GET.get('models', 'gpt-4o-mini').split(',')
         preferred_links = request.GET.get('preferred_links', '[]')
@@ -142,7 +130,6 @@ def adv_response(request: HttpRequest) -> JsonResponse:
         if not question:
             return JsonResponse({'error': 'No question provided'}, status=400)
 
-        # Parse preferred links
         try:
             preferred_urls = json.loads(preferred_links) if preferred_links else []
         except json.JSONDecodeError:
@@ -150,7 +137,6 @@ def adv_response(request: HttpRequest) -> JsonResponse:
 
         logger.info(f"Advanced request: models={models}, preferred={len(preferred_urls)}, unified={use_unified}")
 
-        # Prepare context with RESEARCH mode
         messages, session_id = prepare_context_messages(
             request=request,
             question=question,
@@ -158,7 +144,6 @@ def adv_response(request: HttpRequest) -> JsonResponse:
             endpoint="adv_response"
         )
 
-        # Update mode to RESEARCH
         if use_unified:
             integration = get_context_integration()
             integration.context_manager.update_metadata(
@@ -170,10 +155,8 @@ def adv_response(request: HttpRequest) -> JsonResponse:
         all_sources = []
         start_time = time.time()
 
-        # Get response from each model
         for model in models:
             try:
-                # Create advanced response with web search
                 response, sources = create_advanced_response(
                     user_input=question,
                     message_list=messages,
@@ -187,12 +170,10 @@ def adv_response(request: HttpRequest) -> JsonResponse:
                 responses[model] = response
                 all_sources.extend(sources)
 
-                # Add search results to context
                 if use_unified and sources:
                     integration = get_context_integration()
                     integration.add_search_results(session_id, sources)
 
-                # Add response to context
                 response_time_ms = int((time.time() - start_time) * 1000)
                 add_response_to_context(
                     session_id=session_id,
@@ -207,10 +188,8 @@ def adv_response(request: HttpRequest) -> JsonResponse:
                 logger.error(f"Error with model {model}: {e}")
                 responses[model] = f"Error: {str(e)}"
 
-        # Get context statistics
         stats = get_context_stats(session_id)
 
-        # Build response
         result = {
             'resp': responses,
             'used_sources': all_sources,
@@ -238,7 +217,6 @@ def agent_chat_response(request: HttpRequest) -> JsonResponse:
     Uses unified context manager with THINKING mode.
     """
     try:
-        # Parse request body
         body = json.loads(request.body) if request.body else {}
         question = body.get('question', request.GET.get('question', ''))
         models = body.get('models', request.GET.get('models', 'gpt-4o-mini'))
@@ -253,7 +231,6 @@ def agent_chat_response(request: HttpRequest) -> JsonResponse:
 
         logger.info(f"Agent request: models={models}, playwright={use_playwright}, unified={use_unified}")
 
-        # Prepare context with THINKING mode
         messages, session_id = prepare_context_messages(
             request=request,
             question=question,
@@ -261,7 +238,6 @@ def agent_chat_response(request: HttpRequest) -> JsonResponse:
             endpoint="agent_chat_response"
         )
 
-        # Update mode to THINKING
         if use_unified:
             integration = get_context_integration()
             integration.context_manager.update_metadata(
@@ -272,27 +248,23 @@ def agent_chat_response(request: HttpRequest) -> JsonResponse:
         responses = {}
         start_time = time.time()
 
-        # Get response from each model
         for model in models:
             try:
-                # Create agent response
                 response = create_agent_response(
                     user_input=question,
                     message_list=messages,
                     model=model,
                     use_playwright=use_playwright,
-                    restricted_domain=None,  # No restriction in agent mode
+                    restricted_domain=None,
                     current_url=body.get('current_url')
                 )
 
                 responses[model] = response
 
-                # Determine tools used
                 tools_used = []
                 if use_playwright:
                     tools_used.append("playwright")
 
-                # Add response to context
                 response_time_ms = int((time.time() - start_time) * 1000)
                 add_response_to_context(
                     session_id=session_id,
@@ -306,10 +278,8 @@ def agent_chat_response(request: HttpRequest) -> JsonResponse:
                 logger.error(f"Error with model {model}: {e}")
                 responses[model] = f"Error: {str(e)}"
 
-        # Get context statistics
         stats = get_context_stats(session_id)
 
-        # Build response
         result = {
             'resp': responses,
             'context_stats': {
@@ -328,9 +298,6 @@ def agent_chat_response(request: HttpRequest) -> JsonResponse:
         return JsonResponse({'error': str(e)}, status=500)
 
 
-# ============================================================================
-# Context Management Endpoints
-# ============================================================================
 
 @csrf_exempt
 @require_http_methods(["POST"])
@@ -340,7 +307,6 @@ def input_webtext(request: HttpRequest) -> JsonResponse:
     Adds to unified context as js_scraping source.
     """
     try:
-        # Parse request body
         body = json.loads(request.body) if request.body else {}
         text_content = body.get('textContent', '')
         current_url = body.get('currentUrl', '')
@@ -351,7 +317,6 @@ def input_webtext(request: HttpRequest) -> JsonResponse:
 
         logger.info(f"Receiving web content from {current_url}, length={len(text_content)}")
 
-        # Add to context
         session_id = add_web_content(
             request=request,
             text_content=text_content,
@@ -359,7 +324,6 @@ def input_webtext(request: HttpRequest) -> JsonResponse:
             source_type="js_scraping"
         )
 
-        # Get updated stats
         stats = get_context_stats(session_id)
 
         return JsonResponse({
@@ -384,12 +348,10 @@ def clear_messages_endpoint(request: HttpRequest) -> JsonResponse:
     Clear conversation history and/or fetched context.
     """
     try:
-        # Parse options
         preserve_web_content = request.GET.get('preserve_web_content', 'false').lower() == 'true'
 
         logger.info(f"Clearing messages, preserve_web={preserve_web_content}")
 
-        # Clear messages
         session_id = clear_messages(
             request=request,
             preserve_web_content=preserve_web_content
@@ -413,14 +375,11 @@ def get_context_stats_endpoint(request: HttpRequest) -> JsonResponse:
     Get detailed context statistics.
     """
     try:
-        # Get session ID
         integration = get_context_integration()
         session_id = integration._get_session_id(request)
 
-        # Get stats
         stats = get_context_stats(session_id)
 
-        # Add full context if debug mode
         if request.GET.get('debug', 'false').lower() == 'true':
             stats['full_context'] = json.loads(
                 integration.get_full_context_json(session_id)
@@ -441,15 +400,12 @@ def export_context(request: HttpRequest) -> JsonResponse:
     Useful for debugging and analysis.
     """
     try:
-        # Get session ID
         integration = get_context_integration()
         session_id = integration._get_session_id(request)
 
-        # Get full context
         context_json = integration.get_full_context_json(session_id)
         context_dict = json.loads(context_json)
 
-        # Format response
         pretty = request.GET.get('pretty', 'false').lower() == 'true'
         if pretty:
             return JsonResponse(context_dict, json_dumps_params={'indent': 2})
@@ -461,9 +417,6 @@ def export_context(request: HttpRequest) -> JsonResponse:
         return JsonResponse({'error': str(e)}, status=500)
 
 
-# ============================================================================
-# Streaming Endpoints (SSE)
-# ============================================================================
 
 def _build_sse_message(data: Dict[str, Any]) -> str:
     """Build Server-Sent Event message"""
@@ -494,10 +447,8 @@ async def _stream_response(
     Yields SSE-formatted messages.
     """
     try:
-        # Send initial status
         yield _build_sse_message(_build_status_frame("Preparing context"))
 
-        # Send mode-specific status
         if mode == "normal" and restricted_domain:
             yield _build_sse_message(_build_status_frame("Navigating site", restricted_domain))
         elif mode == "advanced":
@@ -505,13 +456,10 @@ async def _stream_response(
         elif mode == "agent":
             yield _build_sse_message(_build_status_frame("Thinking"))
 
-        # Start response generation
         start_time = time.time()
         accumulated_response = ""
 
-        # Generate response based on mode
         if mode == "normal":
-            # Use agent with Playwright
             response = await asyncio.to_thread(
                 create_agent_response,
                 user_input=question,
@@ -519,20 +467,19 @@ async def _stream_response(
                 model=model,
                 use_playwright=True,
                 restricted_domain=restricted_domain,
-                stream=False  # Can't stream agent responses yet
+                stream=False
             )
             accumulated_response = response
             yield _build_sse_message({"content": response, "done": False})
 
         elif mode == "advanced":
-            # Use web search
             response, sources = await asyncio.to_thread(
                 create_advanced_response,
                 user_input=question,
                 message_list=messages,
                 model=model,
                 preferred_links=preferred_links,
-                stream=False  # Would need to refactor for streaming
+                stream=False
             )
             accumulated_response = response
             yield _build_sse_message({
@@ -542,7 +489,6 @@ async def _stream_response(
             })
 
         else:
-            # Regular response
             response = await asyncio.to_thread(
                 create_response,
                 user_input=question,
@@ -553,7 +499,6 @@ async def _stream_response(
             accumulated_response = response
             yield _build_sse_message({"content": response, "done": False})
 
-        # Add to context
         response_time_ms = int((time.time() - start_time) * 1000)
         await asyncio.to_thread(
             add_response_to_context,
@@ -563,7 +508,6 @@ async def _stream_response(
             response_time_ms=response_time_ms
         )
 
-        # Send final status with stats
         stats = await asyncio.to_thread(get_context_stats, session_id)
         yield _build_sse_message({
             "content": "",
@@ -589,22 +533,19 @@ def chat_response_stream(request: HttpRequest) -> StreamingHttpResponse:
     Returns Server-Sent Events stream.
     """
     try:
-        # Extract parameters
         question = request.GET.get('question', '')
-        model = request.GET.get('models', 'gpt-4o-mini').split(',')[0]  # Use first model for streaming
+        model = request.GET.get('models', 'gpt-4o-mini').split(',')[0]
         current_url = request.GET.get('current_url', '')
 
         if not question:
             return JsonResponse({'error': 'No question provided'}, status=400)
 
-        # Extract domain
         restricted_domain = None
         if current_url:
             from urllib.parse import urlparse
             parsed = urlparse(current_url)
             restricted_domain = parsed.netloc
 
-        # Prepare context
         messages, session_id = prepare_context_messages(
             request=request,
             question=question,
@@ -612,7 +553,6 @@ def chat_response_stream(request: HttpRequest) -> StreamingHttpResponse:
             endpoint="chat_response_stream"
         )
 
-        # Create async event loop for streaming
         async def event_stream():
             async for message in _stream_response(
                 question=question,
@@ -624,7 +564,6 @@ def chat_response_stream(request: HttpRequest) -> StreamingHttpResponse:
             ):
                 yield message
 
-        # Run async generator
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
 

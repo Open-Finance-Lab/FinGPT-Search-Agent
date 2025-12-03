@@ -1,16 +1,6 @@
 """
-API Views for FinGPT Search Agent - Unified Context Manager Integration
-Integrates the new UnifiedContextManager while maintaining complete backward compatibility
-
-SECURITY NOTE: CSRF Protection
--------------------------------
-Most endpoints use @csrf_exempt because this backend serves a browser extension frontend.
-Browser extensions cannot easily include CSRF tokens in their requests.
-
-Security is provided through:
-1. CORS_ALLOWED_ORIGINS restricting which origins can make requests
-2. SESSION_COOKIE_SAMESITE='None' with SESSION_COOKIE_SECURE=True (in production)
-3. Session-based authentication via Django sessions
+API views for the FinGPT agent using the unified context manager and browser-extension
+friendly CSRF exemptions guarded by CORS and secure session settings.
 """
 
 import json
@@ -29,12 +19,10 @@ from django.views.decorators.cache import cache_page
 from django.http import JsonResponse, StreamingHttpResponse, HttpRequest
 from django.conf import settings
 
-# Legacy imports (kept for compatibility)
 from datascraper import datascraper as ds
 from datascraper.preferred_links_manager import get_manager
 from datascraper.models_config import MODELS_CONFIG
 
-# Unified context manager imports (clean version - no legacy support)
 from datascraper.unified_context_manager import (
     UnifiedContextManager,
     ContextMode,
@@ -44,16 +32,9 @@ from datascraper.context_integration import (
     ContextIntegration,
     get_context_integration
 )
+from datascraper.url_tools import _scrape_url_impl as scrape_url
 
-# Configure logging
 logger = logging.getLogger(__name__)
-
-# Constants
-# QUESTION_LOG_PATH removed - using console logging instead
-
-# ============================================================================
-# Helper Functions
-# ============================================================================
 
 def _get_version():
     """Dynamically fetch version from pyproject.toml"""
@@ -79,10 +60,8 @@ def _int_env(name: str, default: int) -> int:
 
 def _get_session_id(request: HttpRequest) -> str:
     """Get or create session ID for context management."""
-    # Try custom session ID from frontend
     custom_session_id = request.GET.get('session_id')
 
-    # For POST requests, check body data
     if not custom_session_id and request.method == 'POST':
         try:
             body_data = json.loads(request.body)
@@ -93,7 +72,6 @@ def _get_session_id(request: HttpRequest) -> str:
     if custom_session_id:
         return custom_session_id
 
-    # Use Django session
     if not request.session.session_key:
         request.session.create()
 
@@ -110,13 +88,7 @@ def _build_status_frame(label: str, detail: Optional[str] = None, url: Optional[
     return f'data: {json.dumps(status_payload)}\n\n'.encode('utf-8')
 
 
-# Logging helper removed - using standard logger
-
-
-
-# ============================================================================
-# Core Chat Endpoints with Unified Context Manager
-# ============================================================================
+ 
 
 @csrf_exempt
 def chat_response(request: HttpRequest) -> JsonResponse:
@@ -136,14 +108,11 @@ def chat_response(request: HttpRequest) -> JsonResponse:
 
         logger.info(f"Chat request: question='{question[:50]}...'")
 
-        # Get session ID
         session_id = _get_session_id(request)
 
-        # Initialize context integration
         integration = get_context_integration()
         context_mgr = get_context_manager()
 
-        # Update metadata
         context_mgr.update_metadata(
             session_id=session_id,
             mode=ContextMode.THINKING,
@@ -152,13 +121,10 @@ def chat_response(request: HttpRequest) -> JsonResponse:
             user_time=request.GET.get('user_time')
         )
 
-        # Add user message to context
         context_mgr.add_user_message(session_id, question)
 
-        # Get formatted messages for API
         messages = context_mgr.get_formatted_messages_for_api(session_id)
 
-        # Process each model
         models = [m.strip() for m in selected_models.split(',') if m.strip()]
         responses = {}
 
@@ -167,7 +133,6 @@ def chat_response(request: HttpRequest) -> JsonResponse:
                 import time
                 start_time = time.time()
 
-                # Use agent with MCP tools (SEC-EDGAR, filesystem)
                 response = ds.create_agent_response(
                     user_input=question,
                     message_list=messages,
@@ -177,7 +142,6 @@ def chat_response(request: HttpRequest) -> JsonResponse:
 
                 responses[model] = response
 
-                # Add response to context
                 response_time_ms = int((time.time() - start_time) * 1000)
                 context_mgr.add_assistant_message(
                     session_id=session_id,
@@ -191,14 +155,11 @@ def chat_response(request: HttpRequest) -> JsonResponse:
                 logger.error(f"Error with model {model}: {e}", exc_info=True)
                 responses[model] = f"Error: {str(e)}"
 
-        # Get context statistics
         stats = context_mgr.get_session_stats(session_id)
 
-        # Log interaction
         first_response = next(iter(responses.values()), "No response")
         logger.info(f"Interaction [normal_chat]: URL={current_url}, Q='{question[:50]}...', Resp='{str(first_response)[:50]}...'")
 
-        # Build response
         result = {
             'resp': responses,
             'context_stats': {
@@ -233,7 +194,6 @@ def adv_response(request: HttpRequest) -> JsonResponse:
         if not question:
             return JsonResponse({'error': 'No question provided'}, status=400)
 
-        # Parse preferred links
         preferred_links = []
         if preferred_links_json:
             try:
@@ -242,14 +202,11 @@ def adv_response(request: HttpRequest) -> JsonResponse:
             except json.JSONDecodeError:
                 logger.error(f"Failed to parse preferred links JSON")
 
-        # Get session ID
         session_id = _get_session_id(request)
 
-        # Initialize context
         integration = get_context_integration()
         context_mgr = get_context_manager()
 
-        # Update metadata for RESEARCH mode
         context_mgr.update_metadata(
             session_id=session_id,
             mode=ContextMode.RESEARCH,
@@ -258,13 +215,10 @@ def adv_response(request: HttpRequest) -> JsonResponse:
             user_time=request.GET.get('user_time')
         )
 
-        # Add user message
         context_mgr.add_user_message(session_id, question)
 
-        # Get formatted messages
         messages = context_mgr.get_formatted_messages_for_api(session_id)
 
-        # Process each model
         models = [m.strip() for m in selected_models.split(',') if m.strip()]
         responses = {}
         all_sources = []
@@ -274,7 +228,6 @@ def adv_response(request: HttpRequest) -> JsonResponse:
                 import time
                 start_time = time.time()
 
-                # Create advanced response with web search
                 response, sources = ds.create_advanced_response(
                     user_input=question,
                     message_list=messages,
@@ -288,11 +241,9 @@ def adv_response(request: HttpRequest) -> JsonResponse:
                 responses[model] = response
                 all_sources.extend(sources)
 
-                # Add search results to context
                 if sources:
                     integration.add_search_results(session_id, sources)
 
-                # Add response to context
                 response_time_ms = int((time.time() - start_time) * 1000)
                 context_mgr.add_assistant_message(
                     session_id=session_id,
@@ -307,14 +258,11 @@ def adv_response(request: HttpRequest) -> JsonResponse:
                 logger.error(f"Error with model {model}: {e}", exc_info=True)
                 responses[model] = f"Error: {str(e)}"
 
-        # Get context statistics
         stats = context_mgr.get_session_stats(session_id)
 
-        # Log interaction
         first_response = next(iter(responses.values()), "No response")
         logger.info(f"Interaction [advanced_search]: URL={current_url}, Q='{question[:50]}...', Resp='{str(first_response)[:50]}...'")
 
-        # Build response
         result = {
             'resp': responses,
             'used_sources': all_sources,
@@ -349,14 +297,11 @@ def agent_chat_response(request: HttpRequest) -> JsonResponse:
         if not question:
             return JsonResponse({'error': 'No question provided'}, status=400)
 
-        # Get session ID
         session_id = _get_session_id(request)
 
-        # Initialize context
         integration = get_context_integration()
         context_mgr = get_context_manager()
 
-        # Update metadata for THINKING mode
         context_mgr.update_metadata(
             session_id=session_id,
             mode=ContextMode.THINKING,
@@ -365,13 +310,10 @@ def agent_chat_response(request: HttpRequest) -> JsonResponse:
             user_time=request.GET.get('user_time')
         )
 
-        # Add user message
         context_mgr.add_user_message(session_id, question)
 
-        # Get formatted messages
         messages = context_mgr.get_formatted_messages_for_api(session_id)
 
-        # Process each model
         models = [m.strip() for m in selected_models.split(',') if m.strip()]
         responses = {}
 
@@ -380,7 +322,6 @@ def agent_chat_response(request: HttpRequest) -> JsonResponse:
                 import time
                 start_time = time.time()
 
-                # Create agent response with MCP tools
                 response = ds.create_agent_response(
                     user_input=question,
                     message_list=messages,
@@ -390,7 +331,6 @@ def agent_chat_response(request: HttpRequest) -> JsonResponse:
 
                 responses[model] = response
 
-                # Add response to context
                 response_time_ms = int((time.time() - start_time) * 1000)
                 context_mgr.add_assistant_message(
                     session_id=session_id,
@@ -404,14 +344,11 @@ def agent_chat_response(request: HttpRequest) -> JsonResponse:
                 logger.error(f"Error with model {model}: {e}", exc_info=True)
                 responses[model] = f"Error: {str(e)}"
 
-        # Get context statistics
         stats = context_mgr.get_session_stats(session_id)
 
-        # Log interaction
         first_response = next(iter(responses.values()), "No response")
         logger.info(f"Interaction [agent_chat]: URL={current_url}, Q='{question[:50]}...', Resp='{str(first_response)[:50]}...'")
 
-        # Build response
         result = {
             'resp': responses,
             'context_stats': {
@@ -430,9 +367,6 @@ def agent_chat_response(request: HttpRequest) -> JsonResponse:
         return JsonResponse({'error': str(e)}, status=500)
 
 
-# ============================================================================
-# Streaming Endpoints
-# ============================================================================
 
 @csrf_exempt
 def chat_response_stream(request: HttpRequest) -> StreamingHttpResponse:
@@ -448,13 +382,11 @@ def chat_response_stream(request: HttpRequest) -> StreamingHttpResponse:
         if not question:
             return JsonResponse({'error': 'No question provided'}, status=400)
 
-        # Get session ID
         session_id = _get_session_id(request)
 
         user_timezone = request.GET.get('user_timezone')
         user_time = request.GET.get('user_time')
 
-        # Initialize context
         context_mgr = get_context_manager()
         integration = get_context_integration()
         context_mgr.update_metadata(
@@ -465,10 +397,8 @@ def chat_response_stream(request: HttpRequest) -> StreamingHttpResponse:
             user_time=user_time
         )
 
-        # Add user message
         context_mgr.add_user_message(session_id, question)
 
-        # Get messages
         messages = context_mgr.get_formatted_messages_for_api(session_id)
 
         model = selected_models.split(',')[0].strip()
@@ -476,7 +406,6 @@ def chat_response_stream(request: HttpRequest) -> StreamingHttpResponse:
         def event_stream():
             """Generator for SSE streaming"""
             try:
-                # Send initial connection
                 yield b'event: connected\ndata: {"status": "connected"}\n\n'
                 yield _build_status_frame("Preparing context")
 
@@ -531,7 +460,6 @@ def chat_response_stream(request: HttpRequest) -> StreamingHttpResponse:
                 if not final_response and aggregated_chunks:
                     final_response = "".join(aggregated_chunks)
 
-                # Add to context
                 response_time_ms = int((time.time() - start_time) * 1000)
                 context_mgr.add_assistant_message(
                     session_id=session_id,
@@ -541,10 +469,8 @@ def chat_response_stream(request: HttpRequest) -> StreamingHttpResponse:
                     response_time_ms=response_time_ms
                 )
 
-                # Get stats
                 stats = context_mgr.get_session_stats(session_id)
 
-                # Send completion
                 yield _build_status_frame("Finalizing response")
                 final_data = {
                     "content": "",
@@ -558,7 +484,6 @@ def chat_response_stream(request: HttpRequest) -> StreamingHttpResponse:
                 }
                 yield f'data: {json.dumps(final_data)}\n\n'.encode('utf-8')
 
-                # Log interaction
                 logger.info(f"Interaction [normal_stream]: URL={current_url}, Q='{question[:50]}...', Resp='{final_response[:50]}...'")
 
             except Exception as e:
@@ -588,7 +513,6 @@ def adv_response_stream(request: HttpRequest) -> StreamingHttpResponse:
         current_url = request.GET.get('current_url', '')
         preferred_links_json = request.GET.get('preferred_links', '')
 
-        # Parse preferred links
         preferred_links = []
         if preferred_links_json:
             try:
@@ -600,10 +524,8 @@ def adv_response_stream(request: HttpRequest) -> StreamingHttpResponse:
         if not question:
             return JsonResponse({'error': 'No question provided'}, status=400)
 
-        # Get session ID
         session_id = _get_session_id(request)
 
-        # Initialize context
         integration = get_context_integration()
         context_mgr = get_context_manager()
         context_mgr.update_metadata(
@@ -614,10 +536,8 @@ def adv_response_stream(request: HttpRequest) -> StreamingHttpResponse:
             user_time=request.GET.get('user_time')
         )
 
-        # Add user message
         context_mgr.add_user_message(session_id, question)
 
-        # Get messages
         messages = context_mgr.get_formatted_messages_for_api(session_id)
 
         model = selected_models.split(',')[0].strip()
@@ -625,7 +545,6 @@ def adv_response_stream(request: HttpRequest) -> StreamingHttpResponse:
         def event_stream():
             """Generator for SSE streaming"""
             try:
-                # Send initial connection
                 yield b'event: connected\ndata: {"status": "connected"}\n\n'
                 yield _build_status_frame("Preparing context", "Research mode")
                 yield _build_status_frame("Searching the web")
@@ -635,7 +554,6 @@ def adv_response_stream(request: HttpRequest) -> StreamingHttpResponse:
                 full_response = ""
                 source_entries = []
 
-                # Use streaming advanced response
                 stream_generator, stream_state = ds.create_advanced_response_streaming(
                     question,
                     messages,
@@ -668,11 +586,9 @@ def adv_response_stream(request: HttpRequest) -> StreamingHttpResponse:
 
                 loop.close()
 
-                # Add search results to context
                 if source_entries:
                     integration.add_search_results(session_id, source_entries)
 
-                # Add response to context
                 response_time_ms = int((time.time() - start_time) * 1000)
                 context_mgr.add_assistant_message(
                     session_id=session_id,
@@ -683,10 +599,8 @@ def adv_response_stream(request: HttpRequest) -> StreamingHttpResponse:
                     response_time_ms=response_time_ms
                 )
 
-                # Get stats
                 stats = context_mgr.get_session_stats(session_id)
 
-                # Send completion
                 yield _build_status_frame("Finalizing response")
                 final_data = {
                     "content": "",
@@ -701,7 +615,6 @@ def adv_response_stream(request: HttpRequest) -> StreamingHttpResponse:
                 }
                 yield f'data: {json.dumps(final_data)}\n\n'.encode('utf-8')
 
-                # Log interaction
                 logger.info(f"Interaction [advanced_stream]: URL={current_url}, Q='{question[:50]}...', Resp='{full_response[:50]}...'")
 
             except Exception as e:
@@ -722,9 +635,57 @@ def adv_response_stream(request: HttpRequest) -> StreamingHttpResponse:
         return JsonResponse({'error': str(e)}, status=500)
 
 
-# ============================================================================
-# Context Management Endpoints
-# ============================================================================
+
+@csrf_exempt
+def auto_scrape(request: HttpRequest) -> JsonResponse:
+    """
+    Automatically scrape the current page if not already in context.
+    Triggered when agent launches/opens on a page.
+    """
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Invalid request method; use POST.'}, status=405)
+
+    try:
+        data = json.loads(request.body) if request.body else {}
+        current_url = data.get('current_url') or data.get('currentUrl')
+        
+        if not current_url:
+            return JsonResponse({'error': 'No URL provided'}, status=400)
+            
+        session_id = _get_session_id(request)
+        
+        integration = get_context_integration()
+        
+        scraped_urls = integration.get_scraped_urls(session_id)
+        if current_url in scraped_urls:
+            logger.info(f"URL already scraped, skipping: {current_url}")
+            return JsonResponse({'status': 'skipped', 'reason': 'already_scraped'})
+            
+        logger.info(f"Auto-scraping URL: {current_url}")
+        
+        scrape_result_json = scrape_url(current_url)
+        scrape_result = json.loads(scrape_result_json)
+        
+        if "error" in scrape_result:
+            logger.error(f"Auto-scrape failed: {scrape_result['error']}")
+            return JsonResponse({'error': scrape_result['error']}, status=500)
+            
+        content = scrape_result.get("content", "")
+        
+        integration.add_web_content(
+            request=request,
+            text_content=content,
+            current_url=current_url,
+            source_type="js_scraping",
+            session_id=session_id
+        )
+        
+        return JsonResponse({'status': 'success', 'url': current_url})
+        
+    except Exception as e:
+        logger.error(f"Auto-scrape error: {e}", exc_info=True)
+        return JsonResponse({'error': str(e)}, status=500)
+
 
 @csrf_exempt
 def add_webtext(request: HttpRequest) -> JsonResponse:
@@ -745,18 +706,14 @@ def add_webtext(request: HttpRequest) -> JsonResponse:
 
         logger.info(f"Receiving web content from {current_url}, length={len(text_content)}")
 
-        # Get session ID
         session_id = _get_session_id(request)
 
-        # Initialize context
         integration = get_context_integration()
 
-        # Add to context (truncate if too long)
         MAX_CONTENT_LENGTH = 10000
         if len(text_content) > MAX_CONTENT_LENGTH:
             text_content = text_content[:MAX_CONTENT_LENGTH] + "... (truncated)"
 
-        # Add to context
         integration.add_web_content(
             request=request,
             text_content=text_content,
@@ -764,11 +721,8 @@ def add_webtext(request: HttpRequest) -> JsonResponse:
             source_type="js_scraping"
         )
 
-        # Get updated stats
         stats = integration.get_context_stats(session_id)
 
-        # Log interaction
-        # Log interaction
         logger.info(f"Interaction [web_content]: URL={current_url}, Msg='Web content received'")
 
         return JsonResponse({
@@ -797,17 +751,12 @@ def clear(request: HttpRequest) -> JsonResponse:
 
         logger.info(f"Clearing messages, preserve_web={preserve_web}")
 
-        # Get session ID
         session_id = _get_session_id(request)
 
-        # Initialize context
         integration = get_context_integration()
 
-        # Clear based on preference
         integration.clear_messages(request, preserve_web_content=preserve_web)
 
-        # Log interaction
-        # Log interaction
         logger.info(f"Interaction [clear]: Msg='Cleared messages'")
 
         return JsonResponse({
@@ -830,10 +779,8 @@ def get_memory_stats(request: HttpRequest) -> JsonResponse:
     try:
         session_id = _get_session_id(request)
 
-        # Initialize context
         integration = get_context_integration()
 
-        # Get stats
         stats = integration.get_context_stats(session_id)
 
         return JsonResponse({
@@ -855,12 +802,8 @@ def get_memory_stats(request: HttpRequest) -> JsonResponse:
         return JsonResponse({'stats': {"error": str(e), "using_unified_context": False}}, status=500)
 
 
-# init_page_context endpoint removed - agent decides when to scrape based on query
 
 
-# ============================================================================
-# Utility Endpoints (Legacy Compatibility)
-# ============================================================================
 
 def health(request: HttpRequest) -> JsonResponse:
     """
@@ -885,7 +828,6 @@ def get_sources(request: HttpRequest) -> JsonResponse:
     
     sources = ds.get_sources(query, current_url=current_url, session_id=session_id)
 
-    # Log the source request
     logger.info(f"Interaction [sources]: URL={current_url or 'N/A'}, Q='Source request: {query}'")
 
     return JsonResponse({'resp': sources})
@@ -915,7 +857,6 @@ def add_preferred_url(request: HttpRequest) -> JsonResponse:
     """Add new preferred URL to storage"""
     if request.method == 'POST':
         try:
-            # Try to get URL from POST data or JSON body
             new_url = request.POST.get('url')
             if not new_url and request.body:
                 data = json.loads(request.body)
@@ -926,7 +867,6 @@ def add_preferred_url(request: HttpRequest) -> JsonResponse:
                 success = manager.add_link(new_url)
 
                 if success:
-                    # Log the action
                     logger.info(f"Interaction [add_url]: URL={new_url}, Msg='Added preferred URL: {new_url}'")
                     return JsonResponse({'status': 'success'})
                 else:

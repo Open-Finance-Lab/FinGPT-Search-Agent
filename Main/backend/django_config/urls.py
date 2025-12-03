@@ -1,27 +1,11 @@
-"""
-URL configuration for chat_server project.
-
-The `urlpatterns` list routes URLs to views. For more information please see:
-    https://docs.djangoproject.com/en/5.2/topics/http/urls/
-Examples:
-Function views
-    1. Add an import:  from my_app import views
-    2. Add a URL to urlpatterns:  path('', views.home, name='home')
-Class-based views
-    1. Add an import:  from other_app.views import Home
-    2. Add a URL to urlpatterns:  path('', Home.as_view(), name='home')
-Including another URLconf
-    1. Import the include() function: from django.urls import include, path
-    2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
-"""
+"""URL configuration for chat_server."""
 from django.urls import path
 from api import views
 
 urlpatterns = [
-    # Admin disabled (requires database)
-    # path('admin/', admin.site.urls),
     path('health/', views.health, name='health'),
     path('input_webtext/', views.add_webtext, name='input_webtext'),
+    path('api/auto_scrape/', views.auto_scrape, name='auto_scrape'),
     path('get_chat_response/', views.chat_response, name='get_chat_response'),
     path('get_chat_response_stream/', views.chat_response_stream, name='get_chat_response_stream'),
     path('get_adv_response/', views.adv_response, name='get_adv_response'),
