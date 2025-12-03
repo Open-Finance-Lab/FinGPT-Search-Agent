@@ -61,9 +61,9 @@ function getChatResponse(question, selectedModel, promptMode, useRAG, useMCP) {
 
     let endpoint;
     if (useMCP) {
-      endpoint = 'get_mcp_response';
+        endpoint = 'get_mcp_response';
     } else {
-      endpoint = promptMode ? 'get_adv_response' : 'get_chat_response';
+        endpoint = promptMode ? 'get_adv_response' : 'get_chat_response';
     }
 
     // Get preferred links from localStorage for advanced mode
@@ -366,15 +366,74 @@ function syncPreferredLinks() {
                 },
                 body: JSON.stringify({ urls: preferredLinks })
             })
-            .then(response => response.json())
-            .catch(error => {
-                console.error('Error syncing preferred links:', error);
-            });
+                .then(response => response.json())
+                .catch(error => {
+                    console.error('Error syncing preferred links:', error);
+                });
         }
     } catch (e) {
         console.error('Error reading preferred links for sync:', e);
     }
     return Promise.resolve();
+}
+
+// Auto-scrape promise tracking for coordination with chat requests
+let autoScrapePromise = Promise.resolve({ status: 'not_started' });
+let autoScrapeInProgress = false;
+
+function setAutoScrapePromise(promise) {
+    autoScrapeInProgress = true;
+    autoScrapePromise = promise.finally(() => {
+        autoScrapeInProgress = false;
+    });
+    return autoScrapePromise;
+}
+
+function waitForAutoScrape() {
+    if (!autoScrapeInProgress) {
+        return Promise.resolve({ status: 'already_complete' });
+    }
+    console.log("[Auto-scrape] Waiting for page scraping to complete...");
+    return autoScrapePromise;
+}
+
+function isAutoScrapeInProgress() {
+    return autoScrapeInProgress;
+}
+
+// Function to trigger auto-scraping of the current page
+function triggerAutoScrape(currentUrl) {
+    if (!currentSessionId) {
+        console.warn("Cannot trigger auto-scrape: Session ID not set");
+        return Promise.resolve({ status: 'skipped', reason: 'no_session_id' });
+    }
+
+    return fetch(buildBackendUrl('/api/auto_scrape/'), {
+        method: "POST",
+        credentials: "include",
+        headers: {
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+            current_url: currentUrl,
+            session_id: currentSessionId
+        }),
+    })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`Network response was not ok (status: ${response.status})`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            console.log("Auto-scrape response:", data);
+            return data;
+        })
+        .catch(error => {
+            console.error("Auto-scrape failed:", error);
+            // Don't throw, just log, as this is a background process
+            return { error: error.message };
+        });
 }
 
 export {
@@ -385,5 +444,9 @@ export {
     getSourceUrls,
     logQuestion,
     setSessionId,
-    syncPreferredLinks
+    syncPreferredLinks,
+    triggerAutoScrape,
+    setAutoScrapePromise,
+    waitForAutoScrape,
+    isAutoScrapeInProgress
 };
