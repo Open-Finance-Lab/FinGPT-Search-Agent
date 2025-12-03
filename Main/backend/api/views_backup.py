@@ -1,19 +1,5 @@
 """
-API Views for FinGPT Search Agent
-
-SECURITY NOTE: CSRF Protection
--------------------------------
-Most endpoints use @csrf_exempt because this backend serves a browser extension frontend.
-Browser extensions cannot easily include CSRF tokens in their requests.
-
-Security is provided through:
-1. CORS_ALLOWED_ORIGINS restricting which origins can make requests
-2. SESSION_COOKIE_SAMESITE='None' with SESSION_COOKIE_SECURE=True (in production)
-3. Session-based authentication via Django sessions
-
-PRODUCTION RECOMMENDATION:
-For production deployments, consider implementing API token authentication
-instead of relying solely on session cookies and CORS.
+Legacy API views for the FinGPT agent that predate the unified context manager.
 """
 
 import json
@@ -38,10 +24,8 @@ from agents import Runner
 from datascraper.mem0_context_manager import Mem0ContextManager
 from datascraper.models_config import MODELS_CONFIG
 
-# Constants
 QUESTION_LOG_PATH = os.path.join(os.path.dirname(__file__), 'questionLog.csv')
 
-# Helper function to get version from pyproject.toml
 def _get_version():
     """Dynamically fetch version from pyproject.toml"""
     try:
@@ -55,8 +39,6 @@ def _get_version():
         pass
     return 'unknown'
 
-# Initial message list (kept for backward compatibility)
-# This is a global message list
 message_list = [
     {"role": "user",
      "content": "[SYSTEM MESSAGE]: You are a helpful financial assistant. Always answer questions to the best of your ability."}
@@ -117,8 +99,6 @@ def _reset_legacy_history(preserve_web_content: bool = False):
     message_list.extend(preserved_messages)
     _trim_legacy_history()
 
-# Mem0 Context Manager
-# Initialize with API key from environment variable (MEM0_API_KEY)
 mem0_manager = None
 MEM0_ENABLED = False
 
@@ -138,7 +118,6 @@ except Exception as e:
     logging.warning(f"Failed to initialize Mem0: {e}")
     logging.warning("Falling back to legacy message list (no intelligent memory)")
 
-# Log memory system status (once per worker boot)
 if MEM0_ENABLED:
     logging.info("Memory system ready: Mem0 (AI-powered intelligent memory)")
 else:
@@ -148,7 +127,6 @@ class MCPGreetView(View):
     def get(self, request):
         name = request.GET.get("name", "world")
         
-        # Use the OpenAI Agents SDK to run MCP tools
         try:
             result = asyncio.run(self._run_mcp_agent(name))
             return JsonResponse({"reply": result})
@@ -157,9 +135,7 @@ class MCPGreetView(View):
             return JsonResponse({"error": f"MCP Agent error: {str(e)}"}, status=500)
 
     async def _run_mcp_agent(self, name: str) -> str:
-        # Create the FinGPT agent with MCP server using async context manager
         async with create_fin_agent(model="o4-mini") as agent:
-            # Run the agent with a greeting request
             prompt = f"Use the greet tool to say hello to '{name}'. Call the greet function with the name parameter."
             logging.info(f"[MCP DEBUG] Running agent with prompt: {prompt}")
             result = await Runner.run(agent, prompt)
@@ -168,7 +144,6 @@ class MCPGreetView(View):
             logging.info(f"[MCP DEBUG] Result attributes: {dir(result)}")
             logging.info(f"[MCP DEBUG] Result final_output: {result.final_output}")
             
-            # Check if final_output is empty, try other attributes
             if not result.final_output:
                 logging.warning(f"[MCP DEBUG] final_output is empty, checking other attributes")
                 if hasattr(result, 'output'):
@@ -181,13 +156,10 @@ class MCPGreetView(View):
             return result.final_output or "No response generated"
 
 
-# Helper functions
 def _get_session_id(request):
     """Get or create session ID for Mem0 context management."""
-    # custom session ID from frontend
     custom_session_id = request.GET.get('session_id')
     
-    # For POST requests, check body data
     if not custom_session_id and request.method == 'POST':
         try:
             body_data = json.loads(request.body)
@@ -198,7 +170,6 @@ def _get_session_id(request):
     if custom_session_id:
         return custom_session_id
 
-    # Fall back to Django session
     if not request.session.session_key:
         request.session.create()
 
@@ -229,13 +200,10 @@ def _prepare_context_messages(request, question, use_memory=True, current_url=No
     session_id = _get_session_id(request) if use_memory else None
 
     if use_memory and session_id and MEM0_ENABLED and mem0_manager:
-        # Use Mem0 if available
         try:
-            # Update current webpage if URL provided
             if current_url:
                 mem0_manager.update_current_webpage(session_id, current_url)
 
-            # Update user's timezone and time if provided
             user_timezone = request.GET.get('user_timezone')
             user_time = request.GET.get('user_time')
             if user_timezone or user_time:
@@ -243,17 +211,14 @@ def _prepare_context_messages(request, question, use_memory=True, current_url=No
 
             mem0_manager.add_message(session_id, "user", question)
 
-            # Get context with intelligent memory retrieval based on the question
             context_messages = mem0_manager.get_context(session_id, query=question)
 
-            # Mem0 already includes system prompt and relevant memories
             legacy_messages = context_messages
         except Exception as e:
             logging.error(f"Mem0 error, falling back to legacy: {e}")
             _append_legacy_message(f"[USER MESSAGE]: {question}")
             legacy_messages = message_list.copy()
     else:
-        # Use legacy message_list - append the question with header
         _append_legacy_message(f"[USER MESSAGE]: {question}")
         legacy_messages = message_list.copy()
 
@@ -268,7 +233,6 @@ def _add_response_to_context(session_id, response, use_memory=True):
             logging.error(f"Mem0 error adding response, using legacy: {e}")
             _append_legacy_message(f"[ASSISTANT MESSAGE]: {response}")
     else:
-        # Add to legacy message_list with header
         _append_legacy_message(f"[ASSISTANT MESSAGE]: {response}")
 
 def _prepare_response_with_stats(responses, session_id, use_memory=True, single_response_mode=False):
@@ -292,21 +256,18 @@ def _prepare_response_with_stats(responses, session_id, use_memory=True, single_
             stats = {"error": "Stats unavailable", "using_mem0": False}
 
         if single_response_mode and isinstance(responses, dict) and len(responses) == 1:
-            # Single model - return as 'reply' for MCP frontend compatibility
             single_response = next(iter(responses.values()))
             return JsonResponse({
                 'reply': single_response,
                 'memory_stats': stats
             })
         else:
-            # Multiple models or not in single response mode
             response_key = 'resp' if isinstance(responses, dict) else 'reply'
             return JsonResponse({
                 response_key: responses,
                 'memory_stats': stats
             })
     else:
-        # No Mem0 stats
         if single_response_mode and isinstance(responses, dict) and len(responses) == 1:
             single_response = next(iter(responses.values()))
             return JsonResponse({'reply': single_response})
@@ -332,31 +293,24 @@ def _log_interaction(button_clicked, current_url, question, response=None):
     date_str = now.strftime('%Y-%m-%d')
     time_str = now.strftime('%H:%M:%S')
 
-    # Handles invalid chars.
     def safe_str(s):
         return str(s).encode('utf-8', errors='replace').decode('utf-8')
 
-    # Only record first 80 chars of the response
     response_preview = response[:80] if response else "N/A"
 
-    # Clean each field before writing
     button_clicked = safe_str(button_clicked)
     current_url = safe_str(current_url)
     question = safe_str(question)
     response_preview = safe_str(response_preview)
 
-    # Check if identical question from same URL exists
     question_exists = False
-    # Read using UTF-8 and replace invalid bytes
     with open(QUESTION_LOG_PATH, 'r', encoding='utf-8', errors='replace') as file:
         reader = csv.reader(file)
-        next(reader, None)  # Skip header
+        next(reader, None)
         for row in reader:
-            # Make sure row is long enough to avoid index errors
             if len(row) >= 3:
                 existing_url = row[1]
                 existing_question = row[2]
-                # Compare with sanitized inputs
                 if existing_url == current_url and existing_question == question:
                     question_exists = True
                     break
@@ -366,7 +320,6 @@ def _log_interaction(button_clicked, current_url, question, response=None):
             writer = csv.writer(log_file)
             writer.writerow([button_clicked, current_url, question, date_str, time_str, response_preview])
 
-# View to handle appending the text from FRONT-END SCRAPER to the message list
 @csrf_exempt
 @ratelimit(key='ip', rate=lambda g, r: settings.API_RATE_LIMIT, method='POST')
 def add_webtext(request):
@@ -397,7 +350,6 @@ def add_webtext(request):
                     url_label = current_url or "unknown location"
                     _append_legacy_message(f"[Web Content from {url_label}]: {text_content}")
             else:
-                # Fallback to legacy
                 url_label = current_url or "unknown location"
                 _append_legacy_message(f"[Web Content from {url_label}]: {text_content}")
 
@@ -420,7 +372,6 @@ def chat_response(request):
     user_timezone = request.GET.get('user_timezone')
     user_time = request.GET.get('user_time')
 
-    # Validate and parse models
     if not selected_models:
         return JsonResponse({'error': 'No models specified'}, status=400)
 
@@ -428,7 +379,6 @@ def chat_response(request):
     if not models:
         return JsonResponse({'error': 'No valid models specified'}, status=400)
 
-    # Extract domain from current_url for domain-restricted navigation
     from urllib.parse import urlparse
     restricted_domain = None
     if current_url:
@@ -442,12 +392,10 @@ def chat_response(request):
 
     responses = {}
 
-    # Prepare context messages using Mem0 or legacy system
     legacy_messages, session_id = _prepare_context_messages(request, question, use_memory, current_url)
 
     for model in models:
         try:
-            # Normal mode always uses agent with Playwright (domain-restricted)
             response = ds.create_agent_response(
                 question,
                 legacy_messages,
@@ -462,7 +410,6 @@ def chat_response(request):
 
             responses[model] = response
 
-            # Add assistant response to Mem0 manager
             _add_response_to_context(session_id, response, use_memory)
 
         except Exception as e:
@@ -487,7 +434,6 @@ def chat_response_stream(request):
     user_timezone = request.GET.get('user_timezone')
     user_time = request.GET.get('user_time')
 
-    # Validate and parse models
     if not selected_models:
         return JsonResponse({'error': 'No models specified'}, status=400)
 
@@ -497,7 +443,6 @@ def chat_response_stream(request):
 
     model = models[0]
 
-    # Extract domain from current_url for domain-restricted navigation
     from urllib.parse import urlparse
     restricted_domain = None
     if current_url:
@@ -509,18 +454,15 @@ def chat_response_stream(request):
         except Exception as e:
             logging.warning(f"Failed to parse current_url: {e}")
 
-    # Prepare context messages using Mem0
     legacy_messages, session_id = _prepare_context_messages(request, question, use_memory, current_url)
 
     def event_stream():
         """Generator function for SSE streaming"""
         try:
-            # Send initial connection event (as bytes for WSGI compatibility)
             yield b'event: connected\ndata: {"status": "connected"}\n\n'
             detail = restricted_domain or (current_url or "current site")
             yield _build_status_frame("Preparing context", str(detail))
 
-            # Normal mode always uses agent with Playwright (domain-restricted)
             logging.info(f"[NORMAL MODE STREAM] Using Playwright within {restricted_domain or 'any domain'}")
             if restricted_domain:
                 yield _build_status_frame("Navigating site", restricted_domain)
@@ -582,7 +524,6 @@ def chat_response_stream(request):
             final_response = stream_state.get("final_output") or full_response
             full_response = final_response
 
-            # Send completion event
             yield _build_status_frame("Finalizing response")
             sse_data = f'data: {json.dumps({"content": "", "done": True})}\n\n'
             yield sse_data.encode('utf-8')
@@ -591,7 +532,6 @@ def chat_response_stream(request):
 
             _log_interaction("normal_mode_stream", current_url, question, full_response)
 
-            # Send Mem0 stats if enabled
             if use_memory and session_id and MEM0_ENABLED and mem0_manager:
                 try:
                     stats = mem0_manager.get_session_stats(session_id)
@@ -612,7 +552,7 @@ def chat_response_stream(request):
         content_type='text/event-stream'
     )
     response['Cache-Control'] = 'no-cache'
-    response['X-Accel-Buffering'] = 'no'  # Disable Nginx buffering
+    response['X-Accel-Buffering'] = 'no'
     return response
 
 @csrf_exempt
@@ -627,7 +567,6 @@ def agent_chat_response(request):
     user_timezone = request.GET.get('user_timezone')
     user_time = request.GET.get('user_time')
 
-    # Validate and parse models
     if not selected_models:
         return JsonResponse({'error': 'No models specified'}, status=400)
 
@@ -637,12 +576,10 @@ def agent_chat_response(request):
 
     responses = {}
 
-    # Prepare context messages using Mem0 or legacy system
     legacy_messages, session_id = _prepare_context_messages(request, question, use_memory, current_url)
 
     for model in models:
         try:
-            # Use the Agent path with tools
             response = ds.create_agent_response(
                 question,
                 legacy_messages,
@@ -661,11 +598,9 @@ def agent_chat_response(request):
             logging.error(f"Error processing agent model {model}: {e}")
             responses[model] = f"Error: {str(e)}"
 
-    # Log with a distinct tag allowing filtering later
     first_model_response = next(iter(responses.values())) if responses else "No response"
     _log_interaction("agent_chat", current_url, question, first_model_response)
 
-    # Return response with optional Mem0 stats, using single response mode
     return _prepare_response_with_stats(responses, session_id, use_memory, single_response_mode=True)
 
 @csrf_exempt
@@ -683,7 +618,6 @@ def adv_response(request):
     user_timezone = request.GET.get('user_timezone')
     user_time = request.GET.get('user_time')
 
-    # Parse preferred links from frontend
     preferred_links = []
     if preferred_links_json:
         try:
@@ -701,13 +635,10 @@ def adv_response(request):
 
     responses = {}
 
-    # Prepare context messages using Mem0 or legacy system
     legacy_messages, session_id = _prepare_context_messages(request, question, use_memory, current_url)
 
     for model in models:
         try:
-            # Extensive mode uses OpenAI Responses API with web_search (no Playwright for now)
-            # TODO combine Playwright, web_search and even more tools in the future for the ultimate intelligent web search UX
             logging.info(f"[EXTENSIVE MODE] Using web_search for external research")
             response = ds.create_advanced_response(
                 question,
@@ -729,7 +660,6 @@ def adv_response(request):
     first_model_response = next(iter(responses.values())) if responses else "No response"
     _log_interaction("extensive_mode", current_url, question, first_model_response)
 
-    # Get the used URLs from datascraper
     used_urls_list = list(ds.used_urls_ordered) if getattr(ds, "used_urls_ordered", None) else list(ds.used_urls)
     used_sources_list = list(getattr(ds, "used_source_details", []))
 
@@ -737,7 +667,6 @@ def adv_response(request):
     for idx, url in enumerate(used_urls_list, 1):
         logging.info(f"  [{idx}] {url}")
 
-    # Return response with optional memory stats and used URLs
     response_data = _prepare_response_with_stats(responses, session_id, use_memory)
     response_json = json.loads(response_data.content)
     response_json['used_urls'] = used_urls_list
@@ -756,7 +685,6 @@ def adv_response_stream(request):
     user_timezone = request.GET.get('user_timezone')
     user_time = request.GET.get('user_time')
 
-    # Parse preferred links from frontend
     preferred_links = []
     if preferred_links_json:
         try:
@@ -765,7 +693,6 @@ def adv_response_stream(request):
         except json.JSONDecodeError:
             logging.error(f"Failed to parse preferred links JSON: {preferred_links_json}")
 
-    # Validate and parse models
     if not selected_models:
         return JsonResponse({'error': 'No models specified'}, status=400)
 
@@ -775,17 +702,14 @@ def adv_response_stream(request):
 
     model = models[0]
 
-    # Prepare context messages using Mem0
     legacy_messages, session_id = _prepare_context_messages(request, question, use_memory, current_url)
 
     def event_stream():
         """Generator function for SSE streaming"""
         try:
-            # Send initial connection event
             yield b'event: connected\ndata: {"status": "connected"}\n\n'
             yield _build_status_frame("Preparing context", "Research mode")
 
-            # Stream response from advanced model
             full_response = ""
             source_entries: list[dict[str, Any]] = []
             stream_generator = None
@@ -912,13 +836,12 @@ def adv_response_stream(request):
             sse_data = f'data: {json.dumps({"error": str(e), "done": True})}\n\n'
             yield sse_data.encode('utf-8')
 
-    # Return streaming response
     response = StreamingHttpResponse(
         event_stream(),
         content_type='text/event-stream'
     )
     response['Cache-Control'] = 'no-cache'
-    response['X-Accel-Buffering'] = 'no'  # Disable Nginx buffering
+    response['X-Accel-Buffering'] = 'no'
     return response
 
 
@@ -928,10 +851,8 @@ def clear(request):
     use_memory = request.GET.get('use_memory', 'true').lower() == 'true'
     preserve_web = request.GET.get('preserve_web', 'false').lower() == 'true'
 
-    # Reset legacy buffer according to preference
     _reset_legacy_history(preserve_web)
 
-    # Clear only conversation in Mem0 if enabled
     if use_memory:
         session_id = _get_session_id(request)
         if session_id and MEM0_ENABLED and mem0_manager:
@@ -962,7 +883,6 @@ def get_sources(request):
     current_url = request.GET.get('current_url')
     sources = ds.get_sources(query, current_url=current_url)
     
-    # Log the source request
     _log_interaction("sources", current_url or 'N/A', f"Source request: {query}")
     
     return JsonResponse({'resp': sources})
@@ -978,7 +898,6 @@ def get_logo(request):
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
 
-# Legacy log_question function maintained for compatibility
 def log_question(request):
     """Legacy question logging (redirects to enhanced logging)"""
     question = request.GET.get('question', '')
@@ -1001,7 +920,6 @@ def add_preferred_url(request):
     """Add new preferred URL to storage"""
     if request.method == 'POST':
         try:
-            # Try to get URL from POST data or JSON body
             new_url = request.POST.get('url')
             if not new_url and request.body:
                 data = json.loads(request.body)
@@ -1012,7 +930,6 @@ def add_preferred_url(request):
                 success = manager.add_link(new_url)
 
                 if success:
-                    # Log the action
                     _log_interaction("add_url", new_url, f"Added preferred URL: {new_url}")
                     return JsonResponse({'status': 'success'})
                 else:

@@ -29,17 +29,23 @@ class ContextIntegration:
 
     def _get_session_id(self, request: HttpRequest) -> str:
         """Extract or create session ID from request"""
-        # Try to get from request params first
+        import json
+
         session_id = request.GET.get('session_id') or request.POST.get('session_id')
 
+        if not session_id and request.method == 'POST' and request.body:
+            try:
+                body_data = json.loads(request.body)
+                session_id = body_data.get('session_id')
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                pass
+
         if not session_id:
-            # Fall back to Django session
             if hasattr(request, 'session'):
                 if not request.session.session_key:
                     request.session.create()
                 session_id = request.session.session_key
             else:
-                # Generate a temporary ID if no session available
                 import uuid
                 session_id = str(uuid.uuid4())
 
@@ -47,7 +53,6 @@ class ContextIntegration:
 
     def _determine_mode(self, request: HttpRequest, endpoint: str) -> ContextMode:
         """Determine the context mode based on request and endpoint"""
-        # Check for explicit mode in request
         mode_param = request.GET.get('mode') or request.POST.get('mode')
         if mode_param:
             try:
@@ -55,7 +60,6 @@ class ContextIntegration:
             except ValueError:
                 pass
 
-        # Determine based on endpoint
         if 'adv' in endpoint or 'advanced' in endpoint:
             return ContextMode.RESEARCH
         elif 'agent' in endpoint:
@@ -77,7 +81,6 @@ class ContextIntegration:
         session_id = self._get_session_id(request)
         mode = self._determine_mode(request, endpoint)
 
-        # Update metadata
         self.context_manager.update_metadata(
             session_id=session_id,
             mode=mode,
@@ -86,10 +89,8 @@ class ContextIntegration:
             user_time=request.GET.get('user_time')
         )
 
-        # Add user message to conversation history
         self.context_manager.add_user_message(session_id, question)
 
-        # Get formatted messages for API
         messages = self.context_manager.get_formatted_messages_for_api(session_id)
 
         return messages, session_id
@@ -118,20 +119,20 @@ class ContextIntegration:
         request: HttpRequest,
         text_content: str,
         current_url: str,
-        source_type: str = "js_scraping"
+        source_type: str = "js_scraping",
+        session_id: Optional[str] = None
     ) -> str:
         """
         Add web content to context.
         Returns session_id
         """
-        session_id = self._get_session_id(request)
+        if not session_id:
+            session_id = self._get_session_id(request)
 
-        # Truncate if too long
         MAX_CONTENT_LENGTH = 10000
         if len(text_content) > MAX_CONTENT_LENGTH:
             text_content = text_content[:MAX_CONTENT_LENGTH] + "... (truncated)"
 
-        # Add to fetched context
         self.context_manager.add_fetched_context(
             session_id=session_id,
             source_type=source_type,
@@ -177,24 +178,17 @@ class ContextIntegration:
         session_id = self._get_session_id(request)
 
         if preserve_web_content:
-            # Only clear conversation history
             self.context_manager.clear_conversation_history(session_id)
         else:
-            # Clear everything
             self.context_manager.clear_session(session_id)
 
         return session_id
 
-    def get_context_stats(self, session_id: str) -> Dict[str, Any]:
-        """Get statistics about the context"""
-        return self.context_manager.get_session_stats(session_id)
-
-    def get_full_context_json(self, session_id: str) -> str:
-        """Get full context as formatted JSON string"""
-        return self.context_manager.export_session_json(session_id)
+    def get_scraped_urls(self, session_id: str) -> List[str]:
+        """Get list of URLs that have already been scraped"""
+        return self.context_manager.get_scraped_urls(session_id)
 
 
-# Singleton instance
 _integration = None
 
 def get_context_integration() -> ContextIntegration:

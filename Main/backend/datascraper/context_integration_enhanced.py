@@ -26,7 +26,6 @@ class EnhancedContextIntegration:
         Args:
             context_mode: "unified" or "mem0" (defaults to env var CONTEXT_MANAGER_MODE or "mem0")
         """
-        # Determine which context manager to use
         mode = context_mode or os.getenv("CONTEXT_MANAGER_MODE", "mem0").lower()
 
         if mode == "unified":
@@ -36,11 +35,9 @@ class EnhancedContextIntegration:
             self.ContextMode = ContextMode
             logger.info("Using UnifiedContextManager (no compression)")
         else:
-            # Default to Mem0 for smart compression
             from .mem0_context_manager import Mem0ContextManager
             self.context_manager = Mem0ContextManager()
             self.manager_type = "mem0"
-            # Create a ContextMode enum for compatibility
             from enum import Enum
             self.ContextMode = Enum('ContextMode', {
                 'RESEARCH': 'research',
@@ -51,17 +48,14 @@ class EnhancedContextIntegration:
 
     def _get_session_id(self, request: HttpRequest) -> str:
         """Extract or create session ID from request"""
-        # Try to get from request params first
         session_id = request.GET.get('session_id') or request.POST.get('session_id')
 
         if not session_id:
-            # Fall back to Django session
             if hasattr(request, 'session'):
                 if not request.session.session_key:
                     request.session.create()
                 session_id = request.session.session_key
             else:
-                # Generate a temporary ID if no session available
                 import uuid
                 session_id = str(uuid.uuid4())
 
@@ -69,7 +63,6 @@ class EnhancedContextIntegration:
 
     def _determine_mode(self, request: HttpRequest, endpoint: str) -> Any:
         """Determine the context mode based on request and endpoint"""
-        # Check for explicit mode in request
         mode_param = request.GET.get('mode') or request.POST.get('mode')
         if mode_param:
             try:
@@ -77,7 +70,6 @@ class EnhancedContextIntegration:
             except (ValueError, KeyError):
                 pass
 
-        # Determine based on endpoint
         if 'adv' in endpoint or 'advanced' in endpoint:
             return self.ContextMode.RESEARCH
         elif 'agent' in endpoint or request.GET.get('use_playwright') == 'true':
@@ -99,9 +91,7 @@ class EnhancedContextIntegration:
         session_id = self._get_session_id(request)
         mode = self._determine_mode(request, endpoint)
 
-        # Handle based on manager type
         if self.manager_type == "unified":
-            # UnifiedContextManager flow
             self.context_manager.update_metadata(
                 session_id=session_id,
                 mode=mode,
@@ -114,8 +104,6 @@ class EnhancedContextIntegration:
             messages = self.context_manager.get_formatted_messages_for_api(session_id)
 
         else:
-            # Mem0ContextManager flow
-            # Update webpage and time info
             if current_url or request.GET.get('current_url'):
                 self.context_manager.update_current_webpage(
                     session_id,
@@ -128,13 +116,10 @@ class EnhancedContextIntegration:
                 current_time=request.GET.get('user_time')
             )
 
-            # Add the user message
             self.context_manager.add_message(session_id, "user", question)
 
-            # Get context (includes fetched content and smart compression)
             context = self.context_manager.get_context(session_id)
 
-            # Format for API compatibility
             messages = []
             for msg in context:
                 messages.append({"content": msg["content"]})
@@ -161,7 +146,6 @@ class EnhancedContextIntegration:
                 response_time_ms=response_time_ms
             )
         else:
-            # Mem0 doesn't track these metadata fields in the same way
             self.context_manager.add_message(session_id, "assistant", response)
 
     def add_web_content(
@@ -177,13 +161,11 @@ class EnhancedContextIntegration:
         """
         session_id = self._get_session_id(request)
 
-        # Truncate if too long
         MAX_CONTENT_LENGTH = 10000
         if len(text_content) > MAX_CONTENT_LENGTH:
             text_content = text_content[:MAX_CONTENT_LENGTH] + "... (truncated)"
 
         if self.manager_type == "unified":
-            # UnifiedContextManager
             self.context_manager.add_fetched_context(
                 session_id=session_id,
                 source_type=source_type,
@@ -191,7 +173,6 @@ class EnhancedContextIntegration:
                 url=current_url
             )
         else:
-            # Mem0ContextManager with smart compression
             self.context_manager.add_fetched_context(
                 session_id=session_id,
                 source_type=source_type,
@@ -282,7 +263,6 @@ class EnhancedContextIntegration:
             else:
                 self.context_manager.clear_session(session_id)
         else:
-            # Mem0ContextManager
             if preserve_web_content:
                 self.context_manager.clear_conversation_only(session_id)
             else:
@@ -296,7 +276,6 @@ class EnhancedContextIntegration:
             stats = self.context_manager.get_session_stats(session_id)
         else:
             stats = self.context_manager.get_session_stats(session_id)
-            # Add additional info about smart compression
             stats['smart_compression_enabled'] = True
             stats['max_tokens'] = self.context_manager.max_session_tokens
 
@@ -308,7 +287,6 @@ class EnhancedContextIntegration:
         if self.manager_type == "unified":
             return self.context_manager.export_session_json(session_id)
         else:
-            # For Mem0, construct a similar JSON structure
             import json
             context = self.context_manager.get_context(session_id)
             stats = self.context_manager.get_session_stats(session_id)
@@ -327,7 +305,6 @@ class EnhancedContextIntegration:
             return json.dumps(result, indent=2, ensure_ascii=False)
 
 
-# Singleton instances
 _unified_integration = None
 _mem0_integration = None
 _enhanced_integration = None
@@ -342,7 +319,6 @@ def get_context_integration(use_mem0: bool = None) -> EnhancedContextIntegration
     global _enhanced_integration
 
     if use_mem0 is None:
-        # Check environment variable
         use_mem0 = os.getenv("CONTEXT_MANAGER_MODE", "mem0").lower() == "mem0"
 
     mode = "mem0" if use_mem0 else "unified"
