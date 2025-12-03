@@ -20,7 +20,7 @@ if (fs.existsSync(katexCssPath)) {
     const katexCssContent = fs.readFileSync(katexCssPath, 'utf8');
     combinedCSS += `/* ===== katex.min.css ===== */\n${katexCssContent}\n\n`;
 } else {
-    console.warn('⚠️ KaTeX CSS not found; math styles may be missing.');
+    console.warn('KaTeX CSS not found; math styles may be missing.');
 }
 
 if (!fs.existsSync(distDir)) {
@@ -28,7 +28,7 @@ if (!fs.existsSync(distDir)) {
 }
 
 fs.writeFileSync(path.join(distDir, 'styles.css'), combinedCSS);
-console.log('✅ Combined CSS created at dist/styles.css');
+console.log('Combined CSS created at dist/styles.css');
 
 function copyDirectory(source, destination) {
     if (!fs.existsSync(source)) {
@@ -52,7 +52,7 @@ function copyDirectory(source, destination) {
 
 if (fs.existsSync(katexFontsSource)) {
     copyDirectory(katexFontsSource, distFontsDir);
-    console.log('✅ KaTeX fonts copied to dist/fonts');
+    console.log('KaTeX fonts copied to dist/fonts');
 } else {
-    console.warn('⚠️ KaTeX fonts directory not found; math fonts may be missing.');
+    console.warn('KaTeX fonts directory not found; math fonts may be missing.');
 }

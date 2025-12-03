@@ -10,7 +10,6 @@ from pathlib import Path
 from typing import List, Dict, Any
 from threading import Lock
 
-# Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 class PreferredLinksManager:
@@ -25,19 +24,15 @@ class PreferredLinksManager:
                          Defaults to backend/data/preferred_links.json
         """
         if storage_path is None:
-            # Default path: backend/data/preferred_links.json
             backend_dir = Path(__file__).resolve().parent.parent
             self.storage_path = backend_dir / 'data' / 'preferred_links.json'
         else:
             self.storage_path = Path(storage_path)
 
-        # Ensure directory exists
         self.storage_path.parent.mkdir(parents=True, exist_ok=True)
 
-        # Thread lock for file operations
         self.lock = Lock()
 
-        # Initialize file if it doesn't exist
         if not self.storage_path.exists():
             self._init_storage()
 
@@ -101,7 +96,6 @@ class PreferredLinksManager:
             links: List of URLs to set as preferred links
         """
         data = self._read_data()
-        # Remove duplicates while preserving order
         unique_links = []
         seen = set()
         for link in links:
@@ -184,7 +178,6 @@ class PreferredLinksManager:
         return self.get_links()
 
 
-# Global instance
 _manager_instance = None
 
 def get_manager() -> PreferredLinksManager:

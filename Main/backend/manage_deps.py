@@ -43,7 +43,6 @@ def main():
 
     command = sys.argv[1]
 
-    # Check if uv is installed
     uv_check = subprocess.run("uv --version", shell=True, capture_output=True)
     if uv_check.returncode != 0:
         print("❌ uv is not installed. Please install it first:")

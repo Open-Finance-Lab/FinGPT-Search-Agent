@@ -26,7 +26,6 @@ from .openai_search import (
 )
 from .unified_context_manager import get_context_manager
 
-# Load .env from the backend root directory
 from pathlib import Path
 backend_dir = Path(__file__).resolve().parent.parent
 load_dotenv(backend_dir / '.env')
@@ -42,25 +41,19 @@ BUFFET_AGENT_TIMEOUT = float(os.getenv("BUFFET_AGENT_TIMEOUT", "60"))
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-# Initialize clients
 clients = {}
 
-# Global MCP Manager instance
-# This will be initialized lazily in create_fin_agent to ensure it persists across requests
 GLOBAL_MCP_MANAGER = None
 
-# OpenAI client
 if OPENAI_API_KEY:
     clients["openai"] = OpenAI(api_key=OPENAI_API_KEY)
 
-# DeepSeek client (OpenAI-compatible)
 if DEEPSEEK_API_KEY:
     clients["deepseek"] = OpenAI(
         api_key=DEEPSEEK_API_KEY,
         base_url="https://api.deepseek.com"
     )
 
-# Anthropic client
 if ANTHROPIC_API_KEY:
     clients["anthropic"] = Anthropic(api_key=ANTHROPIC_API_KEY)
 
@@ -69,7 +62,6 @@ INSTRUCTION = apply_guardrails(
     "the context provided is the most up-to-date information."
 )
 
-# Warren Buffett-specific system prompt for the Buffet Agent
 BUFFETT_INSTRUCTION = apply_guardrails(
     "You are Warren Buffett, the legendary investor and CEO of Berkshire Hathaway. "
     "Answer questions with his characteristic wisdom, folksy charm, and value investing philosophy. "
@@ -81,7 +73,6 @@ BUFFETT_INSTRUCTION = apply_guardrails(
     "the context provided is the most up-to-date information."
 )
 
-# Shared prefixes for context management metadata
 SYSTEM_PREFIX = "[SYSTEM MESSAGE]: "
 USER_PREFIXES = ("[USER MESSAGE]: ", "[USER QUESTION]: ")
 ASSISTANT_PREFIXES = ("[ASSISTANT MESSAGE]: ", "[ASSISTANT RESPONSE]: ")
@@ -94,7 +85,6 @@ def _strip_any_prefix(content: str, prefixes: tuple[str, ...]) -> tuple[bool, st
             return True, content[len(prefix):]
     return False, content
 
-# Global variables removed to prevent memory leaks
 
 
 
@@ -146,7 +136,6 @@ def _prepare_messages(message_list: list[dict], user_input: str, model: str = No
     for msg in message_list:
         content = msg.get("content", "")
 
-        # Parse headers to determine actual role
         if content.startswith(SYSTEM_PREFIX):
             actual_content = content.replace(SYSTEM_PREFIX, "", 1)
             if not system_message:
@@ -165,10 +154,8 @@ def _prepare_messages(message_list: list[dict], user_input: str, model: str = No
             msgs.append({"role": "assistant", "content": actual_content})
             continue
 
-        # Legacy format or web content - treat as user message
         msgs.append({"role": "user", "content": content})
 
-    # Determine which instruction to use based on the model
     instruction = INSTRUCTION
     if model:
         model_config = get_model_config(model)
@@ -176,7 +163,6 @@ def _prepare_messages(message_list: list[dict], user_input: str, model: str = No
             instruction = BUFFETT_INSTRUCTION
             logging.info("[BUFFET] Using Warren Buffett system prompt")
 
-    # Add system message at the beginning
     if system_message:
         instruction_payload = f"{system_message} {instruction}".strip()
     else:
@@ -184,7 +170,6 @@ def _prepare_messages(message_list: list[dict], user_input: str, model: str = No
 
     msgs.insert(0, {"role": "user", "content": f"{SYSTEM_PREFIX}{instruction_payload}"})
 
-    # Add current user input
     msgs.append({"role": "user", "content": user_input})
 
     return msgs, system_message
@@ -282,7 +267,6 @@ def _sanitize_buffet_output(text: str) -> str:
 
     candidate = candidate.strip()
 
-    # If the response still contains user-prefixed text, keep only the tail content.
     if "User:" in candidate:
         tail = candidate.rsplit("User:", 1)[-1].strip()
         if tail:
@@ -309,7 +293,6 @@ def _sanitize_buffet_output(text: str) -> str:
                 cleaned_lines.append("")
             continue
         if any(stripped.startswith(prefix) for prefix in skip_prefixes):
-            # If this is a user-prefixed line with actual content, keep the part after the prefix.
             if stripped.startswith("User:"):
                 remainder = stripped.split("User:", 1)[-1].strip()
                 if remainder:
@@ -409,7 +392,6 @@ def create_response(
     Creates a chat completion using the appropriate provider based on model configuration.
     Returns a string when stream=False, or a generator when stream=True.
     """
-    # Get model configuration
     model_config = get_model_config(model)
     if not model_config:
         raise ValueError(f"Unsupported model: {model}")
@@ -430,12 +412,10 @@ def create_response(
             return _create_buffet_response_stream(model_config, msgs)
         return _create_buffet_response_sync(model_config, msgs)
 
-    # Get the appropriate client
     client = clients.get(provider)
     if not client:
         raise ValueError(f"No client available for provider: {provider}. Please check API key configuration.")
 
-    # Route to streaming or non-streaming based on flag
     if stream:
         return _create_response_stream(client, provider, model_name, model_config, msgs)
     else:
@@ -445,7 +425,6 @@ def create_response(
 def _create_response_sync(client, provider: str, model_name: str, model_config: dict, msgs: list) -> str:
     """Non-streaming response - returns a string directly."""
     if provider == "anthropic":
-        # Anthropic uses a different API structure
         anthropic_msgs = [msg for msg in msgs if msg.get("role") != "system"]
 
         response = client.messages.create(
@@ -455,7 +434,6 @@ def _create_response_sync(client, provider: str, model_name: str, model_config: 
         )
         return response.content[0].text
     else:
-        # OpenAI and DeepSeek use the same API structure
         kwargs = {}
         if provider == "deepseek" and "recommended_temperature" in model_config:
             kwargs["temperature"] = model_config["recommended_temperature"]
@@ -471,7 +449,6 @@ def _create_response_sync(client, provider: str, model_name: str, model_config: 
 def _create_response_stream(client, provider: str, model_name: str, model_config: dict, msgs: list):
     """Streaming response - returns a generator."""
     if provider == "anthropic":
-        # Anthropic streaming
         anthropic_msgs = [msg for msg in msgs if msg.get("role") != "system"]
 
         with client.messages.stream(
@@ -482,7 +459,6 @@ def _create_response_stream(client, provider: str, model_name: str, model_config
             for text in stream_response.text_stream:
                 yield text
     else:
-        # OpenAI and DeepSeek streaming
         kwargs = {}
         if provider == "deepseek" and "recommended_temperature" in model_config:
             kwargs["temperature"] = model_config["recommended_temperature"]
@@ -498,7 +474,6 @@ def _create_response_stream(client, provider: str, model_name: str, model_config
                 yield chunk.choices[0].delta.content
 
 
-# _update_used_sources removed
 
 
 
@@ -539,7 +514,6 @@ def create_advanced_response(
 
     try:
         if stream:
-            # Return async generator for streaming
             return _create_advanced_response_stream_async(
             user_input=user_input,
                 message_list=message_list,
@@ -549,18 +523,15 @@ def create_advanced_response(
                 user_time=user_time
             )
         else:
-            # Call OpenAI Responses API search function
             response_text, source_entries = create_responses_api_search(
                 user_query=user_input,
                 message_history=message_list,
-                model=actual_model,  # Use the actual model name from model_config.py, not the frontend ID
+                model=actual_model,
                 preferred_links=preferred_urls,
                 user_timezone=user_timezone,
                 user_time=user_time
             )
 
-            # Update cached sources for compatibility with frontend queries
-            # _update_used_sources(source_entries) # Removed to prevent memory leaks
 
             logging.info(f"Advanced response generated with {len(source_entries)} sources")
             for idx, entry in enumerate(source_entries, 1):
@@ -570,7 +541,6 @@ def create_advanced_response(
 
     except Exception as e:
         logging.error(f"OpenAI Responses API failed: {e}")
-        # Return a fallback response
         if stream:
             error_message = str(e)
             async def error_gen():
@@ -597,7 +567,6 @@ async def _create_advanced_response_stream_async(
     from datascraper.openai_search import create_responses_api_search_async
 
     try:
-        # Get async generator from the streaming API
         stream_gen = await create_responses_api_search_async(
             user_query=user_input,
             message_history=message_list,
@@ -608,11 +577,7 @@ async def _create_advanced_response_stream_async(
             user_time=user_time
         )
 
-        # Yield chunks from the stream
         async for text_chunk, source_entries in stream_gen:
-            # Update global caches when we get sources
-            # if source_entries:
-            #     _update_used_sources(source_entries)
             yield text_chunk, source_entries
 
     except Exception as e:
@@ -668,7 +633,6 @@ def create_advanced_response_streaming(
             state["final_output"] = final_text
             state["used_sources"] = latest_entries
             state["used_urls"] = [entry.get("url") for entry in latest_entries if entry.get("url")]
-            # _update_used_sources(latest_entries)
             logging.info(f"[ADVANCED STREAM] Completed with {len(final_text)} characters and {len(latest_entries)} sources")
 
     return _stream(), state
@@ -692,7 +656,6 @@ def create_agent_response(user_input: str, message_list: list[dict], model: str 
     """
 
 
-    # Resolve model ID to actual model name for logging
     model_config = get_model_config(model)
     actual_model_name = model_config.get("model_name") if model_config else model
     provider = model_config.get("provider") if model_config else None
@@ -702,7 +665,6 @@ def create_agent_response(user_input: str, message_list: list[dict], model: str 
         return create_response(user_input, message_list, model)
 
     try:
-        # Check if model supports agent features
         if not validate_model_support(model, "mcp"):
             logging.warning(f"Model {model} ({actual_model_name}) doesn't support agent features")
             logging.info(f"FALLBACK: Using regular response with {model} ({actual_model_name})")
@@ -736,12 +698,10 @@ async def _create_agent_response_async(user_input: str, message_list: list[dict]
     from mcp_client.agent import create_fin_agent
     from agents import Runner
 
-    # Convert message list to context, parsing headers
     context = ""
     for msg in message_list:
         content = msg.get("content", "")
 
-        # Parse headers to determine actual role
         if content.startswith(SYSTEM_PREFIX):
             actual_content = content.replace(SYSTEM_PREFIX, "", 1)
             context += f"System: {actual_content}\n"
@@ -757,12 +717,10 @@ async def _create_agent_response_async(user_input: str, message_list: list[dict]
             context += f"Assistant: {actual_content}\n"
             continue
 
-        # Legacy format or web content - treat as user message
         context += f"User: {content}\n"
 
     full_prompt = f"{context}User: {user_input}"
 
-    # Create agent with MCP tools (SEC-EDGAR, filesystem)
     async with create_fin_agent(
         model=model,
         user_input=user_input,
@@ -770,7 +728,6 @@ async def _create_agent_response_async(user_input: str, message_list: list[dict]
         user_timezone=user_timezone,
         user_time=user_time
     ) as agent:
-        # Run the agent with the full prompt
         logging.info(f"[AGENT] Running agent with MCP tools")
         logging.info(f"[AGENT] Current URL: {current_url}")
         logging.info(f"[AGENT] Prompt preview: {full_prompt[:150]}...")
@@ -802,7 +759,6 @@ def create_agent_response_stream(
     provider = model_config.get("provider") if model_config else None
     if provider == "buffet":
         logging.info(f"[AGENT STREAM] Buffet agent does not support tool mode; using direct response stream for {model}")
-        # Reuse the regular streaming response helper
         regular_stream = create_response(user_input, message_list, model, stream=True)
 
         async def _fallback_stream() -> AsyncIterator[str]:
@@ -884,7 +840,6 @@ def create_agent_response_stream(
                                 tool_type = getattr(tool_item, "type", "")
                                 logging.debug(f"[AGENT STREAM] Tool event: {event_name} ({tool_type})")
                 
-                # If we complete successfully, break the retry loop
                 break
 
             except Exception as stream_error:
@@ -901,14 +856,12 @@ def create_agent_response_stream(
                 await asyncio.sleep(1)
 
             finally:
-                # Only update state if we are done or if we failed and can't retry
                 if retry_count > MAX_RETRIES or has_yielded or result:
                     final_text = ""
                     if result and isinstance(result.final_output, str) and result.final_output:
                         final_text = result.final_output
                     elif aggregated_chunks:
                         final_text = "".join(aggregated_chunks)
-                    # Only update final output if it's better than what we have (e.g. from a successful run)
                     if final_text:
                         state["final_output"] = final_text
                     logging.info(f"[AGENT STREAM] Completed with {len(final_text)} characters")
@@ -928,12 +881,9 @@ def get_sources(query: str, current_url: str | None = None, session_id: str | No
             manager = get_context_manager()
             session = manager._get_or_create_session(session_id)
             
-            # Find the last assistant message with sources
             for msg in reversed(session["conversation_history"]):
                 if msg.role == "assistant" and msg.metadata and msg.metadata.sources_used:
-                    # Convert source dicts to the format expected by frontend
                     for source in msg.metadata.sources_used:
-                        # Handle both dictionary and object access
                         url = source.get("url") if isinstance(source, dict) else getattr(source, "url", None)
                         title = source.get("title") if isinstance(source, dict) else getattr(source, "title", None)
                         
@@ -941,11 +891,10 @@ def get_sources(query: str, current_url: str | None = None, session_id: str | No
                             sources.append({
                                 "url": url,
                                 "title": title or url,
-                                "icon": None # Icon fetching removed
+                                "icon": None
                             })
                     break
             
-            # If no sources in messages, check fetched_context (fallback)
             if not sources and session["fetched_context"]["web_search"]:
                 logging.info(f"Fallback: Using {len(session['fetched_context']['web_search'])} web search items from context")
                 for item in session["fetched_context"]["web_search"]:

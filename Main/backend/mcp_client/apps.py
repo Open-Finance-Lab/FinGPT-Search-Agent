@@ -5,10 +5,9 @@ from django.apps import AppConfig
 
 logger = logging.getLogger(__name__)
 
-# Global MCP Manager instance that persists across requests
 _global_mcp_manager = None
 _global_mcp_lock = threading.Lock()
-_initialized = False  # Process-level flag to prevent double initialization
+_initialized = False
 
 def get_global_mcp_manager():
     """Get the global MCP manager instance"""
@@ -30,7 +29,6 @@ class MCPClientConfig(AppConfig):
         """
         global _initialized
 
-        # Prevent double initialization in the same process
         if _initialized:
             print("[MCP DEBUG] MCP already initialized in this process, skipping")
             return
@@ -38,15 +36,12 @@ class MCPClientConfig(AppConfig):
         import os
         import sys
 
-        # In development with auto-reload, only run in the child process
-        # In production (gunicorn), RUN_MAIN won't be set, so we'll initialize
         if 'runserver' in sys.argv and os.environ.get('RUN_MAIN') != 'true':
             print("[MCP DEBUG] Skipping MCP init in Django autoreload parent process")
             return
 
         _initialized = True
 
-        # Detect if we're running in a gunicorn worker (for quieter logging on worker 2+)
         worker_id = os.getenv('GUNICORN_WORKER_ID')
         verbose_marker_path = os.getenv('MCP_VERBOSE_MARKER_PATH', '/tmp/mcp_verbose_worker')
         force_verbose = os.getenv('MCP_DEBUG_FORCE_VERBOSE') == '1'
@@ -113,7 +108,6 @@ class MCPClientConfig(AppConfig):
                         print(f"[MCP DEBUG] Total tools discovered: {len(tools)}")
                         print("-" * 60)
 
-                    # Store the manager globally
                     with _global_mcp_lock:
                         set_global_mcp_manager(manager)
 
@@ -138,33 +132,26 @@ class MCPClientConfig(AppConfig):
                     print(f"[MCP DEBUG] MCP init failed: {e}")
                 logger.error(f"MCP initialization failed: {e}", exc_info=True)
 
-        # Run the async initialization in a background thread
         def run_async_init():
             """Run MCP initialization and keep event loop alive for async operations"""
             try:
                 if is_verbose:
                     print("[MCP DEBUG] Starting async initialization in background thread...")
 
-                # Create and set event loop for this thread
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
 
-                # Initialize MCP manager
                 loop.run_until_complete(initialize_global_manager(verbose=is_verbose))
 
-                # Keep the loop running to maintain MCP sessions
-                # MCP uses stdio/SSE transports which need an active event loop
                 if is_verbose:
                     print("[MCP DEBUG] Event loop now running to maintain connections...")
 
-                # Run forever - the daemon thread will exit when Django shuts down
                 loop.run_forever()
 
             except Exception as e:
                 print(f"[MCP DEBUG] ✗ Error in MCP initialization thread: {e}")
                 logger.error(f"Error in MCP initialization thread: {e}", exc_info=True)
             finally:
-                # Cleanup when thread exits
                 try:
                     loop.close()
                 except Exception as e:

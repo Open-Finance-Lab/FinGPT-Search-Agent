@@ -140,3 +140,34 @@
     visibility: visible;
     transition-delay: 1s;
 }
+
+/* Auto-scrape Loading Indicator */
+.loading-container {
+    display: flex;
+    align-items: center;
+    margin-right: 10px;
+}
+
+.loading-text {
+    color: #bbbbbb;
+    /* Greyer than white */
+    font-size: 0.9em;
+    margin-right: 8px;
+    font-weight: normal !important;
+    /* Override #header span bold */
+}
+
+.spinner-small {
+    width: 14px;
+    height: 14px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
+    border-top-color: #ffffff;
+    animation: spin 1s ease-in-out infinite;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}

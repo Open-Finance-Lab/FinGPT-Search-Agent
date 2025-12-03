@@ -15,15 +15,12 @@ from openai import OpenAI, AsyncOpenAI
 from dotenv import load_dotenv
 from pathlib import Path
 
-# Load environment variables
 backend_dir = Path(__file__).resolve().parent.parent
 load_dotenv(backend_dir / '.env')
 
-# Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-# Initialize OpenAI client lazily to allow imports without secrets (e.g., CI)
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 if not OPENAI_API_KEY:
@@ -34,7 +31,6 @@ else:
     sync_client = OpenAI(api_key=OPENAI_API_KEY)
     async_client = AsyncOpenAI(api_key=OPENAI_API_KEY)
 
-# Feature flag for using Responses API (can be controlled via env var)
 USE_RESPONSES_API = os.getenv("USE_OPENAI_RESPONSES_API", "true").lower() == "true"
 
 
@@ -45,15 +41,11 @@ def _get_site_name(url: str) -> str:
         if not hostname:
             return "Source"
 
-        # Remove www prefix
         hostname = re.sub(r'^www\.', '', hostname, flags=re.IGNORECASE)
 
-        # Extract site name from domain
         parts = hostname.split('.')
         if len(parts) >= 2:
-            # Get the main domain part
             site_name = parts[-2] if parts[-1] in ['com', 'org', 'net', 'edu', 'gov', 'io', 'co'] else parts[0]
-            # Capitalize first letter
             return site_name.capitalize()
 
         return hostname.capitalize()
@@ -69,10 +61,8 @@ def _format_display_url(url: str, max_length: int = 30) -> str:
         if parsed.query:
             display += f"?{parsed.query}"
 
-        # Remove www prefix
         display = re.sub(r'^www\.', '', display, flags=re.IGNORECASE)
 
-        # Truncate if too long
         if len(display) > max_length:
             display = display[:max_length - 3] + "..."
 
@@ -94,18 +84,13 @@ def extract_citations_from_response(response) -> List[Dict[str, Any]]:
     citations = []
 
     try:
-        # Check if response has output attribute (Responses API structure)
         if hasattr(response, 'output') and response.output:
             for output_item in response.output:
-                # Check for message type outputs
                 if hasattr(output_item, 'type') and output_item.type == 'message':
-                    # Extract content blocks
                     if hasattr(output_item, 'content') and output_item.content:
                         for content_block in output_item.content:
-                            # Check for annotations in content blocks
                             if hasattr(content_block, 'annotations') and content_block.annotations:
                                 for annotation in content_block.annotations:
-                                    # Extract URL citations
                                     if annotation.type == 'url_citation':
                                         citations.append({
                                             'url': annotation.url,
@@ -120,7 +105,6 @@ def extract_citations_from_response(response) -> List[Dict[str, Any]]:
                                             'type': 'file_citation'
                                         })
 
-        # Log citation extraction results
         logger.info(f"Extracted {len(citations)} citations from response")
         for idx, citation in enumerate(citations, 1):
             if citation['type'] == 'url_citation':
@@ -341,15 +325,12 @@ def prepare_search_prompt(user_query: str, preferred_domains: List[str] = None) 
     """
     prompt_parts = []
 
-    # Add domain preferences if provided
     if preferred_domains:
         domains_str = ', '.join(preferred_domains)
         prompt_parts.append(f"When searching, prioritize these sources: {domains_str}")
 
-    # Add the user query
     prompt_parts.append(user_query)
 
-    # Add instruction for comprehensive search
     prompt_parts.append("\nProvide a comprehensive answer with citations from multiple reputable sources.")
 
     return '\n'.join(prompt_parts)
@@ -384,19 +365,15 @@ async def create_responses_api_search_async(
         raise RuntimeError("OPENAI_API_KEY is not configured; cannot execute OpenAI search.")
 
     try:
-        # Extract domains from preferred links
         preferred_domains = []
         if preferred_links:
             for link in preferred_links:
-                # Extract domain from URL
                 domain = urlparse(link).netloc
                 if domain and domain not in preferred_domains:
                     preferred_domains.append(domain)
 
-        # Prepare enhanced prompt
         enhanced_prompt = prepare_search_prompt(user_query, preferred_domains)
 
-        # Build system instructions with timezone/time context
         system_instructions = (
             "Instructions: You are an expert and a helpful financial assistant with access to web search. "
             "Decide whether to search based on intent: use web_search when the question needs external or current information; "
@@ -417,7 +394,6 @@ async def create_responses_api_search_async(
             "- Unicode symbols like ≈ or · outside of $ delimiters"
         )
 
-        # Add timezone and time information if available
         if user_timezone or user_time:
             from datetime import datetime
             import pytz
@@ -425,7 +401,6 @@ async def create_responses_api_search_async(
             time_info_parts = []
             if user_timezone and user_time:
                 try:
-                    # Parse ISO time and convert to user's timezone
                     utc_time = datetime.fromisoformat(user_time.replace('Z', '+00:00'))
                     user_tz = pytz.timezone(user_timezone)
                     local_time = utc_time.astimezone(user_tz)
@@ -442,12 +417,9 @@ async def create_responses_api_search_async(
             if time_info_parts:
                 system_instructions += f"\n\n[TIME CONTEXT]: {' | '.join(time_info_parts)}"
 
-        # Build conversation context from message_history
         conversation_context = ""
 
-        # Process message history to include full conversation
         if message_history:
-            # Extract system message
             system_msg = None
             conversation_parts = []
 
@@ -455,26 +427,20 @@ async def create_responses_api_search_async(
                 content = msg.get('content', '')
 
                 if content.startswith("[SYSTEM MESSAGE]:"):
-                    # Extract system message content
                     system_msg = content.replace("[SYSTEM MESSAGE]:", "").strip()
                 elif content.startswith("[USER MESSAGE]:"):
-                    # Add user message
                     user_content = content.replace("[USER MESSAGE]:", "").strip()
                     conversation_parts.append(f"User: {user_content}")
                 elif content.startswith("[ASSISTANT MESSAGE]:"):
-                    # Add assistant message
                     assistant_content = content.replace("[ASSISTANT MESSAGE]:", "").strip()
                     conversation_parts.append(f"Assistant: {assistant_content}")
 
-            # Use extracted system message if available, otherwise use default
             if system_msg:
                 system_instructions = system_msg + "\n\n" + system_instructions
 
-            # Add conversation history if it exists (excluding the current query which is the last user message)
-            if len(conversation_parts) > 1:  # More than just the current question
+            if len(conversation_parts) > 1:
                 conversation_context = "\n\n[CONVERSATION HISTORY]:\n" + "\n".join(conversation_parts[:-1])
 
-        # Combine all parts: system instructions, conversation history, and current query
         combined_input = system_instructions
         if conversation_context:
             combined_input += conversation_context
@@ -789,14 +755,13 @@ def format_sources_for_frontend(
             continue
         seen.add(url)
 
-        # Create normalized entry without snippet
         normalized = {
             "url": url,
             "title": raw_entry.get("title") or _format_display_url(url),
             "site_name": raw_entry.get("site_name") or _get_site_name(url),
             "display_url": raw_entry.get("display_url") or _format_display_url(url),
             "snippet": raw_entry.get("snippet") or "",
-            "icon": None,  # No icon fetching for performance
+            "icon": None,
             "provisional": bool(raw_entry.get("provisional", False))
         }
 
@@ -805,7 +770,6 @@ def format_sources_for_frontend(
         else:
             entries.append(normalized)
 
-    # If current page not among sources but we have URL, synthesize entry
     if current_url and not current_entry:
         current_entry = {
             "url": current_url,
@@ -833,7 +797,6 @@ def is_responses_api_available(model: str) -> bool:
     Returns:
         True if model supports Responses API, False otherwise
     """
-    # Models that support Responses API with web search (per OpenAI docs)
     supported_models = {
         "gpt-4o",
         "gpt-4o-mini",
@@ -857,7 +820,6 @@ def is_responses_api_available(model: str) -> bool:
     return False
 
 
-# Maintain backward compatibility exports
 __all__ = [
     'create_responses_api_search',
     'create_responses_api_search_async',
