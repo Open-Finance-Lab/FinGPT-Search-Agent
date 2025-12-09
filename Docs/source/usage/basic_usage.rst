@@ -26,10 +26,8 @@ The top bar of the pop up contains the following elements:
 - **Pin-to-Place Button**: Pins the pop up to its current location. The pop up will not move when the user scrolls the
   page.
 
-- **Setting Button**: Opens the settings page, and may be close by clicking anywhere outside the settings page but
-  inside the pop up. It allows users to choose foundation models, set preferred links and toggle the local
-  Retrieval-Augmented Generation function. Note, that currently under the local RAG mode, the search agent will NOT
-  incorporate context from anywhere but the user's local files.
+- **Setting Button**: Opens the settings page, and may be closed by clicking anywhere outside the settings page but
+  inside the pop up. It allows users to choose foundation models and set preferred links for Advanced search.
 
 Main Body
 ~~~~~~~~~
@@ -83,10 +81,8 @@ The top bar of the pop up contains the following elements:
 - **Pin-to-Place Button**: Pins the pop up to its current location. The pop up will not move when the user scrolls the
   page.
 
-- **Setting Button**: Opens the settings page, and may be close by clicking anywhere outside the settings page but
-  inside the pop up. It allows users to choose foundation models, set preferred links and toggle the local
-  Retrieval-Augmented Generation function. Note, that currently under the local RAG mode, the search agent will NOT
-  incorporate context from anywhere but the user's local files.
+- **Setting Button**: Opens the settings page, and may be closed by clicking anywhere outside the settings page but
+  inside the pop up. It allows users to choose foundation models and set preferred links for Advanced search.
 
 Main Body
 ~~~~~~~~~

@@ -5,76 +5,121 @@ import { createHeader } from './components/header.js';
 import { createChatInterface } from './components/chat.js';
 import { createSettingsWindow } from './components/settings_window.js';
 import { createLinkManager } from './components/link_manager.js';
+import { getLayoutKeyForUrl, loadLayoutState, saveLayoutState } from './layoutState.js';
+
+const DEFAULT_POPUP_HEIGHT = '520px';
+const DEFAULT_POPUP_WIDTH = '690px';
+
+function capturePopupLayout(element, isFixedMode) {
+    const rect = element.getBoundingClientRect();
+    return {
+        position: isFixedMode ? 'fixed' : 'absolute',
+        top: isFixedMode ? rect.top : rect.top + window.scrollY,
+        left: isFixedMode ? rect.left : rect.left + window.scrollX,
+        width: rect.width,
+        height: rect.height,
+    };
+}
 
 // Function to create UI elements
 function createUI() {
     let isFixedMode = true;
     let searchQuery = '';
+    const layoutStorageKey = getLayoutKeyForUrl(window.location.href);
 
     const isFixedModeRef = { value: isFixedMode }; // Pass-by-reference workaround
 
     // Main popup
     const popup = createPopup();
 
-    // Icons
-    const settingsIcon = document.createElement('span');
-    settingsIcon.innerText = "⚙️";
-    settingsIcon.className = "icon";
+    // Header buttons
+    const settingsButton = document.createElement('button');
+    settingsButton.innerText = "Settings";
+    settingsButton.className = "header-button";
 
-    const positionModeIcon = document.createElement('span');
-    positionModeIcon.innerText = "⛓️‍💥";
-    positionModeIcon.id = "position-mode-icon";
-    positionModeIcon.className = "icon";
+    const positionModeButton = document.createElement('button');
+    positionModeButton.innerText = "Hover in Place";
+    positionModeButton.id = "position-mode-button";
+    positionModeButton.className = "header-button";
+    positionModeButton.setAttribute('data-tooltip', 'This toggles this pop up\'s dynamic placement. "Hover in Place" keeps the pop up in place when you scroll the webpage, while "Move with Page" moves the pop up with the page when the page is scrolled.');
 
     // Settings window
-    const settings_window = createSettingsWindow(isFixedModeRef, settingsIcon, positionModeIcon);
+    const settings_window = createSettingsWindow(isFixedModeRef, settingsButton, positionModeButton);
+
+    const updateSettingsWindowPosition = () => {
+        const settingsButtonRect = settingsButton.getBoundingClientRect();
+        const offsetY = isFixedModeRef.value ? 0 : window.scrollY;
+        const offsetX = isFixedModeRef.value ? 0 : window.scrollX;
+        settings_window.style.position = isFixedModeRef.value ? "fixed" : "absolute";
+        settings_window.style.top = `${settingsButtonRect.bottom + offsetY}px`;
+        settings_window.style.left = `${settingsButtonRect.left - 100 + offsetX}px`;
+    };
+
+    const updateSourcesWindowPosition = () => {
+        const sources_window = document.getElementById('sources_window');
+        if (!sources_window) {
+            return;
+        }
+        const popupRect = popup.getBoundingClientRect();
+        const baseLeft = isFixedModeRef.value ? popupRect.left : popup.offsetLeft;
+        const baseTop = isFixedModeRef.value ? popupRect.top : popup.offsetTop;
+        sources_window.style.position = isFixedModeRef.value ? 'fixed' : 'absolute';
+        const sourcesLeft = Math.max(0, baseLeft - 370); // 360px width + 10px gap
+        sources_window.style.left = `${sourcesLeft}px`;
+        sources_window.style.top = `${baseTop}px`;
+    };
+
+    const persistLayoutState = () => {
+        const layoutState = capturePopupLayout(popup, isFixedModeRef.value);
+        saveLayoutState(layoutState, layoutStorageKey).catch((error) => {
+            console.warn('Unable to persist popup layout:', error);
+        });
+    };
+
+    const applySavedLayout = (layoutState) => {
+        if (!layoutState) {
+            return;
+        }
+        isFixedModeRef.value = layoutState.position !== 'absolute';
+        popup.style.position = isFixedModeRef.value ? 'fixed' : 'absolute';
+        popup.style.top = `${layoutState.top}px`;
+        popup.style.left = `${layoutState.left}px`;
+        popup.style.right = 'auto';
+        if (layoutState.width) {
+            popup.style.width = `${layoutState.width}px`;
+        }
+        if (layoutState.height) {
+            popup.style.height = `${layoutState.height}px`;
+        }
+        positionModeButton.innerText = isFixedModeRef.value ? "Hover in Place" : "Move with Page";
+        requestAnimationFrame(() => {
+            updateSettingsWindowPosition();
+            updateSourcesWindowPosition();
+        });
+    };
 
     // Position mode toggle logic
-    positionModeIcon.onclick = function () {
+    positionModeButton.onclick = function () {
         const rect = popup.getBoundingClientRect();
         if (isFixedModeRef.value) {
             popup.style.position = "absolute";
             popup.style.top = `${rect.top + window.scrollY}px`;
             popup.style.left = `${rect.left + window.scrollX}px`;
-            popup.style.right = "auto"; // Clear right positioning when switching to absolute
-            positionModeIcon.innerText = "📌";
-
-            const settingsIconRect = settingsIcon.getBoundingClientRect();
-            settings_window.style.position = "absolute";
-            settings_window.style.top = `${settingsIconRect.bottom + window.scrollY}px`;
-            settings_window.style.left = `${settingsIconRect.left + window.scrollX - 100}px`;
-
-            // Update sources window position mode
-            const sources_window = document.getElementById('sources_window');
-            if (sources_window) {
-                sources_window.style.position = "absolute";
-                sources_window.style.top = `${rect.top + window.scrollY}px`;
-                sources_window.style.left = `${rect.left - 370 + window.scrollX}px`; // Keep on left (360px width + 10px gap)
-            }
         } else {
             popup.style.position = "fixed";
             popup.style.top = `${rect.top}px`;
             popup.style.left = `${rect.left}px`;
-            positionModeIcon.innerText = "⛓️‍💥";
-
-            const settingsIconRect = settingsIcon.getBoundingClientRect();
-            settings_window.style.position = "fixed";
-            settings_window.style.top = `${settingsIconRect.bottom}px`;
-            settings_window.style.left = `${settingsIconRect.left - 100}px`;
-
-            // Update sources window position mode
-            const sources_window = document.getElementById('sources_window');
-            if (sources_window) {
-                sources_window.style.position = "fixed";
-                sources_window.style.top = `${rect.top}px`;
-                sources_window.style.left = `${rect.left - 370}px`; // Keep on left (360px width + 10px gap)
-            }
         }
+        popup.style.right = "auto";
         isFixedModeRef.value = !isFixedModeRef.value;
+        positionModeButton.innerText = isFixedModeRef.value ? "Hover in Place" : "Move with Page";
+        updateSettingsWindowPosition();
+        updateSourcesWindowPosition();
+        persistLayoutState();
     };
 
     // Header
-    const header = createHeader(popup, settings_window, settingsIcon, positionModeIcon, isFixedModeRef);
+    const header = createHeader(popup, settings_window, settingsButton, positionModeButton, isFixedModeRef, DEFAULT_POPUP_HEIGHT);
 
     // Intro
     const intro = document.createElement('div');
@@ -141,6 +186,18 @@ function createUI() {
     popup.appendChild(inputContainer);
     popup.appendChild(buttonContainer);
 
+    const resizeHandleBottomRight = document.createElement('div');
+    resizeHandleBottomRight.className = 'resize-handle resize-handle--bottom-right';
+    resizeHandleBottomRight.dataset.resizeHandle = 'bottom-right';
+    resizeHandleBottomRight.setAttribute('aria-hidden', 'true');
+    const resizeHandleBottomLeft = document.createElement('div');
+    resizeHandleBottomLeft.className = 'resize-handle resize-handle--bottom-left';
+    resizeHandleBottomLeft.dataset.resizeHandle = 'bottom-left';
+    resizeHandleBottomLeft.setAttribute('aria-hidden', 'true');
+
+    popup.appendChild(resizeHandleBottomRight);
+    popup.appendChild(resizeHandleBottomLeft);
+
     document.body.appendChild(sources_window);
     document.body.appendChild(settings_window);
     document.body.appendChild(popup);
@@ -151,18 +208,23 @@ function createUI() {
     // Position dynamically from the right edge
     popup.style.right = "2%";
     popup.style.left = "auto";
-    popup.style.width = '450px';
-    popup.style.height = '650px';
+    popup.style.width = DEFAULT_POPUP_WIDTH;
+    popup.style.height = DEFAULT_POPUP_HEIGHT;
+    updateSettingsWindowPosition();
+    updateSourcesWindowPosition();
 
     const sourceWindowOffsetX = 10;
-    makeDraggableAndResizable(popup, sourceWindowOffsetX, isFixedModeRef.value);
+    makeDraggableAndResizable(popup, sourceWindowOffsetX, () => {
+        updateSettingsWindowPosition();
+        persistLayoutState();
+    });
 
-    const popupRect = popup.getBoundingClientRect();
-    // Position sources window to the left of the main popup
-    // Ensure sources window doesn't go off-screen
-    const sourcesLeft = Math.max(0, popupRect.left - 370); // 360px width + 10px offset
-    sources_window.style.left = `${sourcesLeft}px`;
-    sources_window.style.top = `${popupRect.top}px`;
+    loadLayoutState(layoutStorageKey).then((layoutState) => {
+        if (layoutState) {
+            applySavedLayout(layoutState);
+        }
+        persistLayoutState();
+    });
 
     console.log("initalized");
 

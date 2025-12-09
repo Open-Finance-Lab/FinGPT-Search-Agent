@@ -1,11 +1,13 @@
 {
   "manifest_version": 3,
   "name": "Agentic FinSearch",
-  "version": "0.7.0",
-  "description": "A demo for the extension for Agentic FinSearch. Frontend-only, backend needs to be locally deployed.",
+  "version": "0.10.0",
+  "description": "Agentic FinSearch companion extension. Defaults to the hosted backend at agenticfinsearch.org, with optional local backend support.",
   "icons": {
     "16": "assets/16x16_icon.png",
-    "32": "assets/32x32_icon.png"
+    "32": "assets/32x32_icon.png",
+    "48": "assets/48x48_icon.png",
+    "128": "assets/128x128_icon.png"
   },
   "content_scripts": [
     {
@@ -18,8 +20,9 @@
         "https://www.cnbc.com/*"
       ],
       "js": [
-        "vendors.js",
-        "katex.js",
+        "vendor/marked.min.js",
+        "vendor/katex.min.js",
+        "vendor/katex-auto-render.min.js",
         "main.js"
       ],
       "css": [
@@ -28,10 +31,13 @@
     }
   ],
   "permissions": [
-
+    "storage"
   ],
   "host_permissions": [
-    "http://127.0.0.1:8000/*"
+    "https://agenticfinsearch.org/*",
+    "https://www.agenticfinsearch.org/*",
+    "http://127.0.0.1:8000/*",
+    "http://localhost:8000/*"
   ],
   "web_accessible_resources": [
     {

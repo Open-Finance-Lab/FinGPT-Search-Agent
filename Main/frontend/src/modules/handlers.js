@@ -1,84 +1,252 @@
 // handlers.js
 import { appendChatElement, scrollChatToBottom } from './helpers.js';
-import { getChatResponse, getChatResponseStream } from './api.js';
+import { getChatResponse, getChatResponseStream, waitForAutoScrape, isAutoScrapeInProgress } from './api.js';
 import { getSelectedModel, selectedModel } from './config.js';
 import { setCachedSources } from './sourcesCache.js';
-import { marked } from 'marked';
-import renderMathInElement from 'katex/dist/contrib/auto-render';
+import { renderMarkdownContent, renderStreamingPreview } from './markdownRenderer.js';
 
-function renderMarkdown(text) {
-  return marked.parse(text, {
-    gfm: true,
-    breaks: true,
-    mangle: false,
-    headerIds: false,
-  });
+const NAVIGATION_STATUS_LABELS = new Set(['navigating site', 'navigating current page']);
+const STATUS_LABEL_REMAPPINGS = {
+  'preparing context': 'Processing',
+  'drafting answer': 'Drafting response',
+  'finalizing response': 'Finalizing response',
+};
+const SEARCH_STATUS_LABEL = 'searching the web';
+const READING_STATUS_LABEL = 'reading source';
+
+function normalizeStatusLabel(label) {
+  return (label || '').trim().toLowerCase();
 }
 
-function renderMarkdownWithMath(element, text) {
-  const mathBlocks = [];
+function getCurrentPageHostname() {
+  try {
+    if (typeof window !== 'undefined' && window.location) {
+      return window.location.hostname || '';
+    }
+  } catch (_error) {
+    // Ignore – fallback below
+  }
+  return '';
+}
 
-  // Extract all math blocks to protect them from markdown processing
-  // Order matters: extract display math before inline math to avoid conflicts
+function extractHostname(value) {
+  if (!value) {
+    return '';
+  }
 
-  // Extract \[ ... \] (LaTeX display math)
-  let processedText = text.replace(/\\\[([\s\S]+?)\\\]/g, (match) => {
-    const index = mathBlocks.length;
-    mathBlocks.push(match);
-    return `XMATHXBLOCKX${index}XENDX`;
+  const trimmed = value.trim();
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+    try {
+      const parsed = new URL(trimmed);
+      return parsed.hostname || '';
+    } catch (_error) {
+      // Fall through to manual parsing
+    }
+  }
+
+  const withoutProtocol = trimmed.replace(/^https?:\/\//i, '');
+  const stopChars = ['/', '?', '#'];
+  let endIndex = withoutProtocol.length;
+  stopChars.forEach((char) => {
+    const idx = withoutProtocol.indexOf(char);
+    if (idx >= 0 && idx < endIndex) {
+      endIndex = idx;
+    }
+  });
+  const hostWithPort = withoutProtocol.slice(0, endIndex);
+  return hostWithPort.replace(/:\d+$/, '');
+}
+
+function deriveLocation(detail, url, { allowDetail = true } = {}) {
+  const trimmedDetail = (detail || '').trim();
+  const lower = trimmedDetail.toLowerCase();
+  if (
+    allowDetail &&
+    trimmedDetail &&
+    lower !== 'current site' &&
+    lower !== 'current page'
+  ) {
+    return trimmedDetail;
+  }
+
+  const fromUrl = extractHostname(url);
+  if (fromUrl) {
+    return fromUrl;
+  }
+
+  return getCurrentPageHostname();
+}
+
+function formatNavigationDetail(detail, url) {
+  const target = deriveLocation(detail, url, { allowDetail: true });
+  if (!target) {
+    return 'Exploring this page';
+  }
+  return /^(visiting|navigating)/i.test(target) ? target : `Visiting ${target}`;
+}
+
+function formatReadingDetail(detail, url) {
+  if (detail && detail.trim()) {
+    return detail;
+  }
+  const target = deriveLocation(detail, url, { allowDetail: false });
+  if (!target) {
+    return 'Reviewing source';
+  }
+  return /^reviewing/i.test(target) ? target : `Reviewing ${target}`;
+}
+
+function describeAgentStatus(status, options = {}) {
+  const fallbackDetail = options.fallbackDetail || '';
+  if (!status || typeof status !== 'object') {
+    return { label: 'Processing', detail: fallbackDetail };
+  }
+
+  const normalizedLabel = normalizeStatusLabel(status.label);
+  let label =
+    STATUS_LABEL_REMAPPINGS[normalizedLabel] || status.label || 'Processing';
+  let detail = (status.detail || '').trim();
+  const url = status.url || '';
+
+  if (NAVIGATION_STATUS_LABELS.has(normalizedLabel)) {
+    label = 'Navigating site';
+    detail = formatNavigationDetail(detail, url);
+  } else if (normalizedLabel === SEARCH_STATUS_LABEL) {
+    label = 'Searching the web';
+    if (!detail) {
+      detail = 'Looking for relevant information';
+    }
+  } else if (normalizedLabel === READING_STATUS_LABEL) {
+    label = 'Reading source';
+    detail = formatReadingDetail(detail, url);
+  }
+
+  if (!detail && label.toLowerCase() === 'processing') {
+    detail = fallbackDetail || 'Working on it';
+  }
+
+  return { label, detail };
+}
+
+function createLoadingCard(responseContainer) {
+  const card = document.createElement('div');
+  card.className = 'agent_response agent-loading-card';
+
+  const title = document.createElement('div');
+  title.className = 'loading-card-title';
+  title.innerText = 'FinGPT is working';
+
+  const currentWrapper = document.createElement('div');
+  currentWrapper.className = 'loading-card-current';
+
+  const currentLabel = document.createElement('div');
+  currentLabel.className = 'loading-card-current-label';
+  currentWrapper.appendChild(currentLabel);
+
+  const currentDetail = document.createElement('div');
+  currentDetail.className = 'loading-card-current-detail';
+  currentWrapper.appendChild(currentDetail);
+
+  const historyList = document.createElement('ul');
+  historyList.className = 'loading-card-history';
+
+  card.appendChild(title);
+  card.appendChild(currentWrapper);
+  card.appendChild(historyList);
+  responseContainer.appendChild(card);
+
+  const MAX_HISTORY = 4;
+  let currentStatus = null;
+  let isActive = true;
+
+  const normalize = (status = {}) => ({
+    label: status.label || '',
+    detail: status.detail || '',
+    url: status.url || '',
   });
 
-  // Extract $$ ... $$ (display math)
-  processedText = processedText.replace(/\$\$([\s\S]+?)\$\$/g, (match) => {
-    const index = mathBlocks.length;
-    mathBlocks.push(match);
-    return `XMATHXBLOCKX${index}XENDX`;
-  });
+  const appendHistory = (status) => {
+    if (!status || !status.label) {
+      return;
+    }
+    const item = document.createElement('li');
+    item.className = 'loading-card-history-item';
 
-  // Extract \( ... \) (LaTeX inline math)
-  processedText = processedText.replace(/\\\(([\s\S]+?)\\\)/g, (match) => {
-    const index = mathBlocks.length;
-    mathBlocks.push(match);
-    return `XMATHXBLOCKX${index}XENDX`;
-  });
+    const labelSpan = document.createElement('span');
+    labelSpan.className = 'history-label';
+    labelSpan.innerText = status.label;
+    item.appendChild(labelSpan);
 
-  // Extract $ ... $ (inline math)
-  processedText = processedText.replace(/\$([^\$\n]+?)\$/g, (match) => {
-    const index = mathBlocks.length;
-    mathBlocks.push(match);
-    return `XMATHXBLOCKX${index}XENDX`;
-  });
+    if (status.detail) {
+      const detailSpan = document.createElement('span');
+      detailSpan.className = 'history-detail';
+      detailSpan.innerText = status.detail;
+      item.appendChild(detailSpan);
+    }
 
-  // Render markdown
-  let html = renderMarkdown(processedText);
+    historyList.insertBefore(item, historyList.firstChild);
+    while (historyList.children.length > MAX_HISTORY) {
+      historyList.removeChild(historyList.lastChild);
+    }
+  };
 
-  // Restore all math blocks
-  mathBlocks.forEach((block, index) => {
-    const escapedPlaceholder = `XMATHXBLOCKX${index}XENDX`;
-    html = html.replace(new RegExp(escapedPlaceholder, 'g'), block);
-  });
+  const updateStatus = (status) => {
+    if (!isActive) {
+      return;
+    }
+    const next = normalize(status);
+    if (!next.label) {
+      return;
+    }
+    if (
+      currentStatus &&
+      currentStatus.label === next.label &&
+      currentStatus.detail === next.detail
+    ) {
+      return;
+    }
+    if (currentStatus) {
+      appendHistory(currentStatus);
+    }
+    currentStatus = next;
+    currentLabel.innerText = next.label;
+    if (next.detail) {
+      currentDetail.innerText = next.detail;
+      currentDetail.style.display = 'block';
+    } else {
+      currentDetail.innerText = '';
+      currentDetail.style.display = 'none';
+    }
+  };
 
-  element.innerHTML = `<strong>FinGPT:</strong> ${html}`;
+  const complete = () => {
+    if (!isActive) {
+      return;
+    }
+    currentStatus = null;
+    isActive = false;
+    if (card.parentNode) {
+      card.parentNode.removeChild(card);
+    }
+  };
 
-  const links = element.querySelectorAll('a');
-  links.forEach((link) => {
-    link.setAttribute('target', '_blank');
-    link.setAttribute('rel', 'noopener noreferrer');
-  });
+  const fail = (message) => {
+    if (!isActive) {
+      return;
+    }
+    card.classList.add('agent-loading-card--error');
+    currentLabel.innerText = 'Issue detected';
+    currentDetail.innerText = message || 'Unable to finish this request.';
+    currentDetail.style.display = 'block';
+    historyList.innerHTML = '';
+  };
 
-  // Let KaTeX handle all the math rendering
-  renderMathInElement(element, {
-    delimiters: [
-      { left: '$$', right: '$$', display: true },
-      { left: '$', right: '$', display: false },
-      { left: '\\[', right: '\\]', display: true },
-      { left: '\\(', right: '\\)', display: false },
-    ],
-    throwOnError: false,
-    errorColor: '#cc0000',
-    strict: false,
-    trust: true,
-  });
+  return {
+    element: card,
+    updateStatus,
+    complete,
+    fail,
+  };
 }
 
 // Function to create action buttons (copy and retry)
@@ -214,70 +382,8 @@ function createRatingElement() {
   return ratingContainer;
 }
 
-// Apply Markdown and LaTeX rendering to an existing message bubble
-function renderFormattedResponse(targetElement, rawText) {
-    if (!targetElement) {
-        return;
-    }
-
-    const formattedText = formatMathExpressions(rawText);
-    const markdownHtml = marked.parse(formattedText, {
-        gfm: true,
-        breaks: true,
-        mangle: false,
-        headerIds: false,
-    });
-
-    targetElement.innerHTML = markdownHtml;
-
-    renderMathInElement(targetElement, {
-        delimiters: [
-            { left: '$$', right: '$$', display: true },
-            { left: '$', right: '$', display: false },
-            { left: '\\(', right: '\\)', display: false },
-            { left: '\\[', right: '\\]', display: true },
-        ],
-        output: 'html',
-        throwOnError: false,
-        errorColor: '#cc0000',
-        macros: {
-            '\\Δ': '\\Delta',
-            '\\σ': '\\sigma',
-            '\\ν': '\\nu',
-            '\\ρ': '\\rho',
-            '\\Γ': '\\Gamma',
-            '\\Θ': '\\theta',
-        },
-        trust: true,
-        strict: false,
-    });
-}
-
-// Lightly adapted from popup.js to wrap math expressions with delimiters
-function formatMathExpressions(text) {
-    if (!text) {
-        return text;
-    }
-
-    let processed = text.replace(/(?<!\$)([^\s$])([^$\n]+?)(?<!\$)([^\s$])/g, (match, p1, p2, p3) => {
-        if (/[∂σ²∆ΓΘνρ√]|\b[dN]_[12]\b|\bln\b|\be\^/.test(match)) {
-            return `${p1}$${p2}${p3}$`;
-        }
-        return match;
-    });
-
-    processed = processed.replace(/^\s*([^$\n]+?)\s*$/gm, (match) => {
-        if (/[∂σ²∆ΓΘνρ√=−].*[∂σ²∆ΓΘνρ√=−]/.test(match) && !/\$\$.*\$\$/.test(match)) {
-            return `$$${match}$$`;
-        }
-        return match;
-    });
-
-    return processed;
-}
-
 // Function to handle chat responses (single model)
-function handleChatResponse(question, promptMode = false, useStreaming = true) {
+async function handleChatResponse(question, promptMode = false, useStreaming = true) {
   const startTime = performance.now();
   const responseContainer = document.getElementById('respons');
 
@@ -287,27 +393,62 @@ function handleChatResponse(question, promptMode = false, useStreaming = true) {
   // Scroll to show the new question immediately
   scrollChatToBottom();
 
-  // Placeholder "Loading..." text
-  const loadingElement = appendChatElement(
-    responseContainer,
-    'agent_response',
-    `FinGPT: Loading...`
-  );
+  const loadingCard = createLoadingCard(responseContainer);
+  const defaultStatusDetail = promptMode ? 'Research mode' : 'Thinking mode';
+  const pushAgentStatus = (status) => {
+    const formatted = describeAgentStatus(status, {
+      fallbackDetail: defaultStatusDetail,
+    });
+    loadingCard.updateStatus(formatted);
+  };
+
+  // Wait for auto-scrape to complete if in progress
+  if (isAutoScrapeInProgress()) {
+    pushAgentStatus({
+      label: 'Preparing',
+      detail: 'Loading page context...',
+    });
+    await waitForAutoScrape();
+    console.log("[Chat] Auto-scrape complete, proceeding with request");
+  }
+
+  pushAgentStatus({
+    label: 'Processing',
+    detail: defaultStatusDetail,
+  });
+
+  const responseElement = appendChatElement(responseContainer, 'agent_response', '');
+  responseElement.style.display = 'none';
 
   // Read the RAG checkbox state
-  const useRAG = document.getElementById('ragSwitch').checked;
+  const ragSwitchEl = document.getElementById('ragSwitch');
+  const useRAG = ragSwitchEl ? !!ragSwitchEl.checked : false;
 
   // Read the MCP mode toggle
-  const useMCP = document.getElementById('mcpModeSwitch').checked;
+  const mcpSwitchEl = document.getElementById('mcpModeSwitch');
+  const useMCP = mcpSwitchEl ? !!mcpSwitchEl.checked : false;
 
   const selectedModel = getSelectedModel();
 
   // Check if streaming is available (not for MCP or RAG modes)
   const canStream = useStreaming && !useMCP && !useRAG;
+  if (!canStream) {
+    pushAgentStatus({
+      label: 'Processing',
+      detail: useMCP ? 'MCP mode' : useRAG ? 'RAG mode' : 'Standard pipeline',
+    });
+  }
 
   if (canStream) {
     // Use streaming response
     let isFirstChunk = true;
+    let loadingDismissed = false;
+    const dismissLoading = () => {
+      if (!loadingDismissed) {
+        loadingDismissed = true;
+        loadingCard.complete();
+      }
+    };
 
     getChatResponseStream(
       question,
@@ -317,13 +458,15 @@ function handleChatResponse(question, promptMode = false, useStreaming = true) {
       useMCP,
       {
         // onChunk callback - called for each chunk of text
-        onChunk: (chunk, fullResponse) => {
+        onChunk: (_chunk, fullResponse) => {
           if (isFirstChunk) {
-            renderMarkdownWithMath(loadingElement, fullResponse);
             isFirstChunk = false;
-          } else {
-            renderMarkdownWithMath(loadingElement, fullResponse);
+            dismissLoading();
           }
+          if (responseElement.style.display === 'none') {
+            responseElement.style.display = 'block';
+          }
+          renderStreamingPreview(responseElement, fullResponse);
           scrollChatToBottom();
         },
         // onComplete callback - called when streaming is done
@@ -335,7 +478,10 @@ function handleChatResponse(question, promptMode = false, useStreaming = true) {
           console.log('[Debug] promptMode:', promptMode);
 
           const responseText = `FinGPT: ${fullResponse}`;
-          renderMarkdownWithMath(loadingElement, fullResponse);
+          if (responseElement.style.display === 'none') {
+            responseElement.style.display = 'block';
+          }
+          renderMarkdownContent(responseElement, fullResponse);
 
           // Create action row containing both action buttons and rating
           const actionRow = document.createElement('div');
@@ -416,11 +562,17 @@ function handleChatResponse(question, promptMode = false, useStreaming = true) {
           // Clear the user textbox
           document.getElementById('textbox').value = '';
           scrollChatToBottom();
+          dismissLoading();
         },
         // onError callback
         onError: (error) => {
           console.error('Streaming error:', error);
-          loadingElement.innerHTML = `<strong>FinGPT:</strong> Failed to load response (streaming error).`;
+          responseElement.style.display = 'block';
+          responseElement.innerHTML = `<strong>FinGPT:</strong> Failed to load response (streaming error).`;
+          loadingCard.fail('Streaming error');
+        },
+        onStatus: (status) => {
+          pushAgentStatus(status);
         },
       }
     );
@@ -447,7 +599,8 @@ function handleChatResponse(question, promptMode = false, useStreaming = true) {
           responseText = `FinGPT: ${modelResponse}`;
         }
 
-        renderMarkdownWithMath(loadingElement, modelResponse);
+        responseElement.style.display = 'block';
+        renderMarkdownContent(responseElement, modelResponse);
 
         // Create action row containing both action buttons and rating
         const actionRow = document.createElement('div');
@@ -488,19 +641,22 @@ function handleChatResponse(question, promptMode = false, useStreaming = true) {
             : [];
           setCachedSources(data.used_urls, question, metadata);
           console.log(
-            '[Sources Debug] Cached',
-            data.used_urls.length,
-            'source URLs from Advanced Ask'
-          );
+          '[Sources Debug] Cached',
+          data.used_urls.length,
+          'source URLs from Advanced Ask'
+        );
         }
 
         // Clear the user textbox
         document.getElementById('textbox').value = '';
         scrollChatToBottom();
+        loadingCard.complete();
       })
       .catch((error) => {
         console.error('There was a problem with your fetch operation:', error);
-        loadingElement.innerHTML = `<strong>FinGPT:</strong> Failed to load response.`;
+        responseElement.style.display = 'block';
+        responseElement.innerHTML = `<strong>FinGPT:</strong> Failed to load response.`;
+        loadingCard.fail('Network error');
       });
   }
 }
