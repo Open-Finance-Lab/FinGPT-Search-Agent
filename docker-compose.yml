@@ -38,10 +38,11 @@ services:
           path: ./Main/backend/uv.lock
 
     # Optional: Mount for live development (read-only for safety)
-    # volumes:
-    #   - ./Main/backend/api:/app/api:ro
-    #   - ./Main/backend/datascraper:/app/datascraper:ro
-    #   - ./Main/backend/mcp_client:/app/mcp_client:ro
+    volumes:
+      - ./Main/backend/api:/app/api
+      - ./Main/backend/datascraper:/app/datascraper
+      - ./Main/backend/mcp_client:/app/mcp_client
+      - ./Main/backend/django_config:/app/django_config
 
     networks:
       - fingpt_network
