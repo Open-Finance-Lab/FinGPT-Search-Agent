@@ -35,11 +35,9 @@ class UnifiedDataScraper:
         """
         lines = []
 
-        # 1. System prompt
         lines.append("=== SYSTEM ===")
         lines.append(context["system_prompt"])
 
-        # 2. Metadata
         metadata = context["metadata"]
         lines.append("\n=== METADATA ===")
         lines.append(f"Session ID: {metadata['session_id']}")
@@ -52,14 +50,12 @@ class UnifiedDataScraper:
         if metadata.get('user_time'):
             lines.append(f"User Time: {metadata['user_time']}")
 
-        # 3. Fetched context
         fetched = context["fetched_context"]
         has_fetched = any(len(items) > 0 for items in fetched.values())
 
         if has_fetched:
             lines.append("\n=== FETCHED CONTEXT ===")
 
-            # Web search results
             if fetched["web_search"]:
                 lines.append("\n--- Web Search Results ---")
                 for item in fetched["web_search"]:
@@ -69,7 +65,6 @@ class UnifiedDataScraper:
                         lines.append(f"Metadata: {json.dumps(item['extracted_data'])}")
                     lines.append("")
 
-            # Playwright content
             if fetched["playwright"]:
                 lines.append("\n--- Playwright Scraped Content ---")
                 for item in fetched["playwright"]:
@@ -79,7 +74,6 @@ class UnifiedDataScraper:
                         lines.append(f"Action: {item['extracted_data']['action']}")
                     lines.append("")
 
-            # JS scraped content
             if fetched["js_scraping"]:
                 lines.append("\n--- JavaScript Scraped Content ---")
                 for item in fetched["js_scraping"]:
@@ -87,7 +81,6 @@ class UnifiedDataScraper:
                     lines.append(item['content'])
                     lines.append("")
 
-        # 4. Conversation history
         lines.append("\n=== CONVERSATION HISTORY ===")
         for msg in context["conversation_history"]:
             timestamp = msg.get('timestamp', '')
@@ -96,7 +89,6 @@ class UnifiedDataScraper:
             lines.append(f"\n[{role}] ({timestamp})")
             lines.append(msg['content'])
 
-            # Add metadata if present
             if msg.get('metadata'):
                 meta = msg['metadata']
                 if meta.get('model'):
@@ -115,10 +107,8 @@ class UnifiedDataScraper:
         """
         messages = []
 
-        # System message (OpenAI format - as system role)
         system_content = context["system_prompt"]
 
-        # Add metadata to system message
         metadata = context["metadata"]
         if metadata.get('current_url'):
             system_content += f"\n\nYou are currently viewing: {metadata['current_url']}"
@@ -130,25 +120,21 @@ class UnifiedDataScraper:
                 time_parts.append(f"Current time: {metadata['user_time']}")
             system_content += f"\n\n{' | '.join(time_parts)}"
 
-        # Add fetched context to system message
         fetched = context["fetched_context"]
         context_parts = []
 
-        # Web search
         if fetched["web_search"]:
             search_content = "\n\nWeb Search Results:\n"
             for item in fetched["web_search"]:
                 search_content += f"- {item.get('url', 'unknown')}: {item['content'][:200]}...\n"
             context_parts.append(search_content)
 
-        # Playwright
         if fetched["playwright"]:
             playwright_content = "\n\nPage Content (via Playwright):\n"
             for item in fetched["playwright"]:
                 playwright_content += f"- {item.get('url', 'page')}: {item['content'][:200]}...\n"
             context_parts.append(playwright_content)
 
-        # JS scraping
         if fetched["js_scraping"]:
             js_content = "\n\nPage Content (via JS):\n"
             for item in fetched["js_scraping"]:
@@ -158,24 +144,18 @@ class UnifiedDataScraper:
         if context_parts:
             system_content += "\n\n=== Available Context ===" + "".join(context_parts)
 
-        # Add system message
         messages.append({"role": "system", "content": system_content})
 
-        # Add conversation history
         for msg in context["conversation_history"]:
             role = msg['role']
             content = msg['content']
 
-            # Map roles appropriately
             if role == "user":
                 messages.append({"role": "user", "content": content})
             elif role == "assistant":
                 messages.append({"role": "assistant", "content": content})
-            # Skip system messages in history as they're already in the system prompt
 
-        # Add current question if not already in history
         if current_question:
-            # Check if last message is the current question
             if not messages or messages[-1].get('content') != current_question:
                 messages.append({"role": "user", "content": current_question})
 
@@ -191,18 +171,14 @@ class UnifiedDataScraper:
         Create a response using the full context from the session.
         """
         try:
-            # Get full context
             context = self.context_manager.get_full_context(session_id)
 
-            # Build API messages
             messages = self._build_api_messages(context)
 
-            # Get model configuration
             model_config = get_model_config(model)
             if not model_config:
                 raise ValueError(f"Unknown model: {model}")
 
-            # Call appropriate API based on provider
             provider = model_config['provider']
 
             if provider in ['openai', 'deepseek']:
@@ -221,7 +197,6 @@ class UnifiedDataScraper:
                 )
 
                 if stream:
-                    # Handle streaming
                     accumulated = ""
                     async for chunk in response:
                         if chunk.choices[0].delta.content:
@@ -237,7 +212,6 @@ class UnifiedDataScraper:
 
                 client = AsyncAnthropic(api_key=model_config['api_key'])
 
-                # Anthropic expects system as a parameter, not in messages
                 system_msg = next((m for m in messages if m['role'] == 'system'), None)
                 if system_msg:
                     messages = [m for m in messages if m['role'] != 'system']
@@ -285,12 +259,10 @@ class UnifiedDataScraper:
         asyncio.set_event_loop(loop)
         try:
             if stream:
-                # For streaming, return the generator
                 return loop.run_until_complete(
                     self.create_response_async(session_id, model, stream)
                 )
             else:
-                # For non-streaming, get the full response
                 coro = self.create_response_async(session_id, model, stream)
                 return loop.run_until_complete(coro)
         finally:
@@ -308,30 +280,23 @@ class UnifiedDataScraper:
         Create a response using an agent with tools.
         """
         try:
-            # Get full context
             context = self.context_manager.get_full_context(session_id)
 
-            # Format context for agent
             context_str = self._format_context_for_llm(context)
 
-            # Import agent module
             from mcp_client.agent import create_fin_agent
 
-            # Create agent with tools
             async with create_fin_agent(
                 model=model,
                 use_playwright=use_playwright,
                 restricted_domain=restricted_domain,
                 current_url=current_url
             ) as agent:
-                # Run agent with full context
                 result = await agent.run(context_str)
 
-                # Extract Playwright content if used
                 if use_playwright and hasattr(result, 'tool_outputs'):
                     for output in result.tool_outputs:
                         if output.tool_name == 'get_page_text':
-                            # Add to fetched context
                             self.context_manager.add_fetched_context(
                                 session_id=session_id,
                                 source_type="playwright",
@@ -379,10 +344,8 @@ class UnifiedDataScraper:
         Create a response using web search capabilities.
         """
         try:
-            # Get full context
             context = self.context_manager.get_full_context(session_id)
 
-            # Get the last user question
             last_question = ""
             for msg in reversed(context["conversation_history"]):
                 if msg["role"] == "user":
@@ -392,13 +355,10 @@ class UnifiedDataScraper:
             if not last_question:
                 raise ValueError("No user question found in context")
 
-            # Import search module
             from .openai_search import create_responses_api_search_async
 
-            # Prepare search with full context
             message_history = self._build_api_messages(context)
 
-            # Perform search
             response_text, sources = await create_responses_api_search_async(
                 user_query=last_question,
                 message_history=message_history,
@@ -408,7 +368,6 @@ class UnifiedDataScraper:
                 user_time=context["metadata"].get("user_time")
             )
 
-            # Add search results to context
             for source in sources:
                 self.context_manager.add_fetched_context(
                     session_id=session_id,
@@ -449,7 +408,6 @@ class UnifiedDataScraper:
             loop.close()
 
 
-# Singleton instance
 _scraper = None
 
 def get_unified_scraper() -> UnifiedDataScraper:
@@ -460,10 +418,6 @@ def get_unified_scraper() -> UnifiedDataScraper:
     return _scraper
 
 
-# ============================================================================
-# Backward Compatibility Functions
-# These maintain the original API while using the new unified system
-# ============================================================================
 
 def create_response(
     user_input: str,
@@ -479,10 +433,8 @@ def create_response(
     scraper = get_unified_scraper()
     context_mgr = get_context_manager()
 
-    # Create temporary session
     session_id = f"temp_{uuid.uuid4()}"
 
-    # Import message history into context
     for msg in message_list:
         content = msg.get('content', '')
         if '[USER MESSAGE]:' in content or '[USER QUESTION]:' in content:
@@ -492,13 +444,10 @@ def create_response(
             clean_content = content.replace('[ASSISTANT MESSAGE]:', '').replace('[ASSISTANT RESPONSE]:', '').strip()
             context_mgr.add_assistant_message(session_id, clean_content, model=model)
 
-    # Add current input
     context_mgr.add_user_message(session_id, user_input)
 
-    # Generate response
     response = scraper.create_response(session_id, model, stream)
 
-    # Clean up temporary session
     context_mgr.clear_session(session_id)
 
     return response
@@ -519,10 +468,8 @@ def create_agent_response(
     scraper = get_unified_scraper()
     context_mgr = get_context_manager()
 
-    # Create temporary session
     session_id = f"temp_{uuid.uuid4()}"
 
-    # Import message history
     for msg in message_list:
         content = msg.get('content', '')
         if '[USER MESSAGE]:' in content or '[USER QUESTION]:' in content:
@@ -532,10 +479,8 @@ def create_agent_response(
             clean_content = content.replace('[ASSISTANT MESSAGE]:', '').replace('[ASSISTANT RESPONSE]:', '').strip()
             context_mgr.add_assistant_message(session_id, clean_content, model=model)
 
-    # Add current input
     context_mgr.add_user_message(session_id, user_input)
 
-    # Update metadata
     from .unified_context_manager import ContextMode
     context_mgr.update_metadata(
         session_id=session_id,
@@ -543,12 +488,10 @@ def create_agent_response(
         current_url=current_url
     )
 
-    # Generate response
     response = scraper.create_agent_response(
         session_id, model, use_playwright, restricted_domain, current_url
     )
 
-    # Clean up
     context_mgr.clear_session(session_id)
 
     return response
@@ -570,10 +513,8 @@ def create_advanced_response(
     scraper = get_unified_scraper()
     context_mgr = get_context_manager()
 
-    # Create temporary session
     session_id = f"temp_{uuid.uuid4()}"
 
-    # Import message history
     for msg in message_list:
         content = msg.get('content', '')
         if '[USER MESSAGE]:' in content or '[USER QUESTION]:' in content:
@@ -583,10 +524,8 @@ def create_advanced_response(
             clean_content = content.replace('[ASSISTANT MESSAGE]:', '').replace('[ASSISTANT RESPONSE]:', '').strip()
             context_mgr.add_assistant_message(session_id, clean_content, model=model)
 
-    # Add current input
     context_mgr.add_user_message(session_id, user_input)
 
-    # Update metadata
     from .unified_context_manager import ContextMode
     context_mgr.update_metadata(
         session_id=session_id,
@@ -595,7 +534,6 @@ def create_advanced_response(
         user_time=user_time
     )
 
-    # Extract domains from preferred links
     preferred_domains = []
     if preferred_links:
         from urllib.parse import urlparse
@@ -607,12 +545,10 @@ def create_advanced_response(
             except:
                 pass
 
-    # Generate response
     response_text, sources = scraper.create_web_search_response(
         session_id, model, preferred_domains
     )
 
-    # Clean up
     context_mgr.clear_session(session_id)
 
     return response_text, sources

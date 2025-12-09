@@ -17,9 +17,9 @@ logger = logging.getLogger(__name__)
 
 class ContextMode(Enum):
     """Modes of operation for context"""
-    RESEARCH = "research"    # Web search mode
-    THINKING = "thinking"    # Agent with tools mode
-    NORMAL = "normal"        # Standard chat mode
+    RESEARCH = "research"
+    THINKING = "thinking"
+    NORMAL = "normal"
 
 
 @dataclass
@@ -113,14 +113,13 @@ class UnifiedContextManager:
     def __init__(self):
         """Initialize the unified context manager"""
         self.sessions: Dict[str, Dict[str, Any]] = {}
-        self.session_ttl = 3600  # 1 hour default TTL
-        self.max_sessions = 100  # Max 100 concurrent sessions
+        self.session_ttl = 3600
+        self.max_sessions = 100
         logger.info("UnifiedContextManager initialized (no compression, no legacy support)")
 
     def _get_or_create_session(self, session_id: str) -> Dict[str, Any]:
         """Get existing session or create new one"""
         if session_id not in self.sessions:
-            # Enforce session limit before creating new session
             self._enforce_session_limit()
 
             now = datetime.now(timezone.utc)
@@ -140,7 +139,6 @@ class UnifiedContextManager:
             }
             logger.debug(f"Created new session: {session_id}")
         else:
-            # Update last accessed time
             self.sessions[session_id]["last_accessed"] = datetime.now(timezone.utc).timestamp()
 
         return self.sessions[session_id]
@@ -179,10 +177,8 @@ class UnifiedContextManager:
         if len(self.sessions) < self.max_sessions:
             return
 
-        # Remove oldest 10% of sessions (min 1)
         num_to_remove = max(1, int(self.max_sessions * 0.1))
 
-        # Sort by last_accessed (LRU)
         sorted_sessions = sorted(
             self.sessions.items(),
             key=lambda x: x[1].get("last_accessed", 0)
@@ -322,10 +318,8 @@ class UnifiedContextManager:
         context = self.get_full_context(session_id)
         messages = []
 
-        # 1. Build system message with all context
         system_content = context["system_prompt"]
 
-        # Add metadata context
         metadata = context["metadata"]
         if metadata.get("current_url"):
             system_content += f"\n\n[CURRENT CONTEXT]: You are viewing: {metadata['current_url']}"
@@ -337,23 +331,20 @@ class UnifiedContextManager:
                 time_parts.append(f"Time: {metadata['user_time']}")
             system_content += f"\n\n[TIME CONTEXT]: {' | '.join(time_parts)}"
 
-        # Add fetched context
         fetched = context["fetched_context"]
 
         if fetched.get("web_search"):
             system_content += "\n\n[WEB SEARCH RESULTS]:"
             for item in fetched["web_search"]:
-                system_content += f"\n- From {item.get('url', 'unknown')}: {item['content'][:200]}"
+                system_content += f"\n- From {item.get('url', 'unknown')}: {item['content'][:500]}"
 
         if fetched.get("js_scraping"):
-            system_content += "\n\n[WEB PAGE CONTENT]:"
+            system_content += "\n\n[CURRENT PAGE CONTENT - Already scraped, do NOT re-scrape]:"
             for item in fetched["js_scraping"]:
-                system_content += f"\n- From {item.get('url', 'page')}: {item['content'][:200]}"
+                system_content += f"\n- From {item.get('url', 'page')}:\n{item['content']}"
 
-        # System message with prefix for datascraper.py compatibility
         messages.append({"content": f"[SYSTEM MESSAGE]: {system_content}"})
 
-        # 2. Add full conversation history with prefixes
         for msg in context["conversation_history"]:
             role = msg["role"]
             content = msg["content"]
@@ -390,46 +381,35 @@ class UnifiedContextManager:
             content = msg.content if hasattr(msg, 'content') else msg.get('content', '')
             session["metadata"].token_count -= self._estimate_tokens(content)
 
-        session["conversation_history"] = []
-        session["metadata"].message_count = 0
-        logger.info(f"Cleared conversation history for session {session_id}")
+    def get_scraped_urls(self, session_id: str) -> List[str]:
+        """Get list of URLs that have already been scraped/fetched"""
+        session = self._get_or_create_session(session_id)
+        urls = []
 
-    def clear_session(self, session_id: str) -> None:
-        """Completely clear a session"""
-        if session_id in self.sessions:
-            del self.sessions[session_id]
-            logger.info(f"Cleared session {session_id}")
+        for item in session["fetched_context"]["web_search"]:
+            if hasattr(item, 'url') and item.url:
+                urls.append(item.url)
+            elif isinstance(item, dict) and item.get('url'):
+                urls.append(item['url'])
+
+        for item in session["fetched_context"]["js_scraping"]:
+            if hasattr(item, 'url') and item.url:
+                urls.append(item.url)
+            elif isinstance(item, dict) and item.get('url'):
+                urls.append(item['url'])
+
+        return urls
 
     def get_session_stats(self, session_id: str) -> Dict[str, Any]:
-        """Get statistics about a session"""
+        """Get stats for a session"""
         session = self._get_or_create_session(session_id)
         metadata = session["metadata"]
-
-        fetched_counts = {
-            source: len(items)
-            for source, items in session["fetched_context"].items()
+        return {
+            "message_count": metadata.message_count if hasattr(metadata, 'message_count') else metadata.get('message_count', 0),
+            "token_count": metadata.token_count if hasattr(metadata, 'token_count') else metadata.get('token_count', 0)
         }
 
-        stats = {
-            "session_id": session_id,
-            "mode": metadata.mode.value if hasattr(metadata.mode, 'value') else metadata.get("mode", "normal"),
-            "message_count": metadata.message_count if hasattr(metadata, 'message_count') else metadata.get("message_count", 0),
-            "token_count": metadata.token_count if hasattr(metadata, 'token_count') else metadata.get("token_count", 0),
-            "fetched_context_counts": fetched_counts,
-            "total_fetched_items": sum(fetched_counts.values()),
-            "current_url": metadata.current_url if hasattr(metadata, 'current_url') else metadata.get("current_url"),
-            "last_updated": metadata.timestamp if hasattr(metadata, 'timestamp') else metadata.get("timestamp")
-        }
 
-        return stats
-
-    def export_session_json(self, session_id: str) -> str:
-        """Export session as formatted JSON string"""
-        context = self.get_full_context(session_id)
-        return json.dumps(context, indent=2, ensure_ascii=False)
-
-
-# Singleton instance
 _context_manager = None
 
 def get_context_manager() -> UnifiedContextManager:

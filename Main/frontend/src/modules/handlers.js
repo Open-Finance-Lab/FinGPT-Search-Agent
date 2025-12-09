@@ -1,6 +1,6 @@
 // handlers.js
 import { appendChatElement, scrollChatToBottom } from './helpers.js';
-import { getChatResponse, getChatResponseStream } from './api.js';
+import { getChatResponse, getChatResponseStream, waitForAutoScrape, isAutoScrapeInProgress } from './api.js';
 import { getSelectedModel, selectedModel } from './config.js';
 import { setCachedSources } from './sourcesCache.js';
 import { renderMarkdownContent, renderStreamingPreview } from './markdownRenderer.js';
@@ -383,7 +383,7 @@ function createRatingElement() {
 }
 
 // Function to handle chat responses (single model)
-function handleChatResponse(question, promptMode = false, useStreaming = true) {
+async function handleChatResponse(question, promptMode = false, useStreaming = true) {
   const startTime = performance.now();
   const responseContainer = document.getElementById('respons');
 
@@ -401,6 +401,16 @@ function handleChatResponse(question, promptMode = false, useStreaming = true) {
     });
     loadingCard.updateStatus(formatted);
   };
+
+  // Wait for auto-scrape to complete if in progress
+  if (isAutoScrapeInProgress()) {
+    pushAgentStatus({
+      label: 'Preparing',
+      detail: 'Loading page context...',
+    });
+    await waitForAutoScrape();
+    console.log("[Chat] Auto-scrape complete, proceeding with request");
+  }
 
   pushAgentStatus({
     label: 'Processing',

@@ -17,14 +17,12 @@ from agents import function_tool
 
 logger = logging.getLogger(__name__)
 
-# Load environment variables
 backend_dir = Path(__file__).resolve().parent.parent
 load_dotenv(backend_dir / '.env')
 
 SITE_MAP_PATH = Path(__file__).resolve().parent.parent / "data" / "site_map.json"
 _site_map_cache: Optional[Dict] = None
 
-# Initialize OpenAI client
 client = None
 if os.getenv("OPENAI_API_KEY"):
     try:
@@ -32,7 +30,6 @@ if os.getenv("OPENAI_API_KEY"):
     except Exception as e:
         logger.warning(f"Failed to initialize OpenAI client: {e}")
 
-# Simple headers to avoid bot detection
 HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
@@ -66,7 +63,6 @@ def resolve_url(route_id: str, params: str) -> str:
         JSON with the constructed URL
     """
     try:
-        # Parse params
         if isinstance(params, str):
             try:
                 params_dict = json.loads(params)
@@ -85,7 +81,6 @@ def resolve_url(route_id: str, params: str) -> str:
         url_pattern = route["url_pattern"]
         defaults = route.get("param_defaults", {})
 
-        # Apply defaults
         for k, v in defaults.items():
             if k not in params_dict:
                 params_dict[k] = v
@@ -99,9 +94,7 @@ def resolve_url(route_id: str, params: str) -> str:
 
 def _clean_text(text: str) -> str:
     """Basic cleanup of raw text."""
-    # Collapse multiple newlines
     text = re.sub(r'\n{3,}', '\n\n', text)
-    # Collapse multiple spaces
     text = re.sub(r' {2,}', ' ', text)
     return text.strip()
 
@@ -112,7 +105,6 @@ def _smart_compress(text: str, url: str) -> str:
         return text[:15000] + "\n[Truncated: No OpenAI Key]"
 
     try:
-        # limit input to avoid token limits even for the compressor
         input_text = text[:60000] 
         
         response = client.chat.completions.create(
@@ -133,7 +125,7 @@ def _smart_compress(text: str, url: str) -> str:
                 },
                 {"role": "user", "content": f"URL: {url}\n\nRAW CONTENT:\n{input_text}"}
             ],
-            max_tokens=6000, # Allow enough space for a detailed summary
+            max_tokens=6000,
             temperature=0.3
         )
         compressed_text = response.choices[0].message.content
@@ -155,10 +147,8 @@ def scrape_with_playwright(url: str) -> str:
 
     try:
         with sync_playwright() as p:
-            # Launch options compatible with the Docker environment
             browser = p.chromium.launch(headless=True, args=['--no-sandbox', '--disable-setuid-sandbox'])
             
-            # Create context with user agent to avoid detection
             context = browser.new_context(
                 user_agent=HEADERS['User-Agent'],
                 viewport={'width': 1280, 'height': 800}
@@ -166,18 +156,14 @@ def scrape_with_playwright(url: str) -> str:
             
             page = context.new_page()
             
-            # Navigate with timeout
             logger.info(f"Playwright scraping: {url}")
             page.goto(url, timeout=30000, wait_until="domcontentloaded")
             
-            # Wait a bit for JS to execute (simple heuristic)
             try:
                 page.wait_for_load_state("networkidle", timeout=5000)
             except Exception:
-                pass # Continue if network doesn't settle
+                pass
                 
-            # Get text content
-            # We use evaluate to get innerText which is closer to rendered text
             text = page.evaluate("document.body.innerText")
             
             browser.close()
@@ -186,6 +172,59 @@ def scrape_with_playwright(url: str) -> str:
     except Exception as e:
         logger.error(f"Playwright scraping failed for {url}: {e}")
         return ""
+
+
+def _scrape_url_impl(url: str) -> str:
+    """
+    Core scraping logic - callable directly.
+    Fetch a URL and return the visible text content as JSON.
+    """
+    if not url.startswith(('http://', 'https://')):
+        return json.dumps({"error": "Invalid URL"})
+
+    text = ""
+    used_method = "requests"
+
+    try:
+        response = requests.get(url, headers=HEADERS, timeout=15)
+        response.raise_for_status()
+
+        soup = BeautifulSoup(response.text, 'html.parser')
+
+        for tag in soup(['script', 'style', 'noscript', 'iframe', 'svg', 'header', 'footer', 'nav', 'aside']):
+            tag.decompose()
+
+        text = soup.get_text(separator='\n', strip=True)
+        text = _clean_text(text)
+
+        is_suspicious = len(text) < 500 or "javascript" in text.lower() or "enable js" in text.lower()
+
+        if is_suspicious:
+            logger.info(f"Content suspicious (len={len(text)}), attempting Playwright fallback for {url}")
+            pw_text = scrape_with_playwright(url)
+            if len(pw_text) > len(text):
+                text = pw_text
+                used_method = "playwright"
+                logger.info(f"Playwright fallback successful (len={len(text)})")
+
+    except Exception as e:
+        logger.warning(f"Requests scraping failed for {url}: {e}. Attempting Playwright fallback.")
+        text = scrape_with_playwright(url)
+        if text:
+            used_method = "playwright"
+        else:
+            return json.dumps({"error": f"Failed to scrape {url}: {str(e)}", "url": url})
+
+    if len(text) > 4000:
+        logger.info(f"Compressing content for {url} (Length: {len(text)})")
+        text = _smart_compress(text, url)
+
+    return json.dumps({
+        "url": url,
+        "content": text,
+        "method": used_method,
+        "length": len(text)
+    })
 
 
 @function_tool
@@ -201,57 +240,7 @@ def scrape_url(url: str) -> str:
     Returns:
         JSON with page content or error
     """
-    if not url.startswith(('http://', 'https://')):
-        return json.dumps({"error": "Invalid URL"})
-
-    text = ""
-    used_method = "requests"
-
-    try:
-        response = requests.get(url, headers=HEADERS, timeout=15)
-        response.raise_for_status()
-
-        soup = BeautifulSoup(response.text, 'html.parser')
-
-        # Remove script and style elements
-        for tag in soup(['script', 'style', 'noscript', 'iframe', 'svg', 'header', 'footer', 'nav', 'aside']):
-            tag.decompose()
-
-        # Get text
-        text = soup.get_text(separator='\n', strip=True)
-        text = _clean_text(text)
-        
-        # Check if content is suspicious (too short or JS required)
-        is_suspicious = len(text) < 500 or "javascript" in text.lower() or "enable js" in text.lower()
-        
-        if is_suspicious:
-            logger.info(f"Content suspicious (len={len(text)}), attempting Playwright fallback for {url}")
-            pw_text = scrape_with_playwright(url)
-            if len(pw_text) > len(text):
-                text = pw_text
-                used_method = "playwright"
-                logger.info(f"Playwright fallback successful (len={len(text)})")
-
-    except Exception as e:
-        logger.warning(f"Requests scraping failed for {url}: {e}. Attempting Playwright fallback.")
-        # Fallback to Playwright on error
-        text = scrape_with_playwright(url)
-        if text:
-            used_method = "playwright"
-        else:
-            return json.dumps({"error": f"Failed to scrape {url}: {str(e)}", "url": url})
-
-    # Smart compression threshold
-    if len(text) > 4000:
-        logger.info(f"Compressing content for {url} (Length: {len(text)})")
-        text = _smart_compress(text, url)
-    
-    return json.dumps({
-        "url": url, 
-        "content": text, 
-        "method": used_method,
-        "length": len(text)
-    })
+    return _scrape_url_impl(url)
 
 
 def get_url_tools():

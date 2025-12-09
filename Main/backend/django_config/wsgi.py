@@ -1,11 +1,4 @@
-"""
-WSGI config for chat_server project.
-
-It exposes the WSGI callable as a module-level variable named ``application``.
-
-For more information on this file, see
-https://docs.djangoproject.com/en/5.2/howto/deployment/wsgi/
-"""
+"""WSGI config for chat_server."""
 
 import os
 
