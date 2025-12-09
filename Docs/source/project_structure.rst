@@ -20,12 +20,12 @@ Backend Highlights
 * ``pyproject.toml`` + ``uv.lock`` manage Python dependencies.
 * ``Dockerfile`` builds a multi-stage image that installs packages with ``uv``.
 * ``manage.py`` exposes standard Django management commands.
-* ``manage_deps.py`` offers a few helper shortcuts for ``uv`` operations.
+
 
 Frontend Highlights
 -------------------
 
-* ``npm run build:full`` creates the extension bundle in ``dist/``.
+* ``bun run build:full`` creates the extension bundle in ``dist/``.
 * Load ``dist/`` as an unpacked extension in Chromium-based browsers.
 
 Docker Workflow

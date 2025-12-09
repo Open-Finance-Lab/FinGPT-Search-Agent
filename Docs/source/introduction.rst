@@ -34,5 +34,5 @@ Road Map
    :align: left
    :width: 800px
 
-Current roadmap begins at March, 2025.
+Current roadmap as of late 2025.
 
