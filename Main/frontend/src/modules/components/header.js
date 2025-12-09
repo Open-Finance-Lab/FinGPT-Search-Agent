@@ -31,6 +31,22 @@ function createHeader(popup, settings_window, settingsButton, positionModeButton
         popup.style.display = 'none';
     };
 
+    const loadingContainer = document.createElement('div');
+    loadingContainer.id = "auto-scrape-loading";
+    loadingContainer.style.display = "none"; // Hidden by default
+    loadingContainer.className = "loading-container";
+
+    const loadingText = document.createElement('span');
+    loadingText.innerText = "Scraping current page...";
+    loadingText.className = "loading-text";
+
+    const spinner = document.createElement('div');
+    spinner.className = "spinner-small";
+
+    loadingContainer.appendChild(loadingText);
+    loadingContainer.appendChild(spinner);
+
+    iconContainer.appendChild(loadingContainer);
     iconContainer.appendChild(settingsButton);
     iconContainer.appendChild(positionModeButton);
     iconContainer.appendChild(minimizeIcon);

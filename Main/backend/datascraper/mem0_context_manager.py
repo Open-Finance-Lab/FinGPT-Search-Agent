@@ -12,7 +12,6 @@ UTC = timezone.utc
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from collections import defaultdict
 
-# Mem0 will be imported conditionally to handle cases where it's not installed yet
 try:
     from mem0 import MemoryClient
     MEM0_AVAILABLE = True
@@ -20,7 +19,6 @@ except ImportError:
     MEM0_AVAILABLE = False
     logging.warning("Mem0 not installed. Install with: pip install mem0ai")
 
-# OpenAI for smart compression
 try:
     from openai import OpenAI
     OPENAI_AVAILABLE = True
@@ -63,7 +61,6 @@ class Mem0ContextManager:
             )
 
         self.max_recent_messages = max_recent_messages
-        # Updated to 100k tokens as per the plan
         self.max_session_tokens = max(
             int(os.getenv("MEM0_CONTEXT_TOKEN_LIMIT", "100000")),
             2000,
@@ -72,14 +69,12 @@ class Mem0ContextManager:
         self.compression_target_ratio = min(max(target_ratio, 0.4), 0.9)
         self.max_compression_chars = max(int(os.getenv("MEM0_COMPRESSION_MAX_CHARS", "4000")), 500)
 
-        # Initialize Mem0 client
         try:
             self.client = MemoryClient(api_key=self.api_key)
         except Exception as e:
             logging.error(f"Failed to initialize Mem0 client: {e}")
             raise
 
-        # Initialize OpenAI client for smart compression
         self.llm_client = None
         if OPENAI_AVAILABLE:
             openai_key = openai_api_key or os.getenv("OPENAI_API_KEY")
@@ -92,10 +87,8 @@ class Mem0ContextManager:
             else:
                 logging.warning("OPENAI_API_KEY not found. Smart compression will use basic fallback.")
 
-        # Local session storage for per-worker short-term buffers and metadata
         self.sessions = defaultdict(self._session_factory)
 
-        # Base system message for financial assistant
         self.base_system_prompt = (
             "You are a helpful financial assistant. Always answer questions to the best of your ability. "
             "You are situated inside an agent. The user may ask questions directly related to an active webpage "
@@ -110,7 +103,7 @@ class Mem0ContextManager:
                 "web_search": [],
                 "js_scraping": []
             },
-            "content_hashes": set(), # For deduplication
+            "content_hashes": set(),
             "message_count": 0,
             "token_count": 0,
             "current_webpage": None,
@@ -134,7 +127,6 @@ class Mem0ContextManager:
         session = self.sessions[session_id]
         session["last_used"] = datetime.now(UTC)
 
-        # Check if this is web content and extract URL
         if role == "user" and "[Web Content from" in content:
             import re
             url_match = re.search(r'\[Web Content from ([^\]]+)\]:', content)
@@ -181,7 +173,6 @@ class Mem0ContextManager:
         session = self.sessions[session_id]
         session["last_used"] = datetime.now(UTC)
 
-        # Deduplication check
         content_hash = hash(content)
         if content_hash in session["content_hashes"]:
             logging.info(f"[Mem0] Skipping duplicate context for session {session_id} (URL: {url})")
@@ -206,7 +197,6 @@ class Mem0ContextManager:
 
         logging.debug(f"[Mem0] Added {source_type} context to session {session_id}: {url}")
 
-        # Check if we need to compress after adding fetched context
         self._check_context_limits(session_id)
 
     def get_context(self, session_id: str, query: Optional[str] = None) -> List[Dict]:
@@ -223,10 +213,8 @@ class Mem0ContextManager:
         session = self.sessions[session_id]
         session["last_used"] = datetime.now(UTC)
 
-        # Build system prompt with current webpage info and time/timezone
         system_prompt = self.base_system_prompt
 
-        # Add timezone and time information
         if session.get("user_timezone") or session.get("user_time"):
             time_info_parts = []
             user_timezone = session.get("user_timezone")
@@ -269,16 +257,13 @@ class Mem0ContextManager:
                 f"always confidently tell them they are on: {session['current_webpage']}"
             )
 
-        # Start with system prompt
         context = [{
             "role": "user",
             "content": system_prompt
         }]
 
-        # Add fetched context if available
         fetched = session.get("fetched_context", {})
 
-        # Add web search results
         if fetched.get("web_search"):
             search_content = "\n\n[WEB SEARCH RESULTS]:"
             for item in fetched["web_search"]:
@@ -288,7 +273,6 @@ class Mem0ContextManager:
                 "content": search_content
             })
 
-        # Add JS scraped content
         if fetched.get("js_scraping"):
             js_content = "\n\n[WEB PAGE CONTENT]:"
             for item in fetched["js_scraping"]:
@@ -298,12 +282,10 @@ class Mem0ContextManager:
                 "content": js_content
             })
 
-        # Include compressed chunks only when they exist
         if session.get("has_compressed_chunks"):
             for chunk in self._get_compressed_chunks(session_id, query=query):
                 context.append(chunk)
 
-        # Retrieve recent conversation entries from local buffer
         for msg in self._get_recent_conversation_entries(session_id):
             context.append({
                 "role": "user",
@@ -352,7 +334,6 @@ class Mem0ContextManager:
         session = self.sessions.get(session_id)
         if session:
             session["recent_messages"].clear()
-            # Clear all fetched context
             for source_type in session.get("fetched_context", {}):
                 session["fetched_context"][source_type] = []
             session["message_count"] = 0
@@ -360,7 +341,6 @@ class Mem0ContextManager:
             session["compressed_chunk_count"] = 0
             session["has_compressed_chunks"] = False
 
-        # Clear Mem0 memories for this user
         try:
             self.client.delete_all(user_id=session_id)
             if session:
@@ -453,13 +433,10 @@ class Mem0ContextManager:
         """
         session = self.sessions[session_id]
 
-        # Log compression trigger
         logging.info(f"[Mem0] Smart compression triggered for session {session_id}. Current tokens: {session['token_count']}/{self.max_session_tokens}")
 
-        # Build context dump for compression
         context_dump = []
 
-        # Add all fetched context
         fetched = session.get("fetched_context", {})
 
         if fetched.get("web_search"):
@@ -478,7 +455,6 @@ class Mem0ContextManager:
                 context_dump.append(f"Content: {item['content']}")
                 context_dump.append("---")
 
-        # Add conversation history (keep last 2 messages for continuity)
         messages_to_compress = session["recent_messages"][:-2] if len(session["recent_messages"]) > 2 else session["recent_messages"]
 
         if messages_to_compress:
@@ -490,12 +466,10 @@ class Mem0ContextManager:
 
         full_context = "\n".join(context_dump)
 
-        # If no content to compress, return
         if not full_context.strip():
             logging.info(f"[Mem0] No content to compress for session {session_id}")
             return
 
-        # Use smart compression with LLM if available, otherwise fallback
         if self.llm_client:
             compressed_summary = self._smart_compress_with_llm(full_context, session_id)
         else:
@@ -505,31 +479,25 @@ class Mem0ContextManager:
             logging.error(f"[Mem0] Failed to generate compression summary for session {session_id}")
             return
 
-        # Store the compressed summary in Mem0
         chunk_index = session.get("compressed_chunk_count", 0) + 1
         try:
             self._store_compressed_chunk(session_id, compressed_summary, chunk_index, datetime.now(UTC))
             session["compressed_chunk_count"] = chunk_index
             session["has_compressed_chunks"] = True
 
-            # Clear the compressed content
-            # Clear fetched context
             for source_type in session["fetched_context"]:
                 session["fetched_context"][source_type] = []
 
-            # Clear compressed messages (keep last 2 for continuity)
             if len(session["recent_messages"]) > 2:
                 kept_messages = session["recent_messages"][-2:]
                 session["recent_messages"] = kept_messages
                 session["message_count"] = len(kept_messages)
 
-                # Recalculate token count for remaining messages
                 session["token_count"] = sum(
                     msg.get("token_estimate", self.count_tokens(msg.get("content", "")))
                     for msg in kept_messages
                 )
             else:
-                # If 2 or fewer messages, don't remove any
                 pass
 
             logging.info(f"[Mem0] Smart compression completed for session {session_id}. Chunk #{chunk_index} stored. Tokens reduced to {session['token_count']}")
@@ -568,10 +536,10 @@ Context to compress:
                 model="gpt-5-chat-latest",
                 messages=[
                     {"role": "system", "content": prompt},
-                    {"role": "user", "content": context_dump[:50000]}  # Limit input to avoid issues
+                    {"role": "user", "content": context_dump[:50000]}
                 ],
                 max_tokens=4000,
-                temperature=0.3  # Lower temperature for more factual compression
+                temperature=0.3
             )
 
             compressed = response.choices[0].message.content
@@ -588,12 +556,10 @@ Context to compress:
         lines = context_dump.split('\n')
         summary_lines = [f"[COMPRESSED MEMORY - Session {session_id} - Fallback]"]
 
-        # Keep section headers and first few lines of each section
         for i, line in enumerate(lines):
             if line.startswith("===") or i < 10:
                 summary_lines.append(line)
             elif len("\n".join(summary_lines)) < self.max_compression_chars:
-                # Add important lines (those with URLs, numbers, etc.)
                 if any(keyword in line.lower() for keyword in ['http', 'www', '$', '%', 'stock', 'price']):
                     summary_lines.append(line)
 
@@ -680,5 +646,4 @@ Context to compress:
         Returns:
             Estimated token count
         """
-        # Rough estimate: ~4 characters per token
         return len(text) // 4
