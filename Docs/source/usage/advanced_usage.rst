@@ -26,20 +26,10 @@ FinGPT Search Agent supports multiple AI model providers, allowing you to choose
 Available Models
 ~~~~~~~~~~~~~~~~
 
-**OpenAI Models:**
-- GPT-4 (Latest)
-- GPT-4 Turbo  
-- GPT-3.5 Turbo
-- O1 Pro (Advanced reasoning)
-- O1 Mini (Fast reasoning)
-
-**DeepSeek Models:**
-- DeepSeek Chat
-- DeepSeek Reasoner
-
-**Anthropic Models:**
-- Claude 3.5 Sonnet (Previous generation)
-- Claude 4 Sonnet (Latest generation)
+**Supported Models:**
+- FinGPT-Light (gpt-5-mini)
+- FinGPT (gpt-5.1-chat-latest)
+- Buffet-Agent (Custom Model)
 
 Switching Models
 ~~~~~~~~~~~~~~~~
@@ -51,10 +41,9 @@ Switching Models
 .. note::
    Different models have different capabilities:
    
-   - **GPT-4**: Best for complex financial analysis
-   - **DeepSeek**: Cost-effective for general queries
-   - **Claude**: Excellent for detailed explanations
-   - **O1 Models**: Superior for reasoning tasks
+   - **FinGPT-Light**: Fast and efficient light-weight model
+   - **FinGPT**: State-of-the-art financial model
+   - **Buffet-Agent**: Specialized financial reasoning
 
 MCP (Model Context Protocol) Integration
 ----------------------------------------
@@ -167,10 +156,12 @@ Debug Mode
 
 For troubleshooting:
 
+For troubleshooting:
+
 .. code-block:: bash
 
    # Set debug environment variable
-   export FINGPT_DEBUG=true
+   export DJANGO_DEBUG=True
    
    # Then start the server
    python manage.py runserver
@@ -185,9 +176,9 @@ Tips for Faster Responses
 2. **Limit Preferred URLs** to essential sources
 3. **Choose Appropriate Models**:
    
-   - GPT-3.5 for quick responses
-   - GPT-4 for complex analysis
-   - O1 Mini for fast reasoning
+   - FinGPT-Light for quick responses
+   - FinGPT for complex analysis
+   - Buffet-Agent for specialized reasoning
 
 Managing Context Length
 ~~~~~~~~~~~~~~~~~~~~~~~
@@ -201,14 +192,13 @@ For long conversations:
 Smart Context Management
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
-FinGPT now includes intelligent context management that automatically handles long conversations:
+FinGPT includes intelligent context management:
 
 **How it works:**
 
-- The agent hard-remembers up to 20,000 tokens (approximately 15,000 words) of conversation
-- When this limit is reached, older messages are automatically compressed
-- Important information is preserved while less relevant details are summarized
-- Web page content is always preserved when you use the Clear button
+- **Session-Based**: The agent maintains the full conversation history for the current session.
+- **No Hidden Compression**: All context is preserved until the session expires or is manually cleared.
+- **Session Isolation**: Each browser tab/session maintains its own isolated context.
 
 .. note::
    Each browser tab maintains its own conversation context. Refreshing the page starts a new session.
