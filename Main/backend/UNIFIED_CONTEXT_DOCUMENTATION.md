@@ -2,78 +2,50 @@
 
 ## Overview
 
-The Unified Context Management System is a complete refactoring of FinGPT's conversation and context handling. It provides comprehensive tracking of all conversation history, fetched context from multiple sources, and metadata in an elegant JSON structure.
+The Unified Context Management System provides comprehensive tracking of conversation history, fetched context from multiple sources, and metadata in a structured JSON format. It replaces legacy context handling with a session-based approach that ensures the Large Language Model (LLM) has access to the full conversation context.
 
-## Key Improvements
+## Core Design
 
-### 1. Full Conversation History
-- **Before**: Limited message buffer, context could be lost
-- **After**: Complete conversation history maintained throughout session
-- **Benefit**: LLM has access to entire conversation context for better continuity
-
-### 2. Elegant JSON Structure
-- **Before**: Mixed message prefixes and fragmented context
-- **After**: Clean, hierarchical JSON with clear separation of concerns
-- **Benefit**: Easy to debug, export, and analyze conversation flow
-
-### 3. Multi-Source Context Integration
-- **Before**: Scattered context handling across different modules
-- **After**: Unified handling of web search, Playwright, and JS scraping
-- **Benefit**: All context sources tracked and attributed properly
+The system is built around a few key principles:
+1.  **Session-Based Context**: All context is tied to a session ID, ensuring isolation between users and conversations.
+2.  **Explicit Context Tracking**: Every piece of information (user message, assistant response, web search result, page content) is explicitly stored with metadata (timestamps, sources).
+3.  **JSON-First**: The internal representation is always a valid, structured JSON object, making it easy to debug, export, and analyze.
+4.  **No Hidden State**: There is no hidden "compression" or automatic truncation in the storage layer. The full history is preserved in the session.
 
 ## Architecture
 
 ### Core Components
 
-```
-┌─────────────────────────────────────────────────┐
-│           UnifiedContextManager                  │
-│  • Session management                           │
-│  • Context storage                              │
-│  • JSON export/import                           │
-└─────────────────────────────────────────────────┘
-                        │
-                        ▼
-┌─────────────────────────────────────────────────┐
-│           ContextIntegration                     │
-│  • API bridge layer                             │
-│  • Backward compatibility                        │
-│  • Request handling                              │
-└─────────────────────────────────────────────────┘
-                        │
-                        ▼
-┌─────────────────────────────────────────────────┐
-│         UnifiedDataScraper                       │
-│  • LLM API calls                                │
-│  • Response generation                           │
-│  • Context formatting                            │
-└─────────────────────────────────────────────────┘
-```
+*   **`UnifiedContextManager`** (`datascraper/unified_context_manager.py`): The singleton class that holds the state. It manages sessions, enforces limits (TTL, max sessions), and provides methods to add/retrieve data.
+*   **`ContextIntegration`** (`datascraper/context_integration.py`): A bridge layer between Django views and the Context Manager. It handles request parsing (session ID extraction, mode determination) and formatting.
+*   **`API Views`** (`api/views.py`): The endpoints that utilize the context manager to serve chat, research, and agent requests.
 
 ### JSON Context Structure
 
+The context for a session is stored in the following structure:
+
 ```json
 {
-  "system_prompt": "System instructions for the LLM",
-
+  "system_prompt": "System instructions for the LLM...",
+  
   "metadata": {
     "session_id": "unique_session_id",
-    "timestamp": "2025-11-15T15:30:00Z",
-    "mode": "research|thinking|normal",
-    "current_url": "https://current.page",
+    "timestamp": "2025-12-09T12:00:00+00:00",
+    "mode": "normal|thinking|research",
+    "current_url": "https://example.com/current-page",
     "user_timezone": "America/New_York",
-    "user_time": "2025-11-15T10:30:00",
-    "token_count": 4500,
-    "message_count": 12
+    "user_time": "2025-12-09T07:00:00",
+    "token_count": 1500,
+    "message_count": 5
   },
 
   "fetched_context": {
     "web_search": [
       {
         "source_type": "web_search",
-        "content": "Search result content",
+        "content": "Search result content...",
         "url": "https://source.url",
-        "timestamp": "2025-11-15T15:25:00Z",
+        "timestamp": "2025-12-09T12:05:00+00:00",
         "extracted_data": {
           "title": "Page Title",
           "site_name": "Source Site",
@@ -81,41 +53,30 @@ The Unified Context Management System is a complete refactoring of FinGPT's conv
         }
       }
     ],
-    "playwright": [
-      {
-        "source_type": "playwright",
-        "content": "Scraped page content",
-        "url": "https://scraped.page",
-        "timestamp": "2025-11-15T15:26:00Z",
-        "extracted_data": {
-          "action": "click_and_wait"
-        }
-      }
-    ],
     "js_scraping": [
       {
         "source_type": "js_scraping",
-        "content": "JS extracted content",
+        "content": "Content scraped from the user's current page...",
         "url": "https://current.page",
-        "timestamp": "2025-11-15T15:24:00Z"
+        "timestamp": "2025-12-09T12:10:00+00:00"
       }
     ]
-  },
+  ],
 
   "conversation_history": [
     {
       "role": "user",
       "content": "User's question",
-      "timestamp": "2025-11-15T15:20:00Z"
+      "timestamp": "2025-12-09T12:01:00+00:00"
     },
     {
       "role": "assistant",
       "content": "Assistant's response",
-      "timestamp": "2025-11-15T15:20:30Z",
+      "timestamp": "2025-12-09T12:01:30+00:00",
       "metadata": {
         "model": "gpt-4o-mini",
         "sources_used": [...],
-        "tools_used": ["web_search", "playwright"],
+        "tools_used": ["web_search"],
         "response_time_ms": 1250
       }
     }
@@ -125,192 +86,89 @@ The Unified Context Management System is a complete refactoring of FinGPT's conv
 
 ## Usage Examples
 
-### 1. Simple Chat Response
+### 1. Basic Interaction in an API View
 
 ```python
-from datascraper.context_integration import prepare_context_messages, add_response_to_context
+from datascraper.unified_context_manager import get_context_manager, ContextMode
 
-# Prepare context with full history
-messages, session_id = prepare_context_messages(
-    request=request,
-    question="What is Apple's stock price?",
-    current_url="https://finance.yahoo.com/quote/AAPL"
+# Get the manager singleton
+context_mgr = get_context_manager()
+
+# 1. Update Metadata (Start of request)
+context_mgr.update_metadata(
+    session_id=session_id,
+    mode=ContextMode.THINKING,
+    current_url=current_url
 )
 
-# Generate response (has access to full conversation history)
-response = create_response(messages, model="gpt-4o-mini")
+# 2. Add User Message
+context_mgr.add_user_message(session_id, question)
 
-# Add response to context for future messages
-add_response_to_context(
+# 3. Get Formatted Messages for LLM
+# This converts the internal JSON structure into a list of messages [System, User, Assistant...]
+messages = context_mgr.get_formatted_messages_for_api(session_id)
+
+# 4. Call LLM (using datascraper or other client)
+response = llm_client.generate(messages)
+
+# 5. Add Assistant Response
+context_mgr.add_assistant_message(
     session_id=session_id,
-    response=response,
+    content=response,
     model="gpt-4o-mini",
     response_time_ms=850
 )
 ```
 
-### 2. Web Search with Context
+### 2. Adding Fetched Context (e.g., Web Search)
 
 ```python
-# Add search results to context
+from datascraper.context_integration import get_context_integration
+
+integration = get_context_integration()
+
+# Add search results (automatically formatted and added to 'fetched_context.web_search')
 integration.add_search_results(session_id, [
     {
-        "title": "Latest Apple News",
-        "snippet": "Apple reports Q4 earnings...",
-        "url": "https://news.source",
-        "body": "Full article content..."
+        "title": "Latest News",
+        "snippet": "...",
+        "url": "https://news.com",
+        "body": "..."
     }
 ])
-
-# Generate response with search context
-response = create_web_search_response(
-    session_id=session_id,
-    model="gpt-4o-mini"
-)
 ```
 
-### 3. Playwright Integration
+### 3. Adding Page Content (Scraping)
 
 ```python
-# Add Playwright scraped content
-integration.add_playwright_content(
-    session_id=session_id,
-    content="Dynamic page content",
-    url="https://dynamic.site",
-    action="scroll_and_extract"
+# Add content from the current page (e.g., via extension)
+integration.add_web_content(
+    request=request,
+    text_content="Main content of the page...",
+    current_url="https://example.com",
+    source_type="js_scraping"
 )
-
-# Content is now part of context for future responses
 ```
 
 ## API Endpoints
 
-### Refactored Endpoints
+The following key endpoints in `api/views.py` interact with the system:
 
-- `GET /chat_response/` - Normal chat with domain-restricted Playwright
-- `GET /get_adv_response/` - Advanced mode with web search
-- `POST /agent_chat_response/` - Agent mode with optional tools
-- `POST /input_webtext/` - Add JS scraped content
-- `DELETE /clear_messages/` - Clear conversation/context
-- `GET /get_context_stats/` - Get session statistics
-- `GET /export_context/` - Export full context as JSON
+*   `GET /chat_response/`: Standard chat (Thinking Mode). Uses `unified_context_manager` to maintain history.
+*   `GET /get_adv_response/`: Advanced/Research Mode. Performs web searches and adds them to `fetched_context["web_search"]`.
+*   `POST /agent_chat_response/`: Agent interface, similar to chat response but conceptualized for agentic tasks.
+*   `POST /add_webtext/`: Ingests text content scraped from the frontend (browser extension) and stores it in `fetched_context["js_scraping"]`.
+*   `DELETE /clear/`: Clears the conversation history for the session. Can optionally preserve fetched web content.
+*   `GET /get_memory_stats/`: Returns JSON statistics about the current session (token count, message count, etc.).
 
-### Response Format
+## Implementation Details
 
-```json
-{
-  "resp": {
-    "model_name": "Response text..."
-  },
-  "context_stats": {
-    "session_id": "session_123",
-    "mode": "research",
-    "message_count": 10,
-    "token_count": 3500,
-    "fetched_context": {
-      "web_search": 2,
-      "playwright": 1,
-      "js_scraping": 3
-    }
-  }
-}
-```
-
-## Migration Guide
-
-### For API Views
-
-Replace old context preparation:
-
-```python
-# OLD
-messages = _prepare_context_messages(request, question)
-_add_response_to_context(response)
-
-# NEW
-from datascraper.context_integration import (
-    prepare_context_messages,
-    add_response_to_context
-)
-
-messages, session_id = prepare_context_messages(
-    request, question, endpoint="your_endpoint"
-)
-add_response_to_context(session_id, response, model, sources)
-```
-
-### For DataScraper Functions
-
-Use new unified scraper:
-
-```python
-# OLD
-response = create_response(user_input, message_list, model)
-
-# NEW
-from datascraper.datascraper_refactored import get_unified_scraper
-
-scraper = get_unified_scraper()
-response = scraper.create_response(session_id, model)
-```
-
-## Benefits
-
-### 1. Complete Context Preservation
-- Every message in the conversation is preserved
-- All fetched content is tracked with source attribution
-- Metadata provides temporal and environmental context
-
-### 2. Better LLM Performance
-- Models have access to full conversation history
-- Context from multiple sources enhances response quality
-- Proper attribution enables fact-checking
-
-### 3. Debugging and Analysis
-- Export full context as JSON for debugging
-- Track token usage and response times
-- Analyze conversation flow and context sources
-
-### 4. Scalability
-- Session-based isolation prevents cross-contamination
-- Efficient token counting and management
-- Clean separation of concerns
-
-## Testing
-
-Run the comprehensive test suite:
-
-```bash
-cd Main/backend
-python3 test_unified_context.py
-```
-
-Tests validate:
-- Context creation and management
-- Message history tracking
-- Fetched content integration
-- JSON structure compliance
-- Export/import functionality
-- Backward compatibility
-
-## Implementation Files
-
-- `datascraper/unified_context_manager.py` - Core context manager
-- `datascraper/context_integration.py` - API integration layer
-- `datascraper/datascraper_refactored.py` - Refactored response generation
-- `api/views_refactored.py` - Refactored API endpoints
-- `test_unified_context.py` - Comprehensive test suite
+*   **Token Estimation**: A rough estimation (~4 chars/token) is used for basic tracking in `metadata.token_count`.
+*   **Session Management**: Sessions are stored in memory. An LRU (Least Recently Used) mechanism ensures that memory usage remains bounded by evicting the oldest sessions when the limit (default 100) is reached. Sessions also have a TTL (Time To Live).
+*   **Thread Safety**: The current implementation primarily writes to a synchronized in-memory dictionary. For production scaling with multiple workers, a persistent backing store (Redis/DB) would be required (see Future Enhancements).
 
 ## Future Enhancements
 
-1. **Persistent Storage**: Add database backing for context persistence
-2. **Compression**: Implement intelligent compression for long conversations
-3. **Analytics**: Add conversation analytics and insights
-4. **Streaming**: Full streaming support for all response types
-5. **Multi-Modal**: Support for image and file context
-
-## Conclusion
-
-The Unified Context Management System provides a solid foundation for FinGPT's conversation handling. It eliminates edge cases through good design, maintains full conversation history, and provides an elegant JSON structure that makes the system easy to understand, debug, and extend.
-
-Following Linus's philosophy: "Good taste" has been applied to eliminate special cases and create a clean, pragmatic solution that serves users effectively.
+1.  **Persistent Storage**: Move session storage from in-memory dict to a database or Redis to support multi-process deployments.
+2.  **Context Compression**: Implement summarization or truncation strategies when `token_count` exceeds model limits.
+3.  **Analytics**: deeper analysis of conversation patterns.
