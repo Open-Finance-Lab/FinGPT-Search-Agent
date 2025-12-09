@@ -10,26 +10,98 @@ import {
     mergeCachedMetadata,
 } from './sourcesCache.js';
 
+// Autoscroll state - enabled by default
+let autoScrollEnabled = true;
+let scrollListenersInitialized = false;
+
+const SCROLL_BOTTOM_THRESHOLD = 50;
+
+function getScrollElements() {
+    const scrollContainer = document.getElementById('content');
+    const responseContainer = document.getElementById('respons');
+    return {
+        scrollContainer,
+        responseContainer,
+        targets: [scrollContainer, responseContainer].filter(Boolean),
+    };
+}
+
+function isElementNearBottom(element, threshold = SCROLL_BOTTOM_THRESHOLD) {
+    if (!element) {
+        return true;
+    }
+
+    const distanceFromBottom = element.scrollHeight - element.scrollTop - element.clientHeight;
+    return distanceFromBottom <= threshold;
+}
+
+// Initialize scroll event listeners to detect user scrolling
+function initScrollListeners() {
+    if (scrollListenersInitialized) {
+        return;
+    }
+
+    const { targets } = getScrollElements();
+    if (targets.length === 0) {
+        return;
+    }
+
+    targets.forEach((element) => {
+        // Detect wheel events (user scrolling with mouse wheel)
+        element.addEventListener('wheel', () => {
+            autoScrollEnabled = false;
+        }, { passive: true });
+
+        // Disable autoscroll when user manually scrolls away from the bottom.
+        // Re-enable when they return to the bottom.
+        element.addEventListener('scroll', () => {
+            const isAtBottom = isElementNearBottom(element);
+
+            if (autoScrollEnabled) {
+                if (!isAtBottom) {
+                    autoScrollEnabled = false;
+                }
+                return;
+            }
+
+            if (isAtBottom) {
+                autoScrollEnabled = true;
+            }
+        }, { passive: true });
+    });
+
+    scrollListenersInitialized = true;
+}
+
 // Function to append chat elements
 function appendChatElement(parent, className, text) {
     const element = document.createElement('span');
     element.className = className;
     element.innerText = text;
     parent.appendChild(element);
+
     scrollChatToBottom();
     return element;
 }
 
 // Ensure the chat history stays pinned to the most recent message
 function scrollChatToBottom() {
-    const scrollContainer = document.getElementById('content');
-    const responseContainer = document.getElementById('respons');
-    if (!scrollContainer && !responseContainer) {
+    // Initialize listeners on first call
+    if (!scrollListenersInitialized) {
+        initScrollListeners();
+    }
+
+    // Only autoscroll if enabled
+    if (!autoScrollEnabled) {
+        return;
+    }
+
+    const { scrollContainer, responseContainer, targets } = getScrollElements();
+    if (targets.length === 0) {
         return;
     }
 
     requestAnimationFrame(() => {
-        const targets = [scrollContainer, responseContainer].filter(Boolean);
         targets.forEach((element) => {
             if (typeof element.scrollTo === 'function') {
                 element.scrollTo({ top: element.scrollHeight, behavior: 'auto' });
@@ -91,9 +163,6 @@ function get_adv_chat_response() {
         return;
     }
 
-    // Clear previous cached sources before making new advanced request
-    clearCachedSources();
-
     // Text Processing Mode
     handleChatResponse(question, true);
     logQuestion(question, 'Advanced Ask');
@@ -116,8 +185,6 @@ function submit_question(mode) {
         logQuestion(question, 'Thinking');
     } else if (mode === 'Research') {
         // Research mode - equivalent to old "Advanced Ask" button
-        // Clear previous cached sources before making new advanced request
-        clearCachedSources();
         handleChatResponse(question, true);
         logQuestion(question, 'Research');
     }
@@ -395,81 +462,184 @@ async function get_sources() {
 // Removed old preferred links functions - now handled by link_manager.js component
 
 // Function to make an element draggable and resizable
-function makeDraggableAndResizable(element, sourceWindowOffsetX = 10, isFixedMode = false) {
-    let isDragging = false;
-    let isResizing = false;
-    let offsetX, offsetY, startX, startY, startWidth, startHeight;
+function makeDraggableAndResizable(element, sourceWindowOffsetX = 10, onLayoutChange = null) {
+    const MIN_WIDTH = 360;
+    const MIN_HEIGHT = 420;
 
-    element.querySelector('.draggable').addEventListener('mousedown', function(e) {
-        if (['INPUT', 'TEXTAREA', 'BUTTON', 'A'].includes(e.target.tagName) || 'position-mode-icon' === e.target.id) {
+    let isDragging = false;
+    let offsetX = 0;
+    let offsetY = 0;
+
+    let isResizing = false;
+    let resizeDirections = { left: false, right: false, top: false, bottom: false };
+    let startX = 0;
+    let startY = 0;
+    let startWidth = 0;
+    let startHeight = 0;
+    let startLeft = 0;
+    let startTop = 0;
+    let layoutChanged = false;
+
+    const dragHandle = element.querySelector('.draggable');
+    if (dragHandle) {
+        dragHandle.addEventListener('mousedown', (event) => {
+            if (shouldIgnoreTarget(event)) {
+                return;
+            }
+
+            event.preventDefault();
+            isDragging = true;
+
+            const rect = element.getBoundingClientRect();
+            offsetX = event.clientX - rect.left;
+            offsetY = event.clientY - rect.top;
+
+            document.addEventListener('mousemove', dragElement);
+            document.addEventListener('mouseup', stopInteraction);
+        });
+    }
+
+    const resizeHandles = element.querySelectorAll('[data-resize-handle]');
+    resizeHandles.forEach((handle) => {
+        handle.addEventListener('mousedown', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            beginResize(event, handle.dataset.resizeHandle || '');
+        });
+    });
+
+    function shouldIgnoreTarget(event) {
+        const tagName = event.target.tagName;
+        return ['INPUT', 'TEXTAREA', 'BUTTON', 'A'].includes(tagName) || event.target.id === 'position-mode-icon';
+    }
+
+    function dragElement(event) {
+        if (!isDragging) {
             return;
         }
 
-        e.preventDefault();
+        event.preventDefault();
+        const positionMode = window.getComputedStyle(element).position;
+        const isFixed = positionMode === 'fixed';
+
+        const newLeft = isFixed
+            ? event.clientX - offsetX
+            : event.clientX - offsetX + window.scrollX;
+        const newTop = isFixed
+            ? event.clientY - offsetY
+            : event.clientY - offsetY + window.scrollY;
+
+        element.style.left = `${newLeft}px`;
+        element.style.top = `${newTop}px`;
+        element.style.right = 'auto';
+        layoutChanged = true;
+
+        updateSourcesWindowPosition();
+    }
+
+    function beginResize(event, direction) {
+        isResizing = true;
 
         const rect = element.getBoundingClientRect();
-        const isRightEdge = e.clientX > rect.right - 10;
-        const isBottomEdge = e.clientY > rect.bottom - 10;
+        const positionMode = window.getComputedStyle(element).position;
+        const isFixed = positionMode === 'fixed';
 
-        if (isRightEdge || isBottomEdge) {
-            isResizing = true;
-            startX = e.clientX;
-            startY = e.clientY;
-            startWidth = rect.width;
-            startHeight = rect.height;
-            document.addEventListener('mousemove', resizeElement);
-        } else {
-            isDragging = true;
-            offsetX = e.clientX - rect.left;
-            offsetY = e.clientY - rect.top;
-            document.addEventListener('mousemove', dragElement);
+        startX = event.clientX;
+        startY = event.clientY;
+        startWidth = rect.width;
+        startHeight = rect.height;
+        startLeft = isFixed ? rect.left : rect.left + window.scrollX;
+        startTop = isFixed ? rect.top : rect.top + window.scrollY;
+
+        resizeDirections = {
+            left: direction.includes('left'),
+            right: direction.includes('right'),
+            top: direction.includes('top'),
+            bottom: direction.includes('bottom'),
+        };
+
+        if (resizeDirections.left) {
+            element.style.left = `${startLeft}px`;
+            element.style.right = 'auto';
         }
 
-        document.addEventListener('mouseup', closeDragOrResizeElement);
-    });
-
-    function dragElement(e) {
-        e.preventDefault();
-        const newX = e.clientX - offsetX + (isFixedMode ? 0 : window.scrollX);
-        const newY = e.clientY - offsetY + (isFixedMode ? 0 : window.scrollY);
-        element.style.left = `${newX}px`;
-        element.style.top = `${newY}px`;
-
-        // Move sources window with main popup (now on the left side)
-        const sourcesWindow = document.getElementById('sources_window');
-        if (sourcesWindow) {
-            const measuredWidth = sourcesWindow.offsetWidth || 360;
-            const sourcesLeft = Math.max(0, newX - (measuredWidth + sourceWindowOffsetX));
-            sourcesWindow.style.left = `${sourcesLeft}px`;
-            sourcesWindow.style.top = `${newY}px`;
-        }
+        document.addEventListener('mousemove', resizeElement);
+        document.addEventListener('mouseup', stopInteraction);
     }
 
-    function resizeElement(e) {
-        e.preventDefault();
-        const newWidth = startWidth + (e.clientX - startX);
-        const newHeight = startHeight + (e.clientY - startY);
-        if (newWidth > 250) {
-            element.style.width = `${newWidth}px`;
-        }
-        if (newHeight > 300) {
-            element.style.height = `${newHeight}px`;
+    function resizeElement(event) {
+        if (!isResizing) {
+            return;
         }
 
-        const sourcesWindow = document.getElementById('sources_window');
-        if (sourcesWindow) {
-            const measuredWidth = sourcesWindow.offsetWidth || 360;
-            const sourcesLeft = Math.max(0, element.offsetLeft - (measuredWidth + sourceWindowOffsetX));
-            sourcesWindow.style.left = `${sourcesLeft}px`;
+        event.preventDefault();
+
+        const deltaX = event.clientX - startX;
+        const deltaY = event.clientY - startY;
+
+        let newWidth = startWidth;
+        if (resizeDirections.right) {
+            newWidth = Math.max(MIN_WIDTH, startWidth + deltaX);
+            layoutChanged = true;
         }
+        if (resizeDirections.left) {
+            const widthFromLeft = startWidth - deltaX;
+            newWidth = Math.max(MIN_WIDTH, widthFromLeft);
+            const appliedLeft = startLeft + (startWidth - newWidth);
+            element.style.left = `${appliedLeft}px`;
+            element.style.right = 'auto';
+            layoutChanged = true;
+        }
+        element.style.width = `${newWidth}px`;
+
+        if (resizeDirections.bottom) {
+            const nextHeight = Math.max(MIN_HEIGHT, startHeight + deltaY);
+            element.style.height = `${nextHeight}px`;
+            layoutChanged = true;
+        }
+
+        if (resizeDirections.top) {
+            const heightFromTop = startHeight - deltaY;
+            const constrainedHeight = Math.max(MIN_HEIGHT, heightFromTop);
+            const appliedTop = startTop + (startHeight - constrainedHeight);
+            element.style.top = `${appliedTop}px`;
+            element.style.height = `${constrainedHeight}px`;
+            layoutChanged = true;
+        }
+
+        updateSourcesWindowPosition();
     }
 
-    function closeDragOrResizeElement() {
+    function updateSourcesWindowPosition() {
+        const sourcesWindow = document.getElementById('sources_window');
+        if (!sourcesWindow) {
+            return;
+        }
+
+        const measuredWidth = sourcesWindow.offsetWidth || 360;
+        const popupRect = element.getBoundingClientRect();
+        const sourcesPosition = window.getComputedStyle(sourcesWindow).position;
+        const isFixedSources = sourcesPosition === 'fixed';
+
+        const baseLeft = isFixedSources ? popupRect.left : element.offsetLeft;
+        const baseTop = isFixedSources ? popupRect.top : element.offsetTop;
+
+        const sourcesLeft = Math.max(0, baseLeft - (measuredWidth + sourceWindowOffsetX));
+        sourcesWindow.style.left = `${sourcesLeft}px`;
+        sourcesWindow.style.top = `${baseTop}px`;
+    }
+
+    function stopInteraction() {
         document.removeEventListener('mousemove', dragElement);
         document.removeEventListener('mousemove', resizeElement);
-        document.removeEventListener('mouseup', closeDragOrResizeElement);
+        document.removeEventListener('mouseup', stopInteraction);
         isDragging = false;
         isResizing = false;
+
+        if (layoutChanged && typeof onLayoutChange === 'function') {
+            onLayoutChange();
+        }
+        layoutChanged = false;
     }
 }
 

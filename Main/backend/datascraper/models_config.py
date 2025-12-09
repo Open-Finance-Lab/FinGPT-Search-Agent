@@ -4,109 +4,55 @@ Central configuration for all supported LLM models.
 """
 
 MODELS_CONFIG = {
-    # OpenAI Models
     "FinGPT-Light": {
         "provider": "openai",
-        "model_name": "gpt-4o-mini",
-        "supports_rag": True,
+        "model_name": "gpt-5-mini",
         "supports_mcp": True,
         "supports_advanced": True,
         "max_tokens": 128000,
-        "description": "GPT-4o Mini - Fast and efficient"
+        "description": "Fast and efficient light-weight model"
     },
-    # "o1-pro": {
-    #     "provider": "openai",
-    #     "model_name": "o1-pro",
-    #     "supports_rag": True,
-    #     "supports_mcp": True,
-    #     "supports_advanced": True,
-    #     "max_tokens": 128000,
-    #     "description": "O1 Pro - Advanced model with enhanced deep reasoning"
-    # },
-    # "gpt-5-chat": {
-    #     "provider": "openai",
-    #     "model_name": "gpt-5-chat-latest",
-    #     "supports_rag": True,
-    #     "supports_mcp": True,
-    #     "supports_advanced": True,
-    #     "max_tokens": 128000,
-    #     "description": "GPT-5 Chat Latest - Latest generation model"
-    # },
     "FinGPT": {
         "provider": "openai",
-        "model_name": "gpt-5-chat-latest",
-        "supports_rag": True,
+        "model_name": "gpt-5.1-chat-latest",
         "supports_mcp": True,
         "supports_advanced": True,
         "max_tokens": 128000,
-        "description": "The FinGPT model"
+        "description": "State-of-the-art financial model"
     },
     "Buffet-Agent": {
         "provider": "buffet",
-        "model_name": "Buffet-Agent",  # Display only: actual calls use the custom endpoint
+        "model_name": "Buffet-Agent",
         "endpoint_url": "https://l7d6yqg7nzbkumx8.us-east-1.aws.endpoints.huggingface.cloud",
-        "supports_rag": True,
         "supports_mcp": True,
         "supports_advanced": True,
         "max_tokens": 400000,
         "description": "The power of the Warren, in the palm of my hands"
     },
 
-    # DeepSeek Models
-    # "deepseek-reasoner": {
-    #     "provider": "deepseek",
-    #     "model_name": "deepseek-reasoner",
-    #     "supports_rag": True,
-    #     "supports_mcp": True,
-    #     "supports_advanced": True,
-    #     "max_tokens": 128000,
-    #     "description": "DeepSeek R1 - Advanced reasoning model",
-    #     "temperature_range": [0.5, 0.7],
-    #     "recommended_temperature": 0.6
-    # },
 
-    # Anthropic Claude Models
-    # "claude-4-sonnet": {
-    #     "provider": "anthropic",
-    #     "model_name": "claude-sonnet-4-20250514",
-    #     "supports_rag": True,
-    #     "supports_mcp": True,
-    #     "supports_advanced": True,
-    #     "max_tokens": 200000,
-    #     "description": "Claude 4 Sonnet - Latest generation model"
-    # },
-    # "claude-haiku-3.5": {
-    #     "provider": "anthropic",
-    #     "model_name": "claude-3-5-haiku-20241022",
-    #     "supports_rag": True,
-    #     "supports_mcp": True,
-    #     "supports_advanced": True,
-    #     "max_tokens": 200000,
-    #     "description": "Claude 3.5 Haiku - Fast and efficient"
-    # }
 }
 
-# Provider configurations
 PROVIDER_CONFIGS = {
     "openai": {
-        "base_url": None,  # Uses default OpenAI URL
+        "base_url": None,
         "env_key": "OPENAI_API_KEY",
         "client_class": "OpenAI"
     },
     "deepseek": {
         "base_url": "https://api.deepseek.com",
         "env_key": "DEEPSEEK_API_KEY",
-        "client_class": "OpenAI"  # DeepSeek is OpenAI-compatible
+        "client_class": "OpenAI"
     },
     "anthropic": {
-        "base_url": None,  # Uses default Anthropic URL
+        "base_url": None,
         "env_key": "ANTHROPIC_API_KEY",
         "client_class": "Anthropic"
     },
     "buffet": {
         "base_url": "https://l7d6yqg7nzbkumx8.us-east-1.aws.endpoints.huggingface.cloud",
         "env_key": "BUFFET_AGENT_API_KEY",
-        "client_class": None  # Custom HTTP client implemented in datascraper
+        "client_class": None
     }
 }
 
@@ -131,7 +77,7 @@ def get_models_by_provider(provider: str) -> list[str]:
     ]
 
 def validate_model_support(model_id: str, feature: str) -> bool:
-    """Check if a model supports a specific feature (rag, mcp, advanced)."""
+    """Check if a model supports a specific feature (e.g., mcp, advanced)."""
     config = get_model_config(model_id)
     if not config:
         return False

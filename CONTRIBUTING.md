@@ -65,7 +65,7 @@ Refer to FinGPT Search Agent's [documentation](https://fingpt-search-agent-docs.
    - `feat: Add R2C context compression stats endpoint`
    - `fix: Resolve session isolation bug in context manager`
    - `docs: Update API documentation for MCP endpoints`
-   - `refactor: Simplify RAG pipeline initialization`
+   - `refactor: Simplify context pipeline initialization`
 
 ---
 
@@ -104,7 +104,7 @@ A contribution is considered complete when ALL of the following criteria are met
 - [ ] Code integrates cleanly with existing codebase
 - [ ] No merge conflicts
 - [ ] Dependencies documented in appropriate requirements files
-- [ ] Environment variables documented in `.env.example`
+- [ ] Environment variables documented in `Main/backend/.env.example`
 
 ### Review Readiness
 - [ ] Self-reviewed before submitting PR

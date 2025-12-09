@@ -1,5 +1,7 @@
 // api.js
 
+import { buildBackendUrl } from './backendConfig.js';
+
 // Session ID management
 let currentSessionId = null;
 
@@ -9,7 +11,7 @@ function setSessionId(sessionId) {
 
 // Function to POST JSON to the server endpoint
 function postWebTextToServer(textContent, currentUrl) {
-    return fetch("http://127.0.0.1:8000/input_webtext/", {
+    return fetch(buildBackendUrl('/input_webtext/'), {
         method: "POST",
         credentials: "include",
         headers: {
@@ -18,7 +20,7 @@ function postWebTextToServer(textContent, currentUrl) {
         body: JSON.stringify({
             textContent: textContent,
             currentUrl: currentUrl,
-            use_r2c: true,
+            use_memory: true,
             session_id: currentSessionId
         }),
     })
@@ -59,17 +61,17 @@ function getChatResponse(question, selectedModel, promptMode, useRAG, useMCP) {
 
     let endpoint;
     if (useMCP) {
-      endpoint = 'get_mcp_response';
+        endpoint = 'get_mcp_response';
     } else {
-      endpoint = promptMode ? 'get_adv_response' : 'get_chat_response';
+        endpoint = promptMode ? 'get_adv_response' : 'get_chat_response';
     }
 
     // Get preferred links from localStorage for advanced mode
-    let url = `http://127.0.0.1:8000/${endpoint}/?question=${encodedQuestion}` +
+    let url = `${buildBackendUrl(`/${endpoint}/`)}?question=${encodedQuestion}` +
         `&models=${selectedModel}` +
         `&is_advanced=${promptMode}` +
         `&use_rag=${useRAG}` +
-        `&use_r2c=true` +
+        `&use_memory=true` +
         `&session_id=${currentSessionId}` +
         `&current_url=${encodedCurrentUrl}` +
         `&user_timezone=${encodedTimezone}` +
@@ -101,7 +103,8 @@ function getChatResponseStream(question, selectedModel, promptMode, useRAG, useM
         onChunk,
         onSources,
         onComplete,
-        onError
+        onError,
+        onStatus,
     } = callbacks;
     const encodedQuestion = encodeURIComponent(question);
     const currentUrl = window.location.href;
@@ -132,10 +135,11 @@ function getChatResponseStream(question, selectedModel, promptMode, useRAG, useM
     let url;
     if (promptMode) {
         // Research mode streaming endpoint
-        url = `http://127.0.0.1:8000/get_adv_response_stream/?question=${encodedQuestion}` +
+        url = `${buildBackendUrl('/get_adv_response_stream/')}` +
+            `?question=${encodedQuestion}` +
             `&models=${selectedModel}` +
             `&use_rag=${useRAG}` +
-            `&use_r2c=true` +
+            `&use_memory=true` +
             `&session_id=${currentSessionId}` +
             `&current_url=${encodedCurrentUrl}` +
             `&user_timezone=${encodedTimezone}` +
@@ -152,10 +156,11 @@ function getChatResponseStream(question, selectedModel, promptMode, useRAG, useM
         }
     } else {
         // Thinking mode streaming endpoint
-        url = `http://127.0.0.1:8000/get_chat_response_stream/?question=${encodedQuestion}` +
+        url = `${buildBackendUrl('/get_chat_response_stream/')}` +
+            `?question=${encodedQuestion}` +
             `&models=${selectedModel}` +
             `&use_rag=${useRAG}` +
-            `&use_r2c=true` +
+            `&use_memory=true` +
             `&session_id=${currentSessionId}` +
             `&current_url=${encodedCurrentUrl}` +
             `&user_timezone=${encodedTimezone}` +
@@ -201,6 +206,10 @@ function getChatResponseStream(question, selectedModel, promptMode, useRAG, useM
                 }
             }
 
+            if (data.status && typeof onStatus === 'function') {
+                onStatus(data.status);
+            }
+
             // Handle source URLs for research mode
             if (data.used_urls && Array.isArray(data.used_urls)) {
                 usedUrls = data.used_urls;
@@ -241,9 +250,9 @@ function getChatResponseStream(question, selectedModel, promptMode, useRAG, useM
                 }
             }
 
-            // Handle R2C stats if present
-            if (data.r2c_stats) {
-                console.log('R2C stats:', data.r2c_stats);
+            // Handle memory stats if present
+            if (data.memory_stats) {
+                console.log('Memory stats:', data.memory_stats);
             }
         } catch (e) {
             console.error('Error parsing SSE data:', e);
@@ -289,7 +298,7 @@ function getChatResponseStream(question, selectedModel, promptMode, useRAG, useM
 
 // Function to clear messages
 function clearMessages() {
-    return fetch(`http://127.0.0.1:8000/clear_messages/?use_r2c=true&session_id=${currentSessionId}`, { method: "POST", credentials: "include" })
+    return fetch(`${buildBackendUrl('/clear_messages/')}?use_memory=true&session_id=${currentSessionId}`, { method: "POST", credentials: "include" })
         .then(response => {
             if (!response.ok) {
                 throw new Error('Network response was not ok');
@@ -313,11 +322,10 @@ function getSourceUrls(searchQuery, currentUrl) {
     }
 
     const queryString = params.toString();
-    const endpoint = queryString
-        ? `http://127.0.0.1:8000/get_source_urls/?${queryString}`
-        : 'http://127.0.0.1:8000/get_source_urls/';
+    const baseEndpoint = buildBackendUrl('/get_source_urls/');
+    const requestUrl = queryString ? `${baseEndpoint}?${queryString}` : baseEndpoint;
 
-    return fetch(endpoint, { method: "GET", credentials: "include" })
+    return fetch(requestUrl, { method: "GET", credentials: "include" })
         .then(response => response.json())
         .catch(error => {
             console.error('There was a problem with your fetch operation:', error);
@@ -329,10 +337,9 @@ function getSourceUrls(searchQuery, currentUrl) {
 function logQuestion(question, button) {
     const currentUrl = window.location.href;
 
-    return fetch(
-        `http://127.0.0.1:8000/log_question/?question=${encodeURIComponent(question)}&button=${encodeURIComponent(button)}&current_url=${encodeURIComponent(currentUrl)}`,
-        { method: "GET", credentials: "include" }
-    )
+    const requestUrl = `${buildBackendUrl('/log_question/')}?question=${encodeURIComponent(question)}&button=${encodeURIComponent(button)}&current_url=${encodeURIComponent(currentUrl)}`;
+
+    return fetch(requestUrl, { method: "GET", credentials: "include" })
         .then(response => response.json())
         .then(data => {
             if (data.status !== 'success') {
@@ -351,7 +358,7 @@ function syncPreferredLinks() {
     try {
         const preferredLinks = JSON.parse(localStorage.getItem('preferredLinks') || '[]');
         if (preferredLinks.length > 0) {
-            return fetch('http://127.0.0.1:8000/api/sync_preferred_urls/', {
+            return fetch(buildBackendUrl('/api/sync_preferred_urls/'), {
                 method: 'POST',
                 credentials: 'include',
                 headers: {
@@ -359,15 +366,74 @@ function syncPreferredLinks() {
                 },
                 body: JSON.stringify({ urls: preferredLinks })
             })
-            .then(response => response.json())
-            .catch(error => {
-                console.error('Error syncing preferred links:', error);
-            });
+                .then(response => response.json())
+                .catch(error => {
+                    console.error('Error syncing preferred links:', error);
+                });
         }
     } catch (e) {
         console.error('Error reading preferred links for sync:', e);
     }
     return Promise.resolve();
+}
+
+// Auto-scrape promise tracking for coordination with chat requests
+let autoScrapePromise = Promise.resolve({ status: 'not_started' });
+let autoScrapeInProgress = false;
+
+function setAutoScrapePromise(promise) {
+    autoScrapeInProgress = true;
+    autoScrapePromise = promise.finally(() => {
+        autoScrapeInProgress = false;
+    });
+    return autoScrapePromise;
+}
+
+function waitForAutoScrape() {
+    if (!autoScrapeInProgress) {
+        return Promise.resolve({ status: 'already_complete' });
+    }
+    console.log("[Auto-scrape] Waiting for page scraping to complete...");
+    return autoScrapePromise;
+}
+
+function isAutoScrapeInProgress() {
+    return autoScrapeInProgress;
+}
+
+// Function to trigger auto-scraping of the current page
+function triggerAutoScrape(currentUrl) {
+    if (!currentSessionId) {
+        console.warn("Cannot trigger auto-scrape: Session ID not set");
+        return Promise.resolve({ status: 'skipped', reason: 'no_session_id' });
+    }
+
+    return fetch(buildBackendUrl('/api/auto_scrape/'), {
+        method: "POST",
+        credentials: "include",
+        headers: {
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+            current_url: currentUrl,
+            session_id: currentSessionId
+        }),
+    })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`Network response was not ok (status: ${response.status})`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            console.log("Auto-scrape response:", data);
+            return data;
+        })
+        .catch(error => {
+            console.error("Auto-scrape failed:", error);
+            // Don't throw, just log, as this is a background process
+            return { error: error.message };
+        });
 }
 
 export {
@@ -378,5 +444,9 @@ export {
     getSourceUrls,
     logQuestion,
     setSessionId,
-    syncPreferredLinks
+    syncPreferredLinks,
+    triggerAutoScrape,
+    setAutoScrapePromise,
+    waitForAutoScrape,
+    isAutoScrapeInProgress
 };

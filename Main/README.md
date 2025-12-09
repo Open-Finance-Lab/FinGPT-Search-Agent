@@ -9,14 +9,11 @@ This document provides comprehensive details about the FinGPT Search Agents proj
 ```markdown
 fingpt_rcos/
 ├── Main/
-│   ├── backend/               # Django backend with RAG and R2C context management
+│   ├── backend/               # Django backend with R2C context management
 │   └── frontend/              # Browser extension (Webpack-bundled JS)
 ├── mcp-server/                # Model Context Protocol server
-├── scripts/                   # Project-wide installation and setup scripts
-├── Requirements/              # Pinned Python dependencies
 ├── Docs/                      # Sphinx documentation
-├── Makefile                   # Build automation for development
-└── pyproject.toml             # Project metadata and dependencies
+└── docker-compose.yml         # One-command deployment (backend)
 ```
 
 ---
@@ -37,26 +34,20 @@ backend/
 │   ├── admin.py                # Django admin configuration
 │   ├── apps.py                 # Django app configuration
 │   ├── models.py               # Database models
-│   ├── views.py                # API endpoints (chat, RAG, MCP, context management)
+│   ├── views.py                # API endpoints (chat, MCP, context management)
 │   ├── tests.py                # Unit tests
 │   └── questionLog.csv         # Runtime artifact: per-prompt telemetry (git-ignored)
-├── datascraper/                # RAG & Context Management utilities
-│   ├── cdm_rag.py              # Orchestrates retrieval-augmented generation pipeline
-│   ├── create_embeddings.py   # Batch-embeds local docs via OpenAI embeddings
+├── datascraper/                # Context management utilities
 │   ├── datascraper.py         # General helpers: web scraping, source parsing, API calls
 │   ├── models_config.py       # Centralized model configuration (OpenAI, DeepSeek, Anthropic)
 │   ├── preferred_links_manager.py  # Manages user-curated preferred sources
 │   ├── r2c_context_manager.py # R2C Context Manager - hierarchical compression system
-│   ├── test/                   # Test files and fixtures
 │   ├── embeddings.pkl          # Cached embeddings (git-ignored)
-│   ├── faiss_index.idx         # FAISS vector index (git-ignored)
 │   └── .gitignore              # Datascraper-specific ignore rules
 ├── mcp_client/                 # Model Context Protocol integration
 │   └── agent.py                # MCP client functionality
 ├── data/                       # Application data storage
 │   └── preferred_links.json   # JSON storage for preferred data sources
-├── scripts/                    # Backend utility scripts
-│   └── export_requirements.py # Exports dependencies from pyproject.toml to requirements.txt
 ├── manage.py                   # Django CLI helper
 ├── pyproject.toml              # Python dependencies and project metadata
 ├── manage_deps.py              # Dependency management utilities
@@ -65,7 +56,7 @@ backend/
 ├── Procfile                    # Heroku deployment configuration
 ├── runtime.txt                 # Python version specification for deployment
 ├── package.json                # npm scripts for auxiliary tooling
-├── .env.example                # Environment variable template
+├── Main/backend/.env.example   # Backend environment variable template
 ├── DEPLOYMENT_GUIDE.md         # Deployment and production configuration guide
 ├── PLAYWRIGHT_INTEGRATION.md   # Playwright browser automation setup and usage
 └── MCP_INSTALLATION.md         # MCP server setup guide
@@ -85,11 +76,6 @@ backend/
 - Financial-aware importance scoring
 - Automatic compression at 4096 tokens
 - Session-based context isolation
-
-**`datascraper/cdm_rag.py`** – RAG Pipeline Orchestration:
-- FAISS vector similarity search
-- OpenAI text-embedding-3-large integration
-- Seamless integration with R2C compressed context
 
 **`datascraper/models_config.py`** – Centralized Model Configuration:
 - OpenAI API integration
@@ -143,10 +129,16 @@ frontend/
 
 **Build Commands:**
 ```bash
-npm run build:css      # Build CSS only
-npm run build          # Build with Webpack
-npm run check          # Verify build artifacts
-npm run build:full     # Complete build pipeline
+bun run build:css      # Build CSS only
+bun run build          # Build with Webpack
+bun run check          # Verify build artifacts
+bun run build:full     # Complete build pipeline
+```
+
+**Note:** Bun must be installed and available in PATH. If not in PATH, source your shell configuration:
+```bash
+source ~/.bashrc  # Linux/WSL
+source ~/.zshrc   # macOS with zsh
 ```
 
 ---
@@ -172,19 +164,26 @@ python server.py
 
 ## 5. Additional Components
 
-### 5.1 Project-Wide Scripts (`scripts/`)
+### 5.1 Docker Compose Quick Start
 
-| Script           | Purpose                                            |
-|------------------|----------------------------------------------------|
-| `install_all.py` | Automated installation for all project components  |
-| `dev_setup.py`   | Development environment setup                      |
+All backend services can be launched with a single command:
 
-### 5.2 Python Dependencies (`Requirements/`)
+```bash
+docker compose up
+```
 
-| File                   | Purpose                                    |
-|------------------------|--------------------------------------------|
-| `requirements_mac.txt` | Pinned dependencies for macOS              |
-| `requirements_win.txt` | Pinned dependencies for Windows            |
+The compose file builds the backend image from `Main/backend/Dockerfile` using `uv` for dependency management. Provide configuration in `Main/backend/.env` (copy from `Main/backend/.env.example`).
+
+### 5.2 Managing Dependencies with `uv`
+
+If you prefer to work outside Docker:
+
+```bash
+cd Main/backend
+uv sync --python 3.12 --frozen          # Install dependencies from uv.lock
+uv run playwright install chromium      # One-time browser install for Playwright tooling
+uv run python manage.py runserver
+```
 
 ### 5.3 Documentation (`Docs/`)
 
@@ -210,13 +209,14 @@ make html
 - **OpenAI API** – LLM integration
 - **DeepSeek API** – Alternative LLM provider
 - **Anthropic API** – Claude integration
-- **Playwright** – Browser automation (requires Chromium: `playwright install chromium`)
+- **Playwright** – Browser automation (requires Chromium: `uv run playwright install chromium`)
 - **FAISS** – Vector similarity search
 - **BeautifulSoup4** – Web scraping
 - **tiktoken** – Token counting for R2C context management
 - **numpy** – Numerical operations for importance scoring
 
 ### Frontend Stack
+- **Bun** – Fast JavaScript runtime and package manager
 - **Webpack 5** – Module bundler
 - **Babel** – JavaScript transpiler
 - **KaTeX** – Mathematical notation rendering
@@ -237,19 +237,36 @@ make html
 ```bash
 cd Main/backend
 
+# Ensure dependencies are installed for Python 3.12
+uv sync --python 3.12 --frozen
+
 # Install Chromium for Playwright (required for Normal Mode)
-playwright install chromium
+uv run playwright install chromium
 
 # Start development server
-python manage.py runserver
+uv run python manage.py runserver
 ```
 
 ### Frontend Development
 ```bash
 cd Main/frontend
-npm install                         # Install dependencies
-npm run build:full                  # Complete build
+
+# Install Bun if not already installed
+curl -fsSL https://bun.sh/install | bash
+
+# Install dependencies with Bun
+bun install
+
+# Complete build
+bun run build:full
 ```
+
+**Package Management with Bun:**
+- `bun install` – Install dependencies (creates `bun.lock`)
+- `bun install --frozen-lockfile` – Install with frozen lockfile (CI/CD)
+- `bun add <package>` – Add new dependency
+- `bun remove <package>` – Remove dependency
+- `bun update` – Update dependencies
 
 ---
 
@@ -274,12 +291,12 @@ npm run build:full                  # Complete build
 
 ## 9. Environment Configuration
 
-### Required API Keys (in `.env`)
+### Required API Keys (in `Main/backend/.env`)
 - `OPENAI_API_KEY` – OpenAI API key
 - `DEEPSEEK_API_KEY` – DeepSeek API key
 - `ANTHROPIC_API_KEY` – Anthropic API key
 
-See `Main/backend/.env.example` for full configuration template.
+See `Main/backend/.env.example` for the full configuration template.
 
 ---
 

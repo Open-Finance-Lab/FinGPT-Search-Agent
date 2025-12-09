@@ -56,37 +56,6 @@ Switching Models
    - **Claude**: Excellent for detailed explanations
    - **O1 Models**: Superior for reasoning tasks
 
-RAG (Retrieval-Augmented Generation)
--------------------------------------
-
-The Local RAG feature allows you to upload and analyze your own financial documents.
-
-Uploading Documents
-~~~~~~~~~~~~~~~~~~~
-
-1. Click the **Settings** button
-2. Toggle **Local RAG** to ON
-3. Use the file upload interface to add documents
-4. Supported formats include:
-   
-   - PDF files
-   - Text files (.txt)
-   - CSV files
-   - Word documents (.docx on macOS)
-
-Using RAG Mode
-~~~~~~~~~~~~~~
-
-When RAG is enabled:
-
-- The agent searches your uploaded documents for relevant information
-- Responses include citations from your documents
-- Click the **Source** button to view which documents were used
-
-.. warning::
-   In Local RAG mode, the agent will ONLY search your uploaded documents,
-   not external websites.
-
 MCP (Model Context Protocol) Integration
 ----------------------------------------
 
@@ -249,12 +218,6 @@ Troubleshooting Advanced Features
 
 Common Issues
 ~~~~~~~~~~~~~
-
-**RAG not finding documents:**
-
-- Ensure documents are properly formatted
-- Check file upload succeeded
-- Verify RAG mode is enabled
 
 **MCP features not working:**
 

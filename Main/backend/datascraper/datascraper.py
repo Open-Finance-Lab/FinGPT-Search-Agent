@@ -2,7 +2,7 @@ import os
 import logging
 import asyncio
 from collections.abc import AsyncIterator
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple, List
 
 import requests
 from dotenv import load_dotenv
@@ -10,8 +10,7 @@ from dotenv import load_dotenv
 from openai import OpenAI
 from anthropic import Anthropic
 
-from . import cdm_rag
-from mcp_client.agent import create_fin_agent, USER_ONLY_MODELS, DEFAULT_PROMPT
+from mcp_client.agent import create_fin_agent, USER_ONLY_MODELS, DEFAULT_PROMPT, apply_guardrails
 from .models_config import (
     MODELS_CONFIG,
     PROVIDER_CONFIGS,
@@ -25,8 +24,8 @@ from .openai_search import (
     format_sources_for_frontend,
     is_responses_api_available
 )
+from .unified_context_manager import get_context_manager
 
-# Load .env from the backend root directory
 from pathlib import Path
 backend_dir = Path(__file__).resolve().parent.parent
 load_dotenv(backend_dir / '.env')
@@ -38,33 +37,32 @@ BUFFET_AGENT_DEFAULT_ENDPOINT = "https://l7d6yqg7nzbkumx8.us-east-1.aws.endpoint
 BUFFET_AGENT_ENDPOINT = os.getenv("BUFFET_AGENT_ENDPOINT", BUFFET_AGENT_DEFAULT_ENDPOINT)
 BUFFET_AGENT_TIMEOUT = float(os.getenv("BUFFET_AGENT_TIMEOUT", "60"))
 
+
+
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-# Initialize clients
 clients = {}
 
-# OpenAI client
+GLOBAL_MCP_MANAGER = None
+
 if OPENAI_API_KEY:
     clients["openai"] = OpenAI(api_key=OPENAI_API_KEY)
 
-# DeepSeek client (OpenAI-compatible)
 if DEEPSEEK_API_KEY:
     clients["deepseek"] = OpenAI(
         api_key=DEEPSEEK_API_KEY,
         base_url="https://api.deepseek.com"
     )
 
-# Anthropic client
 if ANTHROPIC_API_KEY:
     clients["anthropic"] = Anthropic(api_key=ANTHROPIC_API_KEY)
 
-INSTRUCTION = (
+INSTRUCTION = apply_guardrails(
     "When provided context, use provided context as fact and not your own knowledge; "
     "the context provided is the most up-to-date information."
 )
 
-# Warren Buffett-specific system prompt for the Buffet Agent
-BUFFETT_INSTRUCTION = (
+BUFFETT_INSTRUCTION = apply_guardrails(
     "You are Warren Buffett, the legendary investor and CEO of Berkshire Hathaway. "
     "Answer questions with his characteristic wisdom, folksy charm, and value investing philosophy. "
     "Use his well-known principles: invest in what you understand, focus on long-term value, "
@@ -75,10 +73,19 @@ BUFFETT_INSTRUCTION = (
     "the context provided is the most up-to-date information."
 )
 
-# A module-level set to keep track of used URLs
-used_urls: set[str] = set()
-used_source_details: list[dict[str, Any]] = []
-used_urls_ordered: list[str] = []
+SYSTEM_PREFIX = "[SYSTEM MESSAGE]: "
+USER_PREFIXES = ("[USER MESSAGE]: ", "[USER QUESTION]: ")
+ASSISTANT_PREFIXES = ("[ASSISTANT MESSAGE]: ", "[ASSISTANT RESPONSE]: ")
+
+
+def _strip_any_prefix(content: str, prefixes: tuple[str, ...]) -> tuple[bool, str]:
+    """Return (matched, stripped_content) when removing the first matching prefix."""
+    for prefix in prefixes:
+        if content.startswith(prefix):
+            return True, content[len(prefix):]
+    return False, content
+
+
 
 
 def _prepare_advanced_search_inputs(model: str, preferred_links: list[str] | None) -> tuple[str, list[str]]:
@@ -94,7 +101,7 @@ def _prepare_advanced_search_inputs(model: str, preferred_links: list[str] | Non
         logging.warning(f"No config found for model {model}, using as-is")
 
     if not is_responses_api_available(actual_model):
-        fallback_model = "gpt-4o"
+        fallback_model = "gpt-4o-mini"
         logging.warning(f"Model {actual_model} (from {model}) doesn't support Responses API")
         logging.info(f"FALLBACK: Using {fallback_model} for web search instead")
         actual_model = fallback_model
@@ -113,23 +120,6 @@ def _prepare_advanced_search_inputs(model: str, preferred_links: list[str] | Non
 
     return actual_model, preferred_urls
 
-
-
-def create_rag_response(user_input, message_list, model):
-    """
-    Generates a response using the RAG pipeline.
-    """
-    try:
-        response = cdm_rag.get_rag_response(user_input, model)
-        # Don't append to message_list here - let the caller handle it properly
-        return response
-    except FileNotFoundError as e:
-        # Handle the error and return the error message
-        error_message = str(e)
-        # Don't append to message_list here - let the caller handle it properly
-        return error_message
-
-
 def _prepare_messages(message_list: list[dict], user_input: str, model: str = None):
     """
     Helper to parse message list with headers and convert to proper format for APIs.
@@ -146,24 +136,26 @@ def _prepare_messages(message_list: list[dict], user_input: str, model: str = No
     for msg in message_list:
         content = msg.get("content", "")
 
-        # Parse headers to determine actual role
-        if content.startswith("[SYSTEM MESSAGE]: "):
-            actual_content = content.replace("[SYSTEM MESSAGE]: ", "")
+        if content.startswith(SYSTEM_PREFIX):
+            actual_content = content.replace(SYSTEM_PREFIX, "", 1)
             if not system_message:
                 system_message = actual_content
             else:
                 system_message = f"{system_message} {actual_content}"
-        elif content.startswith("[USER MESSAGE]: "):
-            actual_content = content.replace("[USER MESSAGE]: ", "")
-            msgs.append({"role": "user", "content": actual_content})
-        elif content.startswith("[ASSISTANT MESSAGE]: "):
-            actual_content = content.replace("[ASSISTANT MESSAGE]: ", "")
-            msgs.append({"role": "assistant", "content": actual_content})
-        else:
-            # Legacy format or web content - treat as user message
-            msgs.append({"role": "user", "content": content})
+            continue
 
-    # Determine which instruction to use based on the model
+        matched, actual_content = _strip_any_prefix(content, USER_PREFIXES)
+        if matched:
+            msgs.append({"role": "user", "content": actual_content})
+            continue
+
+        matched, actual_content = _strip_any_prefix(content, ASSISTANT_PREFIXES)
+        if matched:
+            msgs.append({"role": "assistant", "content": actual_content})
+            continue
+
+        msgs.append({"role": "user", "content": content})
+
     instruction = INSTRUCTION
     if model:
         model_config = get_model_config(model)
@@ -171,13 +163,13 @@ def _prepare_messages(message_list: list[dict], user_input: str, model: str = No
             instruction = BUFFETT_INSTRUCTION
             logging.info("[BUFFET] Using Warren Buffett system prompt")
 
-    # Add system message at the beginning
     if system_message:
-        msgs.insert(0, {"role": "system", "content": f"{system_message} {instruction}"})
+        instruction_payload = f"{system_message} {instruction}".strip()
     else:
-        msgs.insert(0, {"role": "system", "content": instruction})
+        instruction_payload = instruction
 
-    # Add current user input
+    msgs.insert(0, {"role": "user", "content": f"{SYSTEM_PREFIX}{instruction_payload}"})
+
     msgs.append({"role": "user", "content": user_input})
 
     return msgs, system_message
@@ -275,7 +267,6 @@ def _sanitize_buffet_output(text: str) -> str:
 
     candidate = candidate.strip()
 
-    # If the response still contains user-prefixed text, keep only the tail content.
     if "User:" in candidate:
         tail = candidate.rsplit("User:", 1)[-1].strip()
         if tail:
@@ -302,7 +293,6 @@ def _sanitize_buffet_output(text: str) -> str:
                 cleaned_lines.append("")
             continue
         if any(stripped.startswith(prefix) for prefix in skip_prefixes):
-            # If this is a user-prefixed line with actual content, keep the part after the prefix.
             if stripped.startswith("User:"):
                 remainder = stripped.split("User:", 1)[-1].strip()
                 if remainder:
@@ -402,7 +392,6 @@ def create_response(
     Creates a chat completion using the appropriate provider based on model configuration.
     Returns a string when stream=False, or a generator when stream=True.
     """
-    # Get model configuration
     model_config = get_model_config(model)
     if not model_config:
         raise ValueError(f"Unsupported model: {model}")
@@ -423,34 +412,28 @@ def create_response(
             return _create_buffet_response_stream(model_config, msgs)
         return _create_buffet_response_sync(model_config, msgs)
 
-    # Get the appropriate client
     client = clients.get(provider)
     if not client:
         raise ValueError(f"No client available for provider: {provider}. Please check API key configuration.")
 
-    # Route to streaming or non-streaming based on flag
     if stream:
-        return _create_response_stream(client, provider, model_name, model_config, msgs, system_message)
+        return _create_response_stream(client, provider, model_name, model_config, msgs)
     else:
-        return _create_response_sync(client, provider, model_name, model_config, msgs, system_message)
+        return _create_response_sync(client, provider, model_name, model_config, msgs)
 
 
-def _create_response_sync(client, provider: str, model_name: str, model_config: dict, msgs: list, system_message: str) -> str:
+def _create_response_sync(client, provider: str, model_name: str, model_config: dict, msgs: list) -> str:
     """Non-streaming response - returns a string directly."""
     if provider == "anthropic":
-        # Anthropic uses a different API structure
-        system_content = msgs[0]["content"] if msgs and msgs[0].get("role") == "system" else INSTRUCTION
         anthropic_msgs = [msg for msg in msgs if msg.get("role") != "system"]
 
         response = client.messages.create(
             model=model_name,
             messages=anthropic_msgs,
-            system=system_content,
             max_tokens=1024
         )
         return response.content[0].text
     else:
-        # OpenAI and DeepSeek use the same API structure
         kwargs = {}
         if provider == "deepseek" and "recommended_temperature" in model_config:
             kwargs["temperature"] = model_config["recommended_temperature"]
@@ -463,23 +446,19 @@ def _create_response_sync(client, provider: str, model_name: str, model_config: 
         return response.choices[0].message.content
 
 
-def _create_response_stream(client, provider: str, model_name: str, model_config: dict, msgs: list, system_message: str):
+def _create_response_stream(client, provider: str, model_name: str, model_config: dict, msgs: list):
     """Streaming response - returns a generator."""
     if provider == "anthropic":
-        # Anthropic streaming
-        system_content = msgs[0]["content"] if msgs and msgs[0].get("role") == "system" else INSTRUCTION
         anthropic_msgs = [msg for msg in msgs if msg.get("role") != "system"]
 
         with client.messages.stream(
             model=model_name,
             messages=anthropic_msgs,
-            system=system_content,
             max_tokens=1024
         ) as stream_response:
             for text in stream_response.text_stream:
                 yield text
     else:
-        # OpenAI and DeepSeek streaming
         kwargs = {}
         if provider == "deepseek" and "recommended_temperature" in model_config:
             kwargs["temperature"] = model_config["recommended_temperature"]
@@ -495,23 +474,7 @@ def _create_response_stream(client, provider: str, model_name: str, model_config
                 yield chunk.choices[0].delta.content
 
 
-def _update_used_sources(source_entries: list[dict[str, Any]]) -> None:
-    """
-    Synchronize module-level caches for used sources.
-    """
-    global used_source_details, used_urls_ordered
-    # defensive copy so downstream mutations do not leak into cache state
-    sanitized_entries: list[dict[str, Any]] = []
-    for entry in source_entries or []:
-        if not entry:
-            continue
-        sanitized_entries.append(dict(entry))
 
-    used_source_details = sanitized_entries
-    used_urls_ordered = [entry.get("url") for entry in used_source_details if entry.get("url")]
-
-    used_urls.clear()
-    used_urls.update(used_urls_ordered)
 
 
 def create_advanced_response(
@@ -547,15 +510,12 @@ def create_advanced_response(
     """
     logging.info(f"Starting advanced response with model ID: {model} (stream={stream})")
 
-    used_urls.clear()
-
     actual_model, preferred_urls = _prepare_advanced_search_inputs(model, preferred_links)
 
     try:
         if stream:
-            # Return async generator for streaming
             return _create_advanced_response_stream_async(
-                user_input=user_input,
+            user_input=user_input,
                 message_list=message_list,
                 actual_model=actual_model,
                 preferred_urls=preferred_urls,
@@ -563,18 +523,15 @@ def create_advanced_response(
                 user_time=user_time
             )
         else:
-            # Call OpenAI Responses API search function
             response_text, source_entries = create_responses_api_search(
                 user_query=user_input,
                 message_history=message_list,
-                model=actual_model,  # Use the actual model name from model_config.py, not the frontend ID
+                model=actual_model,
                 preferred_links=preferred_urls,
                 user_timezone=user_timezone,
                 user_time=user_time
             )
 
-            # Update cached sources for compatibility with frontend queries
-            _update_used_sources(source_entries)
 
             logging.info(f"Advanced response generated with {len(source_entries)} sources")
             for idx, entry in enumerate(source_entries, 1):
@@ -584,7 +541,6 @@ def create_advanced_response(
 
     except Exception as e:
         logging.error(f"OpenAI Responses API failed: {e}")
-        # Return a fallback response
         if stream:
             error_message = str(e)
             async def error_gen():
@@ -611,7 +567,6 @@ async def _create_advanced_response_stream_async(
     from datascraper.openai_search import create_responses_api_search_async
 
     try:
-        # Get async generator from the streaming API
         stream_gen = await create_responses_api_search_async(
             user_query=user_input,
             message_history=message_list,
@@ -622,11 +577,7 @@ async def _create_advanced_response_stream_async(
             user_time=user_time
         )
 
-        # Yield chunks from the stream
         async for text_chunk, source_entries in stream_gen:
-            # Update global caches when we get sources
-            if source_entries:
-                _update_used_sources(source_entries)
             yield text_chunk, source_entries
 
     except Exception as e:
@@ -647,7 +598,6 @@ def create_advanced_response_streaming(
     """
     logging.info(f"Starting advanced streaming response with model ID: {model}")
 
-    used_urls.clear()
     actual_model, preferred_urls = _prepare_advanced_search_inputs(model, preferred_links)
 
     state: Dict[str, Any] = {
@@ -683,42 +633,20 @@ def create_advanced_response_streaming(
             state["final_output"] = final_text
             state["used_sources"] = latest_entries
             state["used_urls"] = [entry.get("url") for entry in latest_entries if entry.get("url")]
-            _update_used_sources(latest_entries)
             logging.info(f"[ADVANCED STREAM] Completed with {len(final_text)} characters and {len(latest_entries)} sources")
 
     return _stream(), state
 
 
-def create_rag_advanced_response(user_input: str, message_list: list[dict], model: str = "o4-mini", preferred_links: list[str] = None) -> str:
+def create_agent_response(user_input: str, message_list: list[dict], model: str = "o4-mini", current_url: str = None, user_timezone: str = None, user_time: str = None) -> str:
     """
-    Creates an advanced response using the RAG pipeline.
-    Combines RAG functionality with advanced web search.
-    """
-    try:
-        # First try to get response from RAG
-        rag_response = cdm_rag.get_rag_advanced_response(user_input, model)
-        if rag_response:
-            return rag_response
-    except Exception as e:
-        logging.warning(f"RAG advanced response failed: {e}, falling back to advanced search")
-
-    # Fallback to advanced search if RAG fails, passing preferred links
-    return create_advanced_response(user_input, message_list, model, preferred_links)
-
-
-def create_agent_response(user_input: str, message_list: list[dict], model: str = "o4-mini", use_playwright: bool = False, restricted_domain: str = None, current_url: str = None, user_timezone: str = None, user_time: str = None) -> str:
-    """
-    Creates a response using the Agent with tools (Playwright, etc.).
-
-    This is the primary response method - tools are always available.
+    Creates a response using the Agent with tools (URL scraping, SEC-EDGAR, filesystem).
     Falls back to create_response() (direct LLM) only if agent fails.
 
     Args:
         user_input: The user's question
         message_list: Previous conversation history
         model: Model ID to use
-        use_playwright: Whether to enable Playwright browser automation tools
-        restricted_domain: Domain restriction for Playwright (e.g., "finance.yahoo.com")
         current_url: Current webpage URL for context
         user_timezone: User's IANA timezone
         user_time: User's current time in ISO format
@@ -726,7 +654,8 @@ def create_agent_response(user_input: str, message_list: list[dict], model: str 
     Returns:
         Generated response from the agent
     """
-    # Resolve model ID to actual model name for logging
+
+
     model_config = get_model_config(model)
     actual_model_name = model_config.get("model_name") if model_config else model
     provider = model_config.get("provider") if model_config else None
@@ -736,7 +665,6 @@ def create_agent_response(user_input: str, message_list: list[dict], model: str 
         return create_response(user_input, message_list, model)
 
     try:
-        # Check if model supports agent features
         if not validate_model_support(model, "mcp"):
             logging.warning(f"Model {model} ({actual_model_name}) doesn't support agent features")
             logging.info(f"FALLBACK: Using regular response with {model} ({actual_model_name})")
@@ -744,87 +672,86 @@ def create_agent_response(user_input: str, message_list: list[dict], model: str 
 
         logging.info(f"[AGENT] Attempting agent response with {model} ({actual_model_name})")
 
-        return asyncio.run(_create_agent_response_async(user_input, message_list, model, use_playwright, restricted_domain, current_url, user_timezone, user_time))
+        response = asyncio.run(_create_agent_response_async(user_input, message_list, model, current_url, user_timezone, user_time))
+        return response
 
     except Exception as e:
         logging.error(f"Agent response failed for {model} ({actual_model_name}): {e}")
         logging.info(f"FALLBACK: Using regular response with {model} ({actual_model_name})")
         return create_response(user_input, message_list, model)
 
-async def _create_agent_response_async(user_input: str, message_list: list[dict], model: str, use_playwright: bool = False, restricted_domain: str = None, current_url: str = None, user_timezone: str = None, user_time: str = None) -> str:
+async def _create_agent_response_async(user_input: str, message_list: list[dict], model: str, current_url: str = None, user_timezone: str = None, user_time: str = None) -> str:
     """
-    Async helper for creating agent response with tools.
+    Async helper for creating agent response with MCP tools.
 
     Args:
         user_input: The user's question
         message_list: Previous conversation history
         model: Model ID to use
-        use_playwright: Whether to enable Playwright browser automation tools
-        restricted_domain: Domain restriction for Playwright navigation
-        current_url: Current webpage URL for context
+        current_url: Current webpage URL for context (informational only)
         user_timezone: User's IANA timezone
         user_time: User's current time in ISO format
 
     Returns:
-        Generated response from the agent
+        Generated response string
     """
     from mcp_client.agent import create_fin_agent
     from agents import Runner
 
-    # Convert message list to context, parsing headers
     context = ""
     for msg in message_list:
         content = msg.get("content", "")
 
-        # Parse headers to determine actual role
-        if content.startswith("[SYSTEM MESSAGE]: "):
-            actual_content = content.replace("[SYSTEM MESSAGE]: ", "")
+        if content.startswith(SYSTEM_PREFIX):
+            actual_content = content.replace(SYSTEM_PREFIX, "", 1)
             context += f"System: {actual_content}\n"
-        elif content.startswith("[USER MESSAGE]: "):
-            actual_content = content.replace("[USER MESSAGE]: ", "")
+            continue
+
+        matched, actual_content = _strip_any_prefix(content, USER_PREFIXES)
+        if matched:
             context += f"User: {actual_content}\n"
-        elif content.startswith("[ASSISTANT MESSAGE]: "):
-            actual_content = content.replace("[ASSISTANT MESSAGE]: ", "")
+            continue
+
+        matched, actual_content = _strip_any_prefix(content, ASSISTANT_PREFIXES)
+        if matched:
             context += f"Assistant: {actual_content}\n"
-        else:
-            # Legacy format or web content - treat as user message
-            context += f"User: {content}\n"
+            continue
+
+        context += f"User: {content}\n"
 
     full_prompt = f"{context}User: {user_input}"
 
-    # Create agent with tools and domain restriction
     async with create_fin_agent(
         model=model,
-        use_playwright=use_playwright,
-        restricted_domain=restricted_domain,
+        user_input=user_input,
         current_url=current_url,
         user_timezone=user_timezone,
         user_time=user_time
     ) as agent:
-        # Run the agent with the full prompt
-        tool_status = f"with Playwright (domain: {restricted_domain})" if use_playwright and restricted_domain else "with Playwright" if use_playwright else "without tools"
-        logging.info(f"[AGENT] Running agent {tool_status}")
+        logging.info(f"[AGENT] Running agent with MCP tools")
         logging.info(f"[AGENT] Current URL: {current_url}")
         logging.info(f"[AGENT] Prompt preview: {full_prompt[:150]}...")
 
         result = await Runner.run(agent, full_prompt)
 
-        logging.info(f"[AGENT] Result length: {len(result.final_output) if result.final_output else 0}")
-        return result.final_output
+        final_output = result.final_output if hasattr(result, "final_output") else None
+        if final_output is None:
+            final_output = ""
+        logging.info(f"[AGENT] Result length: {len(final_output)}")
+
+        return final_output
 
 
 def create_agent_response_stream(
     user_input: str,
     message_list: list[dict],
     model: str = "o4-mini",
-    use_playwright: bool = False,
-    restricted_domain: str | None = None,
     current_url: str | None = None,
     user_timezone: str | None = None,
     user_time: str | None = None
 ) -> Tuple[AsyncIterator[str], Dict[str, str]]:
     """
-    Create a streaming agent response, returning an async iterator and final state.
+    Create a streaming agent response with tools, returning an async iterator and final state.
     """
     state: Dict[str, str] = {"final_output": ""}
 
@@ -832,7 +759,6 @@ def create_agent_response_stream(
     provider = model_config.get("provider") if model_config else None
     if provider == "buffet":
         logging.info(f"[AGENT STREAM] Buffet agent does not support tool mode; using direct response stream for {model}")
-        # Reuse the regular streaming response helper
         regular_stream = create_response(user_input, message_list, model, stream=True)
 
         async def _fallback_stream() -> AsyncIterator[str]:
@@ -848,98 +774,146 @@ def create_agent_response_stream(
 
     async def _stream() -> AsyncIterator[str]:
         from agents import Runner
+        import asyncio
 
         context = ""
         for msg in message_list:
             content = msg.get("content", "")
-            if content.startswith("[SYSTEM MESSAGE]: "):
-                actual_content = content.replace("[SYSTEM MESSAGE]: ", "")
+            if content.startswith(SYSTEM_PREFIX):
+                actual_content = content.replace(SYSTEM_PREFIX, "", 1)
                 context += f"System: {actual_content}\n"
-            elif content.startswith("[USER MESSAGE]: "):
-                actual_content = content.replace("[USER MESSAGE]: ", "")
+                continue
+
+            matched, actual_content = _strip_any_prefix(content, USER_PREFIXES)
+            if matched:
                 context += f"User: {actual_content}\n"
-            elif content.startswith("[ASSISTANT MESSAGE]: "):
-                actual_content = content.replace("[ASSISTANT MESSAGE]: ", "")
+                continue
+
+            matched, actual_content = _strip_any_prefix(content, ASSISTANT_PREFIXES)
+            if matched:
                 context += f"Assistant: {actual_content}\n"
-            else:
-                context += f"User: {content}\n"
+                continue
+
+            context += f"User: {content}\n"
 
         full_prompt = f"{context}User: {user_input}"
-        aggregated_chunks: list[str] = []
-        result = None
-
-        async with create_fin_agent(
-            model=model,
-            use_playwright=use_playwright,
-            restricted_domain=restricted_domain,
-            current_url=current_url,
-            user_timezone=user_timezone,
-            user_time=user_time
-        ) as agent:
-            logging.info("[AGENT STREAM] Starting streamed agent run")
-            logging.info(f"[AGENT STREAM] Prompt preview: {full_prompt[:150]}...")
-            result = Runner.run_streamed(agent, full_prompt)
-
+        
+        MAX_RETRIES = 2
+        retry_count = 0
+        
+        while True:
+            aggregated_chunks: list[str] = []
+            has_yielded = False
+            result = None
+            
             try:
-                async for event in result.stream_events():
-                    event_type = getattr(event, "type", "")
-                    if event_type == "raw_response_event":
-                        data = getattr(event, "data", None)
-                        data_type = getattr(data, "type", "")
-                        if data_type == "response.output_text.delta":
-                            chunk = getattr(data, "delta", "")
-                            if chunk:
-                                aggregated_chunks.append(chunk)
-                                yield chunk
-                    elif event_type == "run_item_stream_event":
-                        event_name = getattr(event, "name", "")
-                        if event_name in {"tool_called", "tool_output"}:
-                            tool_item = getattr(event, "item", None)
-                            tool_type = getattr(tool_item, "type", "")
-                            logging.debug(f"[AGENT STREAM] Tool event: {event_name} ({tool_type})")
+                async with create_fin_agent(
+                    model=model,
+                    user_input=user_input,
+                    current_url=current_url,
+                    user_timezone=user_timezone,
+                    user_time=user_time
+                ) as agent:
+                    if retry_count > 0:
+                        logging.info(f"[AGENT STREAM] Retry attempt {retry_count}/{MAX_RETRIES}")
+                    else:
+                        logging.info("[AGENT STREAM] Starting streamed agent run with MCP tools")
+                        logging.info(f"[AGENT STREAM] Prompt preview: {full_prompt[:150]}...")
+                    
+                    result = Runner.run_streamed(agent, full_prompt)
+
+                    async for event in result.stream_events():
+                        event_type = getattr(event, "type", "")
+                        if event_type == "raw_response_event":
+                            data = getattr(event, "data", None)
+                            data_type = getattr(data, "type", "")
+                            if data_type == "response.output_text.delta":
+                                chunk = getattr(data, "delta", "")
+                                if chunk:
+                                    aggregated_chunks.append(chunk)
+                                    yield chunk
+                                    has_yielded = True
+                        elif event_type == "run_item_stream_event":
+                            event_name = getattr(event, "name", "")
+                            if event_name in {"tool_called", "tool_output"}:
+                                tool_item = getattr(event, "item", None)
+                                tool_type = getattr(tool_item, "type", "")
+                                logging.debug(f"[AGENT STREAM] Tool event: {event_name} ({tool_type})")
+                
+                break
+
             except Exception as stream_error:
-                logging.error(f"[AGENT STREAM] Error during streaming: {stream_error}")
-                raise
+                if has_yielded:
+                    logging.error(f"[AGENT STREAM] Error during streaming after content sent. Cannot retry. Error: {stream_error}")
+                    raise stream_error
+                
+                retry_count += 1
+                if retry_count > MAX_RETRIES:
+                    logging.error(f"[AGENT STREAM] Max retries ({MAX_RETRIES}) reached. Error: {stream_error}")
+                    raise stream_error
+                
+                logging.warning(f"[AGENT STREAM] Error encountered: {stream_error}. Retrying ({retry_count}/{MAX_RETRIES})...")
+                await asyncio.sleep(1)
+
             finally:
-                final_text = ""
-                if result and isinstance(result.final_output, str) and result.final_output:
-                    final_text = result.final_output
-                elif aggregated_chunks:
-                    final_text = "".join(aggregated_chunks)
-                state["final_output"] = final_text
-                logging.info(f"[AGENT STREAM] Completed with {len(final_text)} characters")
+                if retry_count > MAX_RETRIES or has_yielded or result:
+                    final_text = ""
+                    if result and isinstance(result.final_output, str) and result.final_output:
+                        final_text = result.final_output
+                    elif aggregated_chunks:
+                        final_text = "".join(aggregated_chunks)
+                    if final_text:
+                        state["final_output"] = final_text
+                    logging.info(f"[AGENT STREAM] Completed with {len(final_text)} characters")
 
     return _stream(), state
 
 
-def get_sources(query: str, current_url: str | None = None) -> Dict[str, Any]:
+def get_sources(query: str, current_url: str | None = None, session_id: str | None = None) -> Dict[str, Any]:
     """
-    Return structured metadata for sources used in the most recent advanced response.
+    Get sources for a query from the Unified Context Manager.
+    Retrieves sources from the last assistant message in the session.
     """
-    logging.info(f"get_sources called with query: '{query}'")
-    if current_url:
-        logging.info(f"Context current_url: {current_url}")
-    logging.info(f"Current used_source_details contains {len(used_source_details)} entries")
-
-    # Also log URLs for debugging
-    if used_urls:
-        logging.info(f"Current used_urls contains {len(used_urls)} URLs:")
-        for idx, url in enumerate(used_urls, 1):
-            logging.info(f"  [{idx}] {url}")
-
-    # Log number of source details
-    logging.info(f"Returning {len(used_source_details)} source details")
-
-    payload = format_sources_for_frontend(used_source_details, current_url)
-    logging.info(f"Returning {len(payload.get('sources', []))} sources to frontend")
-    return payload
+    sources = []
+    
+    if session_id:
+        try:
+            manager = get_context_manager()
+            session = manager._get_or_create_session(session_id)
+            
+            for msg in reversed(session["conversation_history"]):
+                if msg.role == "assistant" and msg.metadata and msg.metadata.sources_used:
+                    for source in msg.metadata.sources_used:
+                        url = source.get("url") if isinstance(source, dict) else getattr(source, "url", None)
+                        title = source.get("title") if isinstance(source, dict) else getattr(source, "title", None)
+                        
+                        if url:
+                            sources.append({
+                                "url": url,
+                                "title": title or url,
+                                "icon": None
+                            })
+                    break
+            
+            if not sources and session["fetched_context"]["web_search"]:
+                logging.info(f"Fallback: Using {len(session['fetched_context']['web_search'])} web search items from context")
+                for item in session["fetched_context"]["web_search"]:
+                    url = item.url
+                    if url:
+                        sources.append({
+                            "url": url,
+                            "title": item.extracted_data.get("title") if item.extracted_data else url,
+                            "icon": None
+                        })
+                        
+        except Exception as e:
+            logging.error(f"Error retrieving sources for session {session_id}: {e}")
+            
+    return {"sources": sources, "query": query, "current_url": current_url}
 
 
 def get_website_icon(url):
-    """
-    DEPRECATED: No longer scraping websites for icons.
-    Returns None for all URLs.
-    """
+    """Returns None (icon fetching removed)."""
     return None
 
 

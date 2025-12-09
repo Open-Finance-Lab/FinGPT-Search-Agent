@@ -1,5 +1,6 @@
 // settings_window.js
 import { availableModels, selectedModel, getSelectedModel, setSelectedModel, fetchAvailableModels, getAvailableModels, getModelDetails } from '../config.js';
+import { buildBackendUrl } from '../backendConfig.js';
 //import { loadPreferredLinks, createAddLinkButton } from '../helpers.js';
 import { createLinkManager } from './link_manager.js';
 
@@ -7,7 +8,7 @@ import { createLinkManager } from './link_manager.js';
 // import * as pdfjsLib from "https://cdn.jsdelivr.net/npm/pdfjs-dist@2.11.338/es5/build/pdf.js";
 // import { mammoth } from 'https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.4.2/mammoth.browser.min.js';
 
-function createSettingsWindow(isFixedModeRef, settingsIcon, positionModeIcon) {
+function createSettingsWindow(isFixedModeRef, settingsButton, positionModeButton) {
     const settings_window = document.createElement('div');
     settings_window.style.display = "none";
     settings_window.id = "settings_window";
@@ -53,8 +54,7 @@ function createSettingsWindow(isFixedModeRef, settingsIcon, positionModeIcon) {
         modelContent.innerHTML = '';
 
         try {
-            // Fetch models from backend
-            await fetchAvailableModels();
+            // Use already-fetched models (fetched in main.js on startup)
             const models = getAvailableModels();
 
             const modelDetails = getModelDetails();
@@ -87,7 +87,9 @@ function createSettingsWindow(isFixedModeRef, settingsIcon, positionModeIcon) {
     }
 
     // Populate model list when settings window is created
+    // Models are already fetched in main.js, this just populates the UI
     populateModelList();
+
 
     modelContainer.appendChild(modelContent);
     settings_window.appendChild(modelContainer);
@@ -127,7 +129,7 @@ function createSettingsWindow(isFixedModeRef, settingsIcon, positionModeIcon) {
     // Set workerSrc to load PDF.js worker from CDN
     // pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.worker.min.js';
     async function extractTextFromPDF(file) {
-        
+
         // Access global libraries from window
         // Check if libraries are available
         // In newer versions of PDF.js, the library might be accessible as window.pdfjsLib or just pdf
@@ -136,7 +138,7 @@ function createSettingsWindow(isFixedModeRef, settingsIcon, positionModeIcon) {
         console.log("PDF.js loaded:", typeof pdfjsLib !== 'undefined');
         console.log("Mammoth loaded:", typeof window.mammoth !== 'undefined');
 
-        
+
         // Set worker path - this is crucial for PDF.js to work
         if (pdfjsLib) {
             pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
@@ -156,14 +158,16 @@ function createSettingsWindow(isFixedModeRef, settingsIcon, positionModeIcon) {
     }
 
     async function extractTextFromDocx(file) {
-    const arrayBuffer = await file.arrayBuffer();
-    const result = await mammoth.extractRawText({ arrayBuffer });
-    return result.value;
+        const arrayBuffer = await file.arrayBuffer();
+        const result = await mammoth.extractRawText({ arrayBuffer });
+        return result.value;
     }
 
 
 
     // —– MCP Mode Toggle —–
+    // MCP Mode toggle temporarily disabled
+    /*
     const mcpLabel = document.createElement('label');
     mcpLabel.className = 'settings-checkbox-label';
     mcpLabel.innerText = "MCP Mode";
@@ -172,11 +176,14 @@ function createSettingsWindow(isFixedModeRef, settingsIcon, positionModeIcon) {
     mcpSwitch.id = "mcpModeSwitch";
     mcpSwitch.style.transform = 'translate(4px, -2px)';
     mcpLabel.appendChild(mcpSwitch);
+    */
 
 
 
 
     // RAG Section
+    // RAG settings temporarily disabled
+    /*
     const ragSectionContainer = document.createElement('div');
     ragSectionContainer.id = 'rag-section-container';
 
@@ -253,7 +260,7 @@ function createSettingsWindow(isFixedModeRef, settingsIcon, positionModeIcon) {
             formData.append('json_data', jsonBlob, 'data.json');
 
             // Making the POST request to Flask
-            fetch('http://127.0.0.1:8000/api/folder_path', {
+            fetch(buildBackendUrl('/api/folder_path'), {
                 method: 'POST',
                 body: formData
             })
@@ -364,14 +371,15 @@ function createSettingsWindow(isFixedModeRef, settingsIcon, positionModeIcon) {
         ragContent.style.display = isHidden ? "block" : "none";
         ragToggleIcon.innerText = isHidden ? "⯅" : "⯆";
     };
+    */
 
     // Append elements to settings window
-    settings_window.appendChild(mcpLabel);
-    settings_window.appendChild(ragSectionContainer);
-    
-    settingsIcon.onclick = function (event) {
+    // settings_window.appendChild(mcpLabel);
+    // settings_window.appendChild(ragSectionContainer);
+
+    settingsButton.onclick = function (event) {
         event.stopPropagation();
-        const rect = settingsIcon.getBoundingClientRect();
+        const rect = settingsButton.getBoundingClientRect();
         const y = rect.bottom + (isFixedModeRef.value ? 0 : window.scrollY);
         const x = rect.left + (isFixedModeRef.value ? 0 : window.scrollX) - 100;
         settings_window.style.top = `${y}px`;
@@ -379,14 +387,19 @@ function createSettingsWindow(isFixedModeRef, settingsIcon, positionModeIcon) {
         settings_window.style.display = settings_window.style.display === 'none' ? 'block' : 'none';
         settings_window.style.position = isFixedModeRef.value ? 'fixed' : 'absolute';
         //if (settings_window.style.display === 'block') loadPreferredLinks();
+
+        // Refresh model list when opening settings
+        if (settings_window.style.display === 'block') {
+            populateModelList();
+        }
     };
 
     document.addEventListener('click', function (event) {
         if (
             settings_window.style.display === 'block' &&
             !settings_window.contains(event.target) &&
-            !settingsIcon.contains(event.target) &&
-            !positionModeIcon.contains(event.target)
+            !settingsButton.contains(event.target) &&
+            !positionModeButton.contains(event.target)
         ) {
             settings_window.style.display = 'none';
         }
