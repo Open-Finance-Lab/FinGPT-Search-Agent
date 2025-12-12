@@ -37,4 +37,5 @@ urlpatterns = [
     path('api/get_r2c_stats/', views.get_r2c_stats, name='get_r2c_stats'),
     path('api/get_available_models/', views.get_available_models, name='get_available_models'),
     path('api/conversations/', views.save_conversation_view, name="save_conversation"),
+    path("api/prefetch_url/", views.prefetch_url, name="prefetch_url"),
 ]

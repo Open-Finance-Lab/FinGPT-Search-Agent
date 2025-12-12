@@ -27,6 +27,15 @@ fetchAvailableModels().then(() => {
     alert(`Failed to connect to Agentic FinSearch backend: ${error.message}\n\nPlease ensure the backend server at ${getBackendBaseUrl()} is reachable.`);
 });
 
+window.addEventListener('load', () => {
+  fetch('/api/prefetch_url/?url=https://finance.yahoo.com', { method: 'GET' })
+    .then(res => res.json())
+    .then(json => {
+      if (!json.ok) console.info('Prefetch response:', json);
+    })
+    .catch(err => console.warn('Prefetch failed:', err));
+});
+
 // POST JSON to the server endpoint
 postWebTextToServer(textContent, currentUrl)
     .then(data => {

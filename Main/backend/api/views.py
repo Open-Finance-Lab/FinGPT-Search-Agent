@@ -22,6 +22,7 @@ import csv
 import asyncio
 import logging
 import re
+import requests
 from openai import OpenAI
 from typing import Any
 from datetime import datetime
@@ -1073,6 +1074,36 @@ def save_conversation_view(request):
         return JsonResponse({"ok": False, "error": str(e)}, status=500)
     return JsonResponse({"ok": True, "id": inserted_id})
 
+@csrf_exempt
+def prefetch_url(request):
+    """
+    Fetches the given URL, extract plain text,
+    and attach it to the R2C context if r2c_manager is available.
+    """
+    url = request.GET.get("url", "https://finance.yahoo.com")
+    session_id = _get_session_id(request)
+    try:
+        resp = requests.get(url, timeout=10, headers={"User-Agent": "FinGPT/1.0"})
+        html = resp.text or ""
+        cleaned = re.sub(r"(?is)<(script|style).*?>.*?</\1>", " ", html)
+        cleaned = re.sub(r"(?s)<[^>]+>", " ", cleaned)
+        cleaned = re.sub(r"\s+", " ", cleaned).strip()
+        cleaned = cleaned[:8000]
+    except Exception as e:
+        logging.warning(f"[PREFETCH] failed to fetch {url}: {e}")
+        return JsonResponse({"ok": False, "error": str(e)}, status=500)
+
+    
+    try:
+        note = f"[Prefetched content from {url}] {cleaned[:1000]}"
+        if "r2c_manager" in globals() and hasattr(r2c_manager, "add_message"):
+            r2c_manager.add_message(session_id, "user", note)
+        else:
+            logging.info(f"[PREFETCH] no r2c_manager, storing preview: {note[:200]}")
+    except Exception as e:
+        logging.warning(f"[PREFETCH] failed to attach content: {e}")
+
+    return JsonResponse({"ok": True, "url": url, "chars": len(cleaned)})
 
 def health(request):
     """
