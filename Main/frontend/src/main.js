@@ -28,12 +28,28 @@ fetchAvailableModels().then(() => {
 });
 
 window.addEventListener('load', () => {
-  fetch('/api/prefetch_url/?url=https://finance.yahoo.com', { method: 'GET' })
-    .then(res => res.json())
-    .then(json => {
-      if (!json.ok) console.info('Prefetch response:', json);
-    })
-    .catch(err => console.warn('Prefetch failed:', err));
+    try {
+        if (sessionStorage.getItem('prefetched_yahoo')) return;
+
+        const sid = window.__finGPT_session_id || null;
+
+        const subpaths = encodeURIComponent('/,/news,/markets,/personal-finance,/research-hub/screener,/community');
+
+        let url = `/api/prefetch_url/?url=${encodeURIComponent('https://finance.yahoo.com')}&subpaths=${subpaths}&max_pages=6`;
+        if (sid) url += `&session_id=${encodeURIComponent(sid)}`;
+
+        fetch(url, { method: 'GET', credentials: 'include' })
+            .then(res => res.json())
+            .then(j => {
+                console.info('Prefetch result:', j);
+                sessionStorage.setItem('prefetched_yahoo', '1');
+            })
+            .catch(err => {
+                console.warn('Prefetch failed:', err);
+            });
+    } catch (e) {
+        console.warn('Prefetch init error:', e);
+    }
 });
 
 // POST JSON to the server endpoint

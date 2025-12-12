@@ -23,6 +23,7 @@ import asyncio
 import logging
 import re
 import requests
+from urllib.parse import urljoin, urlparse
 from openai import OpenAI
 from typing import Any
 from datetime import datetime
@@ -1077,33 +1078,67 @@ def save_conversation_view(request):
 @csrf_exempt
 def prefetch_url(request):
     """
-    Fetches the given URL, extract plain text,
-    and attach it to the R2C context if r2c_manager is available.
+    Fetches the given URL (default finance.yahoo.com) plus optional subpaths,
+    extract plain text, and attach each to the R2C context if r2c_manager is available.
+
+    Query params:
+      url         - start URL (default https://finance.yahoo.com)
+      subpaths    - deeper scrape like /news,/markets
+      max_pages   - limiter on how many pages to fetch
     """
-    url = request.GET.get("url", "https://finance.yahoo.com")
+    start_url = request.GET.get("url", "https://finance.yahoo.com").rstrip("/")
     session_id = _get_session_id(request)
-    try:
-        resp = requests.get(url, timeout=10, headers={"User-Agent": "FinGPT/1.0"})
-        html = resp.text or ""
-        cleaned = re.sub(r"(?is)<(script|style).*?>.*?</\1>", " ", html)
-        cleaned = re.sub(r"(?s)<[^>]+>", " ", cleaned)
-        cleaned = re.sub(r"\s+", " ", cleaned).strip()
-        cleaned = cleaned[:8000]
-    except Exception as e:
-        logging.warning(f"[PREFETCH] failed to fetch {url}: {e}")
-        return JsonResponse({"ok": False, "error": str(e)}, status=500)
+    default_subpaths = ["/", "/news", "/markets", "/personal-finance", "/research-hub/screener", "/community"]
+    subpaths_param = request.GET.get("subpaths")
+    if subpaths_param:
+        try:
+            custom = [p.strip() for p in subpaths_param.split(",") if p.strip()]
+            if custom:
+                default_subpaths = custom
+        except Exception:
+            pass
 
-    
     try:
-        note = f"[Prefetched content from {url}] {cleaned[:1000]}"
-        if "r2c_manager" in globals() and hasattr(r2c_manager, "add_message"):
-            r2c_manager.add_message(session_id, "user", note)
-        else:
-            logging.info(f"[PREFETCH] no r2c_manager, storing preview: {note[:200]}")
-    except Exception as e:
-        logging.warning(f"[PREFETCH] failed to attach content: {e}")
+        max_pages = int(request.GET.get("max_pages", 6))
+    except Exception:
+        max_pages = 6
 
-    return JsonResponse({"ok": True, "url": url, "chars": len(cleaned)})
+    parsed_start = urlparse(start_url)
+    base_origin = f"{parsed_start.scheme}://{parsed_start.netloc}"
+
+    results = []
+    fetched_count = 0
+    for sub in default_subpaths:
+        if fetched_count >= max_pages:
+            break
+        target = urljoin(base_origin, sub.lstrip("/"))
+        p = urlparse(target)
+        if p.netloc != parsed_start.netloc:
+            continue
+        try:
+            resp = requests.get(target, timeout=10, headers={"User-Agent": "FinGPT/1.0"})
+            html = resp.text or ""
+            cleaned = re.sub(r"(?is)<(script|style).*?>.*?</\1>", " ", html)
+            cleaned = re.sub(r"(?s)<[^>]+>", " ", cleaned)
+            cleaned = re.sub(r"\s+", " ", cleaned).strip()
+            cleaned = cleaned[:8000]
+
+            note = f"[Prefetched content from {target}] {cleaned[:1000]}"
+            if "r2c_manager" in globals() and hasattr(r2c_manager, "add_message"):
+                try:
+                    r2c_manager.add_message(session_id, "user", note)
+                except Exception:
+                    logging.warning(f"[PREFETCH] failed to add to r2c for {target}", exc_info=True)
+            else:
+                logging.info(f"[PREFETCH] no r2c_manager, preview for {target}: {note[:200]}")
+
+            results.append({"url": target, "chars": len(cleaned)})
+            fetched_count += 1
+        except Exception as e:
+            logging.warning(f"[PREFETCH] failed to fetch {target}: {e}")
+            results.append({"url": target, "error": str(e)})
+
+    return JsonResponse({"ok": True, "fetched": results, "count": len(results)})
 
 def health(request):
     """
