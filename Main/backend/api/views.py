@@ -266,6 +266,7 @@ def adv_response(request: HttpRequest) -> JsonResponse:
         result = {
             'resp': responses,
             'used_sources': all_sources,
+            'used_urls': [s.get('url') for s in all_sources if isinstance(s, dict) and s.get('url')],
             'context_stats': {
                 'session_id': session_id,
                 'mode': stats['mode'],
@@ -606,6 +607,7 @@ def adv_response_stream(request: HttpRequest) -> StreamingHttpResponse:
                     "content": "",
                     "done": True,
                     "used_sources": source_entries,
+                    "used_urls": [s.get('url') for s in source_entries if isinstance(s, dict) and s.get('url')],
                     "context_stats": {
                         'session_id': session_id,
                         'message_count': stats['message_count'],
