@@ -129,7 +129,9 @@ function setCachedSources(urls, searchQuery = '', metadataList = []) {
     ];
 
     cachedSources = currentPageUrl ? [currentPageUrl, ...mergedUrls] : [...mergedUrls];
-    lastSearchQuery = searchQuery || lastSearchQuery;
+    if (searchQuery) {
+        lastSearchQuery = searchQuery;
+    }
 
     const allowedUrls = new Set(cachedSources);
     Array.from(cachedMetadata.keys()).forEach((url) => {
