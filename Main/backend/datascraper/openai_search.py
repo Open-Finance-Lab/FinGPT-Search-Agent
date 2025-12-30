@@ -797,24 +797,24 @@ def is_responses_api_available(model: str) -> bool:
     Returns:
         True if model supports Responses API, False otherwise
     """
-    supported_models = {
+    if not USE_RESPONSES_API:
+        logger.info(f"Responses API integration DISABLED via USE_OPENAI_RESPONSES_API=false")
+        return False
+
+    # Standard model families that support Responses API
+    supported_patterns = {
         "gpt-4o",
-        "gpt-4o-mini",
-        "gpt-4o-2024-11-20",
-        "gpt-4o-2024-08-06",
-        "gpt-4o-2024-05-13",
-        "gpt-5-mini",
-        "gpt-5-nano",
-        "gpt-5-chat",
+        "gpt-5",
+        "gpt-5.1",
         "o1-preview",
         "o1-mini"
     }
 
     model_lower = model.lower()
-    for supported in supported_models:
-        if supported in model_lower:
-            logger.debug(f"Model '{model}' supports Responses API with web search")
-            return USE_RESPONSES_API
+    for pattern in supported_patterns:
+        if pattern in model_lower:
+            logger.info(f"Model '{model}' matches supported pattern '{pattern}' for Responses API")
+            return True
 
     logger.info(f"Model '{model}' does not support Responses API with web search - will use fallback")
     return False
