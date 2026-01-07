@@ -20,6 +20,13 @@
         "SEC_EDGAR_TIMEOUT": "120"
       },
       "disabled": false
+    },
+    "yahoo-finance": {
+      "command": "python",
+      "args": [
+        "mcp_server/yahoo_finance_server.py"
+      ],
+      "disabled": false
     }
   }
 }
