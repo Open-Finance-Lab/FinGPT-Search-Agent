@@ -7,62 +7,37 @@
 
 .. note::
    As a reminder, the search agent currently does NOT work on **Brave** browser.
-Tutorial: Advanced Usages
-
-.. admonition:: When to use this section
-   :class: note
-
-   Please make sure the search agent is successfully installed
-   and running before testing out any of the examples below!
-
-.. note::
-   As a reminder, the search agent currently does NOT work on **Brave** browser.
 
 Multi-Model Support
 -------------------
 
-FinGPT Search Agent supports multiple AI model providers, allowing you to choose the best model for your needs.
+FinGPT Search Agent supports multiple foundation models.
 
 Available Models
 ~~~~~~~~~~~~~~~~
 
 **Supported Models:**
-- FinGPT-Light (gpt-5-mini)
-- FinGPT (gpt-5.1-chat-latest)
-- Buffet-Agent (Custom Model)
+- **FinGPT-Light**: Fast and efficient light-weight model.
+- **FinGPT**: State-of-the-art financial model.
+- **Buffet-Agent**: The minds of Warren Buffet, in the palm of your hands.
 
 Switching Models
 ~~~~~~~~~~~~~~~~
 
-1. Click the **Settings** button in the agent popup
-2. Select your preferred model from the dropdown
-3. The agent will use the selected model for all subsequent queries
-
-.. note::
-   Different models have different capabilities:
-   
-   - **FinGPT-Light**: Fast and efficient light-weight model
-   - **FinGPT**: State-of-the-art financial model
-   - **Buffet-Agent**: Specialized financial reasoning
+1. Click the **Settings** button in the agent popup.
+2. Select your preferred model from the dropdown.
+3. The agent will use the selected model for all subsequent queries.
 
 MCP (Model Context Protocol) Integration
 ----------------------------------------
 
 MCP enables advanced agent capabilities through tool integration.
 
-Enabling MCP
-~~~~~~~~~~~~
-
-1. Ensure you have an OpenAI API key configured
-2. Select an MCP-compatible model (currently OpenAI models only)
-3. The agent will automatically use MCP tools when beneficial
-
 MCP Features
 ~~~~~~~~~~~~
 
-- **Enhanced Search**: More sophisticated web searching
-- **Tool Usage**: Access to specialized financial tools
-- **Multi-step Reasoning**: Complex query resolution
+- **Yahoo Finance MCP**: Directly fetches real-time information via the ``yfinance API``.
+- **SEC-EDGAR MCP**: Enables the agent to directly access SEC filings like 10-K, 10-Q, 8-K, etc and even extract data from them.
 
 Custom URL Preferences
 ----------------------
@@ -97,7 +72,7 @@ Query Modes
 - Best for page-specific questions
 
 **Advanced Ask:**
-- Searches current page + preferred URLs + web search
+- Mainly searches the open domain
 - More comprehensive responses
 - Best for research and analysis
 
@@ -111,50 +86,25 @@ For best results:
 3. **Compare Data**: "Compare Tesla's P/E ratio to industry average"
 4. **Time-bound Queries**: Include dates for historical data
 
-Example Queries
-~~~~~~~~~~~~~~~
-
-**Financial Analysis:**
-
-.. code-block:: text
-
-   Analyze Tesla's debt-to-equity ratio over the last 3 years 
-   and compare it to other EV manufacturers. Include sources.
-
-**Market Research:**
-
-.. code-block:: text
-
-   What are the key risk factors mentioned in Apple's latest 10-K 
-   filing? Summarize in bullet points.
-
-**Technical Analysis:**
-
-.. code-block:: text
-
-   Based on the current chart, identify support and resistance 
-   levels for NVDA stock.
-
 Monitoring Agent Activity
 -------------------------
 
 Real-time Logs
 ~~~~~~~~~~~~~~
 
-Monitor the agent's search and scraping activity:
+If you are running the agent locally, monitor the agent's search and scraping activity:
 
-1. Keep your terminal/PowerShell window visible
-2. Watch for:
+1. Inside your terminal and / or browser Dev Tool (console), watch for:
    
+   - MCP status
    - URLs being scraped
    - Search queries executed
    - Model API calls
+   - Citations if using advanced ask
    - Error messages
 
 Debug Mode
 ~~~~~~~~~~
-
-For troubleshooting:
 
 For troubleshooting:
 
@@ -163,45 +113,25 @@ For troubleshooting:
    # Set debug environment variable
    export DJANGO_DEBUG=True
    
-   # Then start the server
-   python manage.py runserver
+   # Then restart the backend server via docker, uv or python
 
 Performance Optimization
 ------------------------
 
-Tips for Faster Responses
-~~~~~~~~~~~~~~~~~~~~~~~~~
-
-1. **Use Basic Ask** for simple, page-specific queries
-2. **Limit Preferred URLs** to essential sources
-3. **Choose Appropriate Models**:
-   
-   - FinGPT-Light for quick responses
-   - FinGPT for complex analysis
-   - Buffet-Agent for specialized reasoning
-
-Managing Context Length
-~~~~~~~~~~~~~~~~~~~~~~~
-
-For long conversations:
-
-1. Use the **Clear** button to reset conversation while keeping web content
-2. Break complex queries into smaller parts
-3. Summarize previous findings before continuing
-
 Smart Context Management
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
-FinGPT includes intelligent context management:
+FinGPT includes production-grade memory powered by **Mem0**:
 
 **How it works:**
 
 - **Session-Based**: The agent maintains the full conversation history for the current session.
-- **No Hidden Compression**: All context is preserved until the session expires or is manually cleared.
+- **Smart Compression**: When the context exceeds **100,000 tokens**, the agent automatically extracts key facts, entities, and research findings into long-term memory.
+- **Fact Preservation**: Critical financial data, URLs, and research objectives are preserved while redundant boilerplate is discarded.
 - **Session Isolation**: Each browser tab/session maintains its own isolated context.
 
 .. note::
-   Each browser tab maintains its own conversation context. Refreshing the page starts a new session.
+   Each browser tab maintains its own conversation context. Refreshing the page starts a new session unless a custom session ID is used.
 
 Troubleshooting Advanced Features
 ---------------------------------
@@ -213,10 +143,10 @@ Common Issues
 
 - Confirm OpenAI API key is valid
 - Check you're using an MCP-compatible model
-- Monitor terminal for MCP-related errors
+- Monitor terminal for MCP-related errors. If errors directly from the MCPs exist, contact Felix via Discord or WeChat.
 
 **Slow responses with Advanced Ask:**
 
 - Reduce number of preferred URLs
 - Check internet connection
-- Consider using a faster model
+- Well it is simply just slow because it's usually searches at least 10 different sources, so it takes a while to scrape and process all of them.
