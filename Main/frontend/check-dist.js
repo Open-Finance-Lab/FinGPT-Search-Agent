@@ -3,7 +3,16 @@ const fs = require('fs');
 const path = require('path');
 
 const distDir = path.resolve(__dirname, 'dist');
-const requiredFiles = ['manifest.json', 'main.js', 'vendors.js', 'katex.js', 'styles.css', 'assets/16x16_icon.png', 'assets/32x32_icon.png']; 
+const requiredFiles = [
+  'manifest.json',
+  'main.js',
+  'styles.css',
+  'vendor/katex.min.js',
+  'vendor/marked.min.js',
+  'vendor/katex-auto-render.min.js',
+  'assets/16x16_icon.png',
+  'assets/32x32_icon.png'
+]; 
 
 let allGood = true;
 

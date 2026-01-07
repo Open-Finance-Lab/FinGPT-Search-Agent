@@ -102,11 +102,11 @@ def _prepare_advanced_search_inputs(model: str, preferred_links: list[str] | Non
 
     if not is_responses_api_available(actual_model):
         fallback_model = "gpt-4o-mini"
-        logging.warning(f"Model {actual_model} (from {model}) doesn't support Responses API")
-        logging.info(f"FALLBACK: Using {fallback_model} for web search instead")
+        logging.warning(f"Model '{actual_model}' (resolved from '{model}') DOES NOT support Responses API")
+        logging.info(f"FALLBACK: Using '{fallback_model}' for web search instead")
         actual_model = fallback_model
     else:
-        logging.info(f"Model {actual_model} supports Responses API with web search")
+        logging.info(f"Model '{actual_model}' (resolved from '{model}') supports Responses API")
 
     manager = get_manager()
 
@@ -537,7 +537,7 @@ def create_advanced_response(
             for idx, entry in enumerate(source_entries, 1):
                 logging.info(f"  Source {idx}: {entry.get('url')}")
 
-            return response_text
+            return response_text, source_entries
 
     except Exception as e:
         logging.error(f"OpenAI Responses API failed: {e}")
@@ -547,7 +547,7 @@ def create_advanced_response(
                 yield f"I encountered an error while searching for information: {error_message}. Please try again.", []
             return error_gen()
         else:
-            return f"I encountered an error while searching for information: {str(e)}. Please try again."
+            return f"I encountered an error while searching for information: {str(e)}. Please try again.", []
 
 
 async def _create_advanced_response_stream_async(
@@ -924,7 +924,8 @@ def handle_multiple_models(question, message_list, models):
     responses = {}
     for model in models:
         if "advanced" in model:
-            responses[model] = create_advanced_response(question, message_list.copy(), model)
+            response_text, sources = create_advanced_response(question, message_list.copy(), model)
+            responses[model] = response_text
         else:
             responses[model] = create_response(question, message_list.copy(), model)
     return responses

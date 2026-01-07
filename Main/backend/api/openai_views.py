@@ -94,6 +94,11 @@ def chat_completions(request: HttpRequest) -> JsonResponse:
     # New required parameters for Agent API
     mode_str = body.get('mode')
     target_url = body.get('url')
+    
+    # Optional parameters for parity with frontend
+    user_timezone = body.get('user_timezone')
+    user_time = body.get('user_time')
+    preferred_links = body.get('preferred_links', [])
 
     if not messages:
         return JsonResponse({'error': {'message': 'messages array is required', 'type': 'invalid_request_error'}}, status=400)
@@ -169,7 +174,9 @@ def chat_completions(request: HttpRequest) -> JsonResponse:
     context_mgr.update_metadata(
         session_id=session_id,
         mode=context_mode,
-        current_url=target_url if target_url else ""
+        current_url=target_url if target_url else "",
+        user_timezone=user_timezone,
+        user_time=user_time
     )
 
     formatted_messages = context_mgr.get_formatted_messages_for_api(session_id)
@@ -181,12 +188,12 @@ def chat_completions(request: HttpRequest) -> JsonResponse:
     
     # 4. Generate Response
     if stream:
-        return _handle_streaming(context_mgr, session_id, last_user_content, formatted_messages, model)
+        return _handle_streaming(context_mgr, session_id, last_user_content, formatted_messages, model, preferred_links)
     else:
-        return _handle_sync(context_mgr, session_id, last_user_content, formatted_messages, model)
+        return _handle_sync(context_mgr, session_id, last_user_content, formatted_messages, model, preferred_links)
 
 
-def _handle_sync(context_mgr, session_id, question, messages, model):
+def _handle_sync(context_mgr, session_id, question, messages, model, preferred_links=None):
     try:
         start_time = time.time()
         
@@ -195,11 +202,13 @@ def _handle_sync(context_mgr, session_id, question, messages, model):
 
         if mode == ContextMode.RESEARCH:
              # Advanced / Research Mode
-            response_content = ds.create_advanced_response(
+            response_content, sources = ds.create_advanced_response(
                 user_input=question,
                 message_list=messages,
                 model=model,
-                preferred_links=[]
+                preferred_links=preferred_links or [],
+                user_timezone=context_mgr.sessions[session_id]['metadata'].user_timezone,
+                user_time=context_mgr.sessions[session_id]['metadata'].user_time
             )
         else:
             # Agent / Thinking Mode
@@ -207,7 +216,9 @@ def _handle_sync(context_mgr, session_id, question, messages, model):
                 user_input=question,
                 message_list=messages,
                 model=model,
-                current_url=current_url
+                current_url=current_url,
+                user_timezone=context_mgr.sessions[session_id]['metadata'].user_timezone,
+                user_time=context_mgr.sessions[session_id]['metadata'].user_time
             )
         
         # Record response
@@ -249,7 +260,7 @@ def _handle_sync(context_mgr, session_id, question, messages, model):
         return JsonResponse({'error': {'message': str(e), 'type': 'server_error'}}, status=500)
 
 
-def _handle_streaming(context_mgr, session_id, question, messages, model):
+def _handle_streaming(context_mgr, session_id, question, messages, model, preferred_links=None):
     
     def event_stream():
         completion_id = f"chatcmpl-{uuid.uuid4().hex}"
@@ -280,7 +291,9 @@ def _handle_streaming(context_mgr, session_id, question, messages, model):
                     user_input=question,
                     message_list=messages,
                     model=model,
-                    preferred_links=[]
+                    preferred_links=preferred_links or [],
+                    user_timezone=context_mgr.sessions[session_id]['metadata'].user_timezone,
+                    user_time=context_mgr.sessions[session_id]['metadata'].user_time
                 )
                 stream_iter = stream_generator.__aiter__()
                 
@@ -307,7 +320,9 @@ def _handle_streaming(context_mgr, session_id, question, messages, model):
                     user_input=question,
                     message_list=messages,
                     model=model,
-                    current_url=current_url
+                    current_url=current_url,
+                    user_timezone=context_mgr.sessions[session_id]['metadata'].user_timezone,
+                    user_time=context_mgr.sessions[session_id]['metadata'].user_time
                 )
                 stream_iter = stream_generator.__aiter__()
             

@@ -3,10 +3,14 @@
 import { buildBackendUrl } from './backendConfig.js';
 
 // Session ID management
-let currentSessionId = null;
+let currentSessionId = sessionStorage.getItem('fingpt_session_id');
 
 function setSessionId(sessionId) {
-    currentSessionId = sessionId;
+    if (sessionId && sessionId !== currentSessionId) {
+        currentSessionId = sessionId;
+        sessionStorage.setItem('fingpt_session_id', sessionId);
+        console.log(`[Session] ID updated to: ${sessionId}`);
+    }
 }
 
 // Function to POST JSON to the server endpoint
@@ -32,6 +36,8 @@ function postWebTextToServer(textContent, currentUrl) {
         })
         .then(data => {
             console.log("Response from server:", data);
+            if (data.session_id) setSessionId(data.session_id);
+            if (data.context_stats && data.context_stats.session_id) setSessionId(data.context_stats.session_id);
             return data;
         })
         .catch(error => {
@@ -320,6 +326,9 @@ function getSourceUrls(searchQuery, currentUrl) {
     if (currentUrl) {
         params.append('current_url', currentUrl);
     }
+    if (currentSessionId && currentSessionId !== 'null' && currentSessionId !== 'undefined') {
+        params.append('session_id', currentSessionId);
+    }
 
     const queryString = params.toString();
     const baseEndpoint = buildBackendUrl('/get_source_urls/');
@@ -327,6 +336,11 @@ function getSourceUrls(searchQuery, currentUrl) {
 
     return fetch(requestUrl, { method: "GET", credentials: "include" })
         .then(response => response.json())
+        .then(data => {
+            if (data.session_id) setSessionId(data.session_id);
+            if (data.resp && data.resp.session_id) setSessionId(data.resp.session_id);
+            return data;
+        })
         .catch(error => {
             console.error('There was a problem with your fetch operation:', error);
             throw error;
