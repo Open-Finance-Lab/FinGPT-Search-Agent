@@ -151,3 +151,4 @@ jobs:
             podman pull "$REMOTE_IMAGE"
             systemctl --user daemon-reload
             systemctl --user restart "$SYSTEMD_UNIT"
+            podman image prune -f
