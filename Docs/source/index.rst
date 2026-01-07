@@ -16,6 +16,7 @@ FinGPT Search Agent
    usage/index
    mcp_tools
    project_structure
+   case_studies
    code_of_conduct
 
 
