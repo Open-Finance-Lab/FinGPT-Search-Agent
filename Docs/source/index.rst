@@ -8,6 +8,7 @@ FinGPT Search Agent
    :caption: Contents:
 
    introduction
+   updates
    install_agent_with_installer
    manual_install
    start_agent_mac
@@ -17,14 +18,7 @@ FinGPT Search Agent
    project_structure
    code_of_conduct
 
-.. note::
-   This documentation covers version 0.10.1 of FinGPT Search Agent.
-   
-   **New in 0.10.1:**
-   
-   - **MCP Tool Integration**: Built-in support for SEC-EDGAR and Yahoo Finance tools.
-   - **Performance Improvements**: Unified context manager for faster response times.
-   - **Modern Workflow**: Fully migrated to ``uv`` and ``bun`` for optimized development.
+
 
 Features
 --------
