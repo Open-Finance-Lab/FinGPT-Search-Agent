@@ -1,11 +1,10 @@
+FinGPT Search Agent
+===================
 
-Add your content using ``reStructuredText`` syntax. See the
-`reStructuredText <https://www.sphinx-doc.org/en/master/usage/restructuredtext/index.html>`_
-documentation for details.
-
+**FinGPT Search Agent** is a powerful browser extension that combines financial information retrieval with advanced AI capabilities. It provides real-time access to financial data, documents, and insights through an intuitive chat interface.
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 3
    :caption: Contents:
 
    introduction
@@ -14,26 +13,18 @@ documentation for details.
    start_agent_mac
    start_agent_win
    usage/index
+   mcp_tools
    project_structure
    code_of_conduct
-.. FinGPT Search Agent documentation master file, created by
-   sphinx-quickstart on Sun Mar  9 21:31:47 2025.
-   You can adapt this file completely to your liking, but it should at least
-   contain the root `toctree` directive.
-
-FinGPT Search Agent
-
-**FinGPT Search Agent** is a powerful browser extension that combines financial information retrieval with advanced AI capabilities. It provides real-time access to financial data, documents, and insights through an intuitive chat interface.
 
 .. note::
-   This documentation covers version 0.5.1 of FinGPT Search Agent.
+   This documentation covers version 0.10.1 of FinGPT Search Agent.
    
-   **New in 0.5.1:**
+   **New in 0.10.1:**
    
-   - Smart context management for longer conversations
-   - Clear button now preserves web content
-   - Support for Claude 4 Sonnet
-   - Improved session handling for better reliability
+   - **MCP Tool Integration**: Built-in support for SEC-EDGAR and Yahoo Finance tools.
+   - **Performance Improvements**: Unified context manager for faster response times.
+   - **Modern Workflow**: Fully migrated to ``uv`` and ``bun`` for optimized development.
 
 Features
 --------
@@ -43,24 +34,26 @@ Features
 - **Browser Extension**: Seamless integration with major financial websites
 - **Real-time Web Scraping**: Extract and analyze content from financial websites
 
-Quick Start
------------
+Quick Start (Docker)
+--------------------
 
-1. Install using the unified installer: ``python scripts/install_all.py``
-2. Configure your API keys in ``Main/backend/.env``
-3. Start the development server: ``make dev`` or ``python scripts/dev_setup.py``
-4. Load the extension in your browser from ``Main/frontend/dist``
+The simplest way to get started is using Docker:
+
+1. Clone the repository and navigate to the project root.
+2. Copy ``Main/backend/.env.example`` to ``Main/backend/.env`` and add your API keys.
+3. Start the application:
+
+   .. code-block:: bash
+
+      docker compose up --build
+
+4. Load the extension in your browser from the ``Main/frontend/dist`` directory.
 5. Navigate to any supported financial website and start chatting!
 
+Manual Installation
+-------------------
 
-.. toctree::
-   :maxdepth: 2
-   :caption: Contents:
+For developers who wish to run or modify the agent outside of Docker, please refer to:
 
-   introduction
-   install_agent_with_installer
-   manual_install
-   start_agent_mac
-   start_agent_win
-   usage/index
-   project_structure
+* :doc:`manual_install`: Detailed steps for manual backend setup using ``uv``.
+* :doc:`project_structure`: Overview of the codebase and frontend build process.

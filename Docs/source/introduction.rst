@@ -7,7 +7,8 @@ Key Features
 ------------
 
 - It is a powerful **information search-and-retrieval engine**: A search agent for websites (Math Cup, Yahoo Finance, Bloomberg, XBRL International) and local files (SEC 10K, XBRL files (eXtensible Business Reporting Language)).
-- Also a powerful **answer engine**: an answer agent that performs open search (open-domain search plus local file search) to quickly locate relevant financial information from various sources, such as websites, reports, filings, and local databases.
+- **Integrated MCP Tools**: Built-in support for Model Context Protocol (MCP) servers, including **SEC-EDGAR** for company filings and **Yahoo Finance** for real-time market data.
+- Also a powerful **answer engine**: an answer agent that performs open search (open-domain search plus local file search) to quickly locate relevant financial information from various sources.
 - For generated responses, users may perform quick **source verification**, ensuring reliability and accuracy.
 
 .. image:: _static/images/agent_mcp_interaction.jpg
