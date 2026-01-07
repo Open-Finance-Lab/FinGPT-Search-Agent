@@ -6,27 +6,138 @@ Top-Level Layout
 
 .. code-block:: text
 
-   fingpt/
+   fingpt_rcos/
+   ├── .github/                      # CI/CD workflows
+   ├── Deploy/                       # Deployment configurations (Podman, Caddy)
+   ├── Docs/                         # Sphinx documentation
    ├── Main/
-   │   ├── backend/        # Django backend (uv-managed)
-   │   └── frontend/       # Browser extension
-   ├── Docs/               # Sphinx documentation
-   ├── docker-compose.yml  # Run backend with Docker
-   └── README.md
+   │   ├── backend/                  # Django backend (uv-managed)
+   │   └── frontend/                 # Browser extension (bun-managed)
+   ├── docker-compose.yml            # Container orchestration
+   ├── readthedocs.yml               # ReadTheDocs configuration
+   ├── CONTRIBUTING.md               # Contribution guidelines
+   └── README.md                     # Project overview
+
+
+Backend Structure
+-----------------
+
+.. code-block:: text
+
+   Main/backend/
+   ├── django_config/                # Django project configuration
+   │   ├── settings.py               # Development settings
+   │   ├── settings_prod.py          # Production settings
+   │   ├── urls.py                   # URL routing
+   │   ├── wsgi.py                   # WSGI entry point
+   │   └── asgi.py                   # ASGI entry point
+   ├── api/                          # REST API layer
+   │   ├── views.py                  # Main API endpoints
+   │   ├── openai_views.py           # OpenAI-specific endpoints
+   │   ├── apps.py                   # Django app configuration
+   │   └── models.py                 # Database models
+   ├── datascraper/                  # Data pipeline & RAG
+   │   ├── datascraper.py            # Web scraping orchestration
+   │   ├── openai_search.py          # OpenAI search integration
+   │   ├── models_config.py          # Model provider settings
+   │   ├── unified_context_manager.py # Session-based context tracking
+   │   ├── mem0_context_manager.py   # Memory-based context
+   │   ├── context_integration.py    # Context system integration
+   │   ├── preferred_links_manager.py # User link preferences
+   │   └── url_tools.py              # URL utilities
+   ├── mcp_client/                   # MCP client integration
+   │   ├── agent.py                  # Agent orchestration
+   │   ├── mcp_manager.py            # MCP connection management
+   │   ├── tool_wrapper.py           # Tool abstraction layer
+   │   └── apps.py                   # Django app configuration
+   ├── mcp_server/                   # MCP server implementations
+   │   └── yahoo_finance_server.py   # Yahoo Finance MCP server
+   ├── data/                         # Static data files
+   │   ├── preferred_links.json      # User-configured sources
+   │   └── site_map.json             # Site structure mapping
+   ├── tests/                        # Test suite
+   ├── scripts/                      # Utility scripts
+   ├── pyproject.toml                # Python project & dependencies
+   ├── uv.lock                       # Locked dependency versions
+   ├── Dockerfile                    # Production container image
+   ├── entrypoint.sh                 # Container entry script
+   ├── gunicorn.conf.py              # Gunicorn WSGI configuration
+   ├── manage.py                     # Django CLI entry point
+   ├── mcp_server_config.json        # MCP server definitions
+   ├── .env.example                  # Environment template (dev)
+   ├── .env.production.example       # Environment template (prod)
+   └── Procfile                      # Heroku process definition
+
 
 Backend Highlights
+^^^^^^^^^^^^^^^^^^
+
+* ``pyproject.toml`` + ``uv.lock`` manage Python dependencies via ``uv``.
+* ``Dockerfile`` + ``entrypoint.sh`` build a production-ready container.
+* ``gunicorn.conf.py`` configures the production WSGI server.
+* ``django_config/settings.py`` vs ``settings_prod.py`` for environment separation.
+* ``datascraper/`` contains the RAG pipeline and context management logic.
+* ``datascraper/unified_context_manager.py`` provides session-based context tracking with JSON structure.
+* ``mcp_client/`` handles Model Context Protocol client connections.
+* ``mcp_server/`` contains standalone MCP server implementations.
+
+
+Frontend Structure
 ------------------
 
-* ``pyproject.toml`` + ``uv.lock`` manage Python dependencies.
-* ``Dockerfile`` builds a multi-stage image that installs packages with ``uv``.
-* ``manage.py`` exposes standard Django management commands.
-* ``manage_deps.py`` offers a few helper shortcuts for ``uv`` operations.
+.. code-block:: text
+
+   Main/frontend/
+   ├── src/
+   │   ├── main.js                   # Extension entry point
+   │   ├── manifest.json             # Chrome extension manifest
+   │   ├── modules/
+   │   │   ├── api.js                # Backend API client
+   │   │   ├── handlers.js           # Event handlers
+   │   │   ├── helpers.js            # Utility functions
+   │   │   ├── ui.js                 # UI state management
+   │   │   ├── config.js             # Frontend configuration
+   │   │   ├── backendConfig.js      # Backend URL settings
+   │   │   ├── markdownRenderer.js   # Markdown parsing
+   │   │   ├── sourcesCache.js       # Source caching logic
+   │   │   ├── layoutState.js        # Layout persistence
+   │   │   ├── components/
+   │   │   │   ├── chat.js           # Chat interface
+   │   │   │   ├── header.js         # Header component
+   │   │   │   ├── popup.js          # Extension popup
+   │   │   │   ├── settings_window.js # Settings UI
+   │   │   │   └── link_manager.js   # Link management UI
+   │   │   └── styles/
+   │   │       ├── theme.css         # Theme variables
+   │   │       ├── chat.css          # Chat styles
+   │   │       ├── header.css        # Header styles
+   │   │       ├── popup.css         # Popup styles
+   │   │       └── windows.css       # Window/modal styles
+   │   ├── assets/                   # Static assets (icons, images)
+   │   └── vendor/
+   │       └── marked.min.js         # Markdown library
+   ├── dist/                         # Build output (load as extension)
+   ├── node_modules/                 # npm/bun dependencies
+   ├── webpack.config.js             # Webpack bundler configuration
+   ├── build-css.js                  # CSS build script
+   ├── check-dist.js                 # Build verification script
+   ├── package.json                  # Node dependencies & scripts
+   ├── bun.lock                      # Locked bun dependencies
+   ├── bunfig.toml                   # Bun configuration
+   ├── babel.config.json             # Babel transpiler config
+   └── Dockerfile.dev                # Development container
+
 
 Frontend Highlights
--------------------
+^^^^^^^^^^^^^^^^^^^
 
-* ``npm run build:full`` creates the extension bundle in ``dist/``.
-* Load ``dist/`` as an unpacked extension in Chromium-based browsers.
+* ``bun run build:full`` runs ``build-css.js`` then Webpack bundling.
+* ``webpack.config.js`` handles JS bundling with Babel transpilation.
+* ``dist/`` is the final output—load as unpacked extension in Chrome.
+* ``src/modules/`` contains modular JavaScript organized by function.
+* ``src/modules/styles/`` contains component-specific CSS files.
+* ``check-dist.js`` verifies build artifacts are complete.
+
 
 Docker Workflow
 ---------------
@@ -42,6 +153,14 @@ Manual Backend Workflow
 .. code-block:: bash
 
    cd Main/backend
-   uv sync --python 3.12 --frozen
-   uv run playwright install chromium
+   uv sync
    uv run python manage.py runserver
+
+Manual Frontend Workflow
+------------------------
+
+.. code-block:: bash
+
+   cd Main/frontend
+   bun install
+   bun run build:full
