@@ -234,12 +234,35 @@ def scrape_url(url: str) -> str:
     Uses requests first, falls back to Playwright for SPAs.
     Uses smart compression for long pages.
 
+    NOTE: For Yahoo Finance URLs (finance.yahoo.com), it is highly recommended 
+    to use the dedicated 'yahoo-finance' MCP tools (e.g., get_stock_info, 
+    get_stock_financials, get_stock_news) instead of this tool for better 
+    accuracy and structured data.
+
     Args:
         url: The URL to scrape
 
     Returns:
         JSON with page content or error
     """
+    if "finance.yahoo.com" in url.lower():
+        logger.info(f"Yahoo Finance URL detected: {url}. Suggesting MCP tools.")
+        # We still allow scraping as a fallback, but we prepended a hint
+        result_json = _scrape_url_impl(url)
+        try:
+            result = json.loads(result_json)
+            if "content" in result:
+                hint = (
+                    "\n\n[SYSTEM HINT]: This is a Yahoo Finance page. For more accurate and structured data "
+                    "(like PE ratio, financials, or analyst ratings), consider using the dedicated "
+                    "Yahoo Finance MCP tools instead of raw scraping."
+                )
+                result["content"] = result["content"] + hint
+                return json.dumps(result)
+        except Exception:
+            pass
+        return result_json
+        
     return _scrape_url_impl(url)
 
 
