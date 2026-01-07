@@ -40,8 +40,8 @@ Only needed when you change the extension source.
 .. code-block:: bash
 
    cd Main/frontend
-   npm install
-   npm run build:full
+   bun install
+   bun run build:full
 
 Environment Variables
 ---------------------
