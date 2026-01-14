@@ -1,21 +1,44 @@
-import asyncio
-import json
-import logging
-import sys
-from typing import Any, List
+"""Yahoo Finance MCP Server with async support and clean architecture."""
 
-import yfinance as yf
+import asyncio
+import logging
+from typing import List
+
 from mcp.server import Server, NotificationOptions
 from mcp.server.models import InitializationOptions
 from mcp.server.stdio import stdio_server
 import mcp.types as types
 
+from mcp_server.handlers.base import ToolHandler, ToolContext
+from mcp_server.handlers.stock_info import GetStockInfoHandler
+from mcp_server.handlers.stock_financials import GetStockFinancialsHandler
+from mcp_server.handlers.stock_news import GetStockNewsHandler
+from mcp_server.handlers.stock_history import GetStockHistoryHandler
+from mcp_server.handlers.stock_analysis import GetStockAnalysisHandler
+from mcp_server.validation import validate_ticker, ValidationError
+from mcp_server.errors import ErrorType, ToolError
+from mcp_server.executor import get_executor
+
+
 # Configure logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger("yahoo-finance-server")
 
 # Initialize the server
 server = Server("yahoo-finance")
+
+# Tool registry mapping tool names to handlers
+TOOL_HANDLERS: dict[str, ToolHandler] = {
+    "get_stock_info": GetStockInfoHandler(),
+    "get_stock_financials": GetStockFinancialsHandler(),
+    "get_stock_news": GetStockNewsHandler(),
+    "get_stock_history": GetStockHistoryHandler(),
+    "get_stock_analysis": GetStockAnalysisHandler(),
+}
+
 
 @server.list_tools()
 async def handle_list_tools() -> List[types.Tool]:
@@ -27,7 +50,10 @@ async def handle_list_tools() -> List[types.Tool]:
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "ticker": {"type": "string", "description": "The stock ticker symbol (e.g., 'AAPL', 'MSFT')."}
+                    "ticker": {
+                        "type": "string",
+                        "description": "The stock ticker symbol (e.g., 'AAPL', 'MSFT')."
+                    }
                 },
                 "required": ["ticker"],
             },
@@ -38,7 +64,10 @@ async def handle_list_tools() -> List[types.Tool]:
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "ticker": {"type": "string", "description": "The stock ticker symbol."}
+                    "ticker": {
+                        "type": "string",
+                        "description": "The stock ticker symbol."
+                    }
                 },
                 "required": ["ticker"],
             },
@@ -49,7 +78,10 @@ async def handle_list_tools() -> List[types.Tool]:
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "ticker": {"type": "string", "description": "The stock ticker symbol."}
+                    "ticker": {
+                        "type": "string",
+                        "description": "The stock ticker symbol."
+                    }
                 },
                 "required": ["ticker"],
             },
@@ -60,9 +92,20 @@ async def handle_list_tools() -> List[types.Tool]:
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "ticker": {"type": "string", "description": "The stock ticker symbol."},
-                    "period": {"type": "string", "description": "The period to fetch data for (e.g., '1mo', '1y', 'ytd', 'max').", "default": "1mo"},
-                    "interval": {"type": "string", "description": "The data interval (e.g., '1d', '1wk', '1mo').", "default": "1d"}
+                    "ticker": {
+                        "type": "string",
+                        "description": "The stock ticker symbol."
+                    },
+                    "period": {
+                        "type": "string",
+                        "description": "The period to fetch data for (e.g., '1mo', '1y', 'ytd', 'max').",
+                        "default": "1mo"
+                    },
+                    "interval": {
+                        "type": "string",
+                        "description": "The data interval (e.g., '1d', '1wk', '1mo').",
+                        "default": "1d"
+                    }
                 },
                 "required": ["ticker"],
             },
@@ -73,89 +116,95 @@ async def handle_list_tools() -> List[types.Tool]:
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "ticker": {"type": "string", "description": "The stock ticker symbol."}
+                    "ticker": {
+                        "type": "string",
+                        "description": "The stock ticker symbol."
+                    }
                 },
                 "required": ["ticker"],
             },
         ),
     ]
 
+
 @server.call_tool()
 async def handle_call_tool(
     name: str, arguments: dict | None
 ) -> List[types.TextContent | types.ImageContent | types.EmbeddedResource]:
-    """Handle tool execution requests."""
-    if not arguments:
-        return [types.TextContent(type="text", text="Missing arguments")]
-
-    ticker = arguments.get("ticker", "").upper()
-    if not ticker:
-        return [types.TextContent(type="text", text="Missing ticker symbol")]
+    """Handle tool execution requests with structured error handling."""
+    ticker = None
 
     try:
-        stock = yf.Ticker(ticker)
-        
-        if name == "get_stock_info":
-            info = stock.info
-            relevant_keys = [
-                'longName', 'symbol', 'currentPrice', 'marketCap', 'trailingPE', 
-                'forwardPE', 'dividendYield', 'fiftyTwoWeekHigh', 'fiftyTwoWeekLow',
-                'averageVolume', 'sector', 'industry', 'longBusinessSummary'
-            ]
-            filtered_info = {k: info.get(k) for k in relevant_keys if k in info}
-            return [types.TextContent(type="text", text=json.dumps(filtered_info, indent=2))]
+        # Validate arguments
+        if not arguments:
+            raise ValidationError("Missing arguments")
 
-        elif name == "get_stock_financials":
-            financials = {
-                "income_statement": stock.income_stmt.to_dict() if not stock.income_stmt.empty else {},
-                "balance_sheet": stock.balance_sheet.to_dict() if not stock.balance_sheet.empty else {},
-                "cash_flow": stock.cashflow.to_dict() if not stock.cashflow.empty else {}
-            }
-            return [types.TextContent(type="text", text=json.dumps(financials, indent=2, default=str))]
+        # Validate ticker for all operations
+        ticker = validate_ticker(arguments.get("ticker"))
 
-        elif name == "get_stock_news":
-            news = stock.news
-            return [types.TextContent(type="text", text=json.dumps(news, indent=2))]
+        # Get handler for this tool
+        handler = TOOL_HANDLERS.get(name)
+        if not handler:
+            raise ValidationError(f"Unknown tool: {name}")
 
-        elif name == "get_stock_history":
-            period = arguments.get("period", "1mo")
-            interval = arguments.get("interval", "1d")
-            history = stock.history(period=period, interval=interval)
-            
-            if history.empty:
-                return [types.TextContent(type="text", text=f"No historical data found for {ticker}")]
-            
-            return [types.TextContent(type="text", text=history.to_json(orient="table"))]
+        # Create context and execute
+        ctx = ToolContext(
+            ticker=ticker,
+            arguments=arguments,
+            executor=get_executor()
+        )
 
-        elif name == "get_stock_analysis":
-            analysis = {
-                "recommendations": stock.recommendations.to_dict() if stock.recommendations is not None and not stock.recommendations.empty else {},
-                "recommendations_summary": stock.recommendations_summary.to_dict() if stock.recommendations_summary is not None and not stock.recommendations_summary.empty else {},
-                "upgrades_downgrades": stock.upgrades_downgrades.to_dict() if stock.upgrades_downgrades is not None and not stock.upgrades_downgrades.empty else {}
-            }
-            return [types.TextContent(type="text", text=json.dumps(analysis, indent=2, default=str))]
+        logger.info(f"Executing {name} for {ticker}")
+        return await handler.execute(ctx)
 
-        else:
-            return [types.TextContent(type="text", text=f"Unknown tool: {name}")]
+    except ValidationError as e:
+        logger.warning(f"Validation error in {name}: {e}")
+        return [ToolError(
+            error_type=ErrorType.VALIDATION,
+            message=str(e),
+            ticker=ticker
+        ).to_content()]
+
+    except KeyError as e:
+        logger.warning(f"Key error in {name} for {ticker}: {e}")
+        return [ToolError(
+            error_type=ErrorType.NOT_FOUND,
+            message=f"Ticker {ticker} not found or has no data for requested field",
+            ticker=ticker,
+            details={"missing_key": str(e)}
+        ).to_content()]
 
     except Exception as e:
-        logger.error(f"Error in {name} for {ticker}: {e}")
-        return [types.TextContent(type="text", text=f"Error: {str(e)}")]
+        logger.error(
+            f"Unexpected error in {name}",
+            exc_info=True,
+            extra={"ticker": ticker, "tool": name}
+        )
+        return [ToolError(
+            error_type=ErrorType.INTERNAL,
+            message="An internal error occurred. Please try again later.",
+            ticker=ticker
+        ).to_content()]
+
 
 async def main():
+    """Run the MCP server."""
+    logger.info("Starting Yahoo Finance MCP server")
+
     async with stdio_server() as (read_stream, write_stream):
         await server.run(
             read_stream,
             write_stream,
             InitializationOptions(
                 server_name="yahoo-finance",
-                server_version="0.1.0",
+                server_version="0.2.0",
                 capabilities=server.get_capabilities(
                     notification_options=NotificationOptions(),
                     experimental_capabilities={},
                 ),
             ),
         )
+
 
 if __name__ == "__main__":
     asyncio.run(main())
