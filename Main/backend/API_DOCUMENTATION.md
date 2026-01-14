@@ -128,3 +128,43 @@ curl http://localhost:8000/v1/chat/completions \
 The API is designed to be **stateless** from the client's perspective, matching industry standards.
 - You must send the full conversation history in the `messages` array for every request.
 - The server automatically re-hydrates the internal session context based on the provided messages.
+
+---
+
+## MCP Servers
+
+### Yahoo Finance MCP Server
+
+The Yahoo Finance MCP server provides real-time and historical stock market data through the Model Context Protocol.
+
+**Location:** `mcp_server/yahoo_finance_server.py`
+
+**Features:**
+- Async/await support for non-blocking operations
+- Input validation and security
+- TTL caching (5 min default)
+- Structured error responses
+
+**Available Tools:**
+- `get_stock_info` - Company info, price, market cap, ratios
+- `get_stock_financials` - Income statement, balance sheet, cash flow
+- `get_stock_news` - Latest news articles
+- `get_stock_history` - Historical price data
+- `get_stock_analysis` - Analyst recommendations and estimates
+
+**Configuration:**
+
+Edit `mcp_server_config.json`:
+```json
+{
+  "mcpServers": {
+    "yahoo-finance": {
+      "command": "python",
+      "args": ["mcp_server/yahoo_finance_server.py"],
+      "disabled": false
+    }
+  }
+}
+```
+
+**See:** `mcp_server/README.md` for detailed documentation.
