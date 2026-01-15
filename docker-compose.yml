@@ -9,11 +9,11 @@ services:
       - "8000:8000"
 
     env_file:
-      - ./Main/backend/.env  # API keys and configuration
+      - ./Main/backend/.env # API keys and configuration
 
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health/"]
-      interval: 2m
+      test: [ "CMD", "curl", "-f", "http://localhost:8000/health/" ]
+      interval: 10m
       timeout: 10s
       retries: 3
       start_period: 1m
@@ -58,7 +58,7 @@ services:
     # networks:
     #   - fingpt_network
     profiles:
-      - dev  # Only runs with: docker compose --profile dev up
+      - dev # Only runs with: docker compose --profile dev up
 
 networks:
   fingpt_network:
