@@ -78,9 +78,12 @@ Main/backend/django_debug.log
 /mcpTest
 
 # claude code local settings
-.claude/settings.local.json
+.claude/
 CLAUDE.md
 AGENTS.md
+
+# serena (the claude code plugin)
+/.serena
 
 # uv
 mcp-server/uv.lock
