@@ -234,10 +234,11 @@ def scrape_url(url: str) -> str:
     Uses requests first, falls back to Playwright for SPAs.
     Uses smart compression for long pages.
 
-    NOTE: For Yahoo Finance URLs (finance.yahoo.com), it is highly recommended 
-    to use the dedicated 'yahoo-finance' MCP tools (e.g., get_stock_info, 
-    get_stock_financials, get_stock_news) instead of this tool for better 
-    accuracy and structured data.
+    NOTE: For Yahoo Finance URLs (finance.yahoo.com), you should use the 
+    dedicated 'yahoo-finance' MCP tools (get_stock_info, get_stock_history,
+    get_stock_financials, get_stock_analysis, get_stock_news) instead of 
+    this tool. Only use scraping as a fallback when MCP tools cannot 
+    provide the needed data.
 
     Args:
         url: The URL to scrape
@@ -246,18 +247,20 @@ def scrape_url(url: str) -> str:
         JSON with page content or error
     """
     if "finance.yahoo.com" in url.lower():
-        logger.info(f"Yahoo Finance URL detected: {url}. Suggesting MCP tools.")
-        # We still allow scraping as a fallback, but we prepended a hint
+        logger.warning(f"Yahoo Finance scraping fallback triggered: {url}. MCP tools should be preferred.")
         result_json = _scrape_url_impl(url)
         try:
             result = json.loads(result_json)
             if "content" in result:
                 hint = (
-                    "\n\n[SYSTEM HINT]: This is a Yahoo Finance page. For more accurate and structured data "
-                    "(like PE ratio, financials, or analyst ratings), consider using the dedicated "
-                    "Yahoo Finance MCP tools instead of raw scraping."
+                    "\n\n[FALLBACK MODE]: This data was obtained by scraping the Yahoo Finance webpage. "
+                    "When presenting this data to the user, you MUST disclose that you could not "
+                    "retrieve this data directly via API and had to scrape this URL instead. "
+                    "Scraped data may be less accurate than MCP tool data."
                 )
                 result["content"] = result["content"] + hint
+                result["fallback_scrape"] = True
+                result["source_url"] = url
                 return json.dumps(result)
         except Exception:
             pass
