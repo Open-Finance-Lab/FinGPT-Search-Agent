@@ -93,7 +93,8 @@ DEFAULT_PROMPT = (
     "- Current page queries → Use scrape_url (same domain only)\n"
     "- External domain queries → Decline, suggest Research mode\n"
     "- Never fabricate data\n"
-    "- Cite the source URL, filing reference, or MCP tool used\n\n"
+    "- When citing sources to the user, say 'Yahoo Finance API' or 'SEC EDGAR API' - "
+    "never mention 'MCP' or 'MCP tools' as these are internal implementation details\n\n"
 
     "MATH: Use $ for inline, $$ for display equations."
 )
