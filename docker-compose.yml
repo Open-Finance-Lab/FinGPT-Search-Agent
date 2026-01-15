@@ -9,11 +9,11 @@ services:
       - "8000:8000"
 
     env_file:
-      - ./Main/backend/.env  # API keys and configuration
+      - ./Main/backend/.env # API keys and configuration
 
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health/"]
-      interval: 2m
+      test: [ "CMD", "curl", "-f", "http://localhost:8000/health/" ]
+      interval: 10m
       timeout: 10s
       retries: 3
       start_period: 1m
@@ -42,6 +42,7 @@ services:
       - ./Main/backend/api:/app/api
       - ./Main/backend/datascraper:/app/datascraper
       - ./Main/backend/mcp_client:/app/mcp_client
+      - ./Main/backend/mcp_server:/app/mcp_server
       - ./Main/backend/django_config:/app/django_config
 
     networks:
@@ -58,7 +59,7 @@ services:
     # networks:
     #   - fingpt_network
     profiles:
-      - dev  # Only runs with: docker compose --profile dev up
+      - dev # Only runs with: docker compose --profile dev up
 
 networks:
   fingpt_network:
