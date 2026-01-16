@@ -7,7 +7,7 @@ import json
 import logging
 import re
 from typing import Optional
-from contextlib import contextmanager
+from contextlib import asynccontextmanager
 
 from agents import function_tool
 
@@ -18,10 +18,10 @@ _current_browser = None
 _current_page = None
 
 
-@contextmanager
-def PlaywrightBrowser(timeout: int = 30000):
+@asynccontextmanager
+async def PlaywrightBrowser(timeout: int = 30000):
     """
-    Ephemeral browser context manager.
+    Ephemeral async browser context manager.
     Launches headless Chromium, yields page, closes on exit.
 
     Args:
@@ -30,7 +30,7 @@ def PlaywrightBrowser(timeout: int = 30000):
     global _current_browser, _current_page
 
     try:
-        from playwright.sync_api import sync_playwright
+        from playwright.async_api import async_playwright
     except ImportError:
         logger.error("Playwright not installed. Run: playwright install chromium")
         raise ImportError("Playwright not installed")
@@ -39,19 +39,19 @@ def PlaywrightBrowser(timeout: int = 30000):
     browser = None
 
     try:
-        playwright = sync_playwright().start()
-        browser = playwright.chromium.launch(
+        playwright = await async_playwright().start()
+        browser = await playwright.chromium.launch(
             headless=True,
             args=['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
         )
 
-        context = browser.new_context(
+        context = await browser.new_context(
             user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
             viewport={'width': 1920, 'height': 1080}
         )
         context.set_default_timeout(timeout)
 
-        page = context.new_page()
+        page = await context.new_page()
         _current_browser = browser
         _current_page = page
 
@@ -61,9 +61,9 @@ def PlaywrightBrowser(timeout: int = 30000):
         _current_page = None
         _current_browser = None
         if browser:
-            browser.close()
+            await browser.close()
         if playwright:
-            playwright.stop()
+            await playwright.stop()
 
 
 def _clean_extracted_text(text: str) -> str:
@@ -83,7 +83,7 @@ def _get_page_summary(page) -> dict:
 
 
 @function_tool
-def navigate_to_url(url: str) -> str:
+async def navigate_to_url(url: str) -> str:
     """
     Navigate to a URL and wait for page load.
 
@@ -94,28 +94,28 @@ def navigate_to_url(url: str) -> str:
         JSON with page title, URL, and status
     """
     try:
-        with PlaywrightBrowser() as page:
+        async with PlaywrightBrowser() as page:
             logger.info(f"Navigating to: {url}")
 
-            response = page.goto(url, wait_until='domcontentloaded')
-            page.wait_for_load_state('networkidle', timeout=10000)
+            response = await page.goto(url, wait_until='domcontentloaded')
+            await page.wait_for_load_state('networkidle', timeout=10000)
 
             status = response.status if response else None
             result = {
                 "success": True,
-                "title": page.title(),
+                "title": await page.title(),
                 "url": page.url,
                 "status_code": status
             }
 
             # Extract initial content summary
-            content = page.inner_text('body')
+            content = await page.inner_text('body')
             cleaned = _clean_extracted_text(content)
             if len(cleaned) > 2000:
                 cleaned = cleaned[:2000] + "..."
             result["content_preview"] = cleaned
 
-            logger.info(f"Navigation successful: {page.title()}")
+            logger.info(f"Navigation successful: {await page.title()}")
             return json.dumps(result)
 
     except Exception as e:
@@ -128,7 +128,7 @@ def navigate_to_url(url: str) -> str:
 
 
 @function_tool
-def click_element(url: str, selector: str) -> str:
+async def click_element(url: str, selector: str) -> str:
     """
     Navigate to URL, click an element, and return the resulting page content.
 
@@ -140,12 +140,12 @@ def click_element(url: str, selector: str) -> str:
         JSON with clicked element info and new page content
     """
     try:
-        with PlaywrightBrowser() as page:
+        async with PlaywrightBrowser() as page:
             logger.info(f"Navigating to {url} to click: {selector}")
 
             # Navigate first
-            page.goto(url, wait_until='domcontentloaded')
-            page.wait_for_load_state('networkidle', timeout=10000)
+            await page.goto(url, wait_until='domcontentloaded')
+            await page.wait_for_load_state('networkidle', timeout=10000)
 
             # Find and click the element
             element = None
@@ -153,7 +153,7 @@ def click_element(url: str, selector: str) -> str:
             # Try as CSS selector first
             try:
                 element = page.locator(selector).first
-                if element.count() == 0:
+                if await element.count() == 0:
                     element = None
             except Exception:
                 element = None
@@ -172,7 +172,7 @@ def click_element(url: str, selector: str) -> str:
                 except Exception:
                     pass
 
-            if element is None or element.count() == 0:
+            if element is None or await element.count() == 0:
                 return json.dumps({
                     "success": False,
                     "error": f"Element not found: {selector}",
@@ -180,21 +180,21 @@ def click_element(url: str, selector: str) -> str:
                 })
 
             # Get element info before clicking
-            element_text = element.inner_text()[:100] if element.inner_text() else ""
+            element_text = (await element.inner_text())[:100] if await element.inner_text() else ""
 
             # Click and wait for navigation
-            element.click()
-            page.wait_for_load_state('networkidle', timeout=15000)
+            await element.click()
+            await page.wait_for_load_state('networkidle', timeout=15000)
 
             # Extract new page content
-            content = page.inner_text('body')
+            content = await page.inner_text('body')
             cleaned = _clean_extracted_text(content)
 
             result = {
                 "success": True,
                 "clicked_element": element_text,
                 "new_url": page.url,
-                "new_title": page.title(),
+                "new_title": await page.title(),
                 "content": cleaned[:5000] if len(cleaned) > 5000 else cleaned
             }
 
@@ -212,7 +212,7 @@ def click_element(url: str, selector: str) -> str:
 
 
 @function_tool
-def extract_page_content(url: str, content_selector: Optional[str] = None) -> str:
+async def extract_page_content(url: str, content_selector: Optional[str] = None) -> str:
     """
     Navigate to URL and extract the main text content.
 
@@ -225,11 +225,11 @@ def extract_page_content(url: str, content_selector: Optional[str] = None) -> st
         JSON with extracted text content
     """
     try:
-        with PlaywrightBrowser() as page:
+        async with PlaywrightBrowser() as page:
             logger.info(f"Extracting content from: {url}")
 
-            page.goto(url, wait_until='domcontentloaded')
-            page.wait_for_load_state('networkidle', timeout=10000)
+            await page.goto(url, wait_until='domcontentloaded')
+            await page.wait_for_load_state('networkidle', timeout=10000)
 
             # Determine which selector to use
             selector = content_selector if content_selector else 'body'
@@ -238,7 +238,7 @@ def extract_page_content(url: str, content_selector: Optional[str] = None) -> st
             if selector == 'body':
                 for main_selector in ['article', 'main', '[role="main"]', '.article-body', '#main-content']:
                     try:
-                        if page.locator(main_selector).count() > 0:
+                        if await page.locator(main_selector).count() > 0:
                             selector = main_selector
                             break
                     except Exception:
@@ -246,16 +246,16 @@ def extract_page_content(url: str, content_selector: Optional[str] = None) -> st
 
             # Extract content
             try:
-                content = page.locator(selector).first.inner_text()
+                content = await page.locator(selector).first.inner_text()
             except Exception:
-                content = page.inner_text('body')
+                content = await page.inner_text('body')
 
             cleaned = _clean_extracted_text(content)
 
             result = {
                 "success": True,
                 "url": page.url,
-                "title": page.title(),
+                "title": await page.title(),
                 "selector_used": selector,
                 "content": cleaned,
                 "content_length": len(cleaned)
