@@ -97,8 +97,9 @@ async def navigate_to_url(url: str) -> str:
         async with PlaywrightBrowser() as page:
             logger.info(f"Navigating to: {url}")
 
-            response = await page.goto(url, wait_until='domcontentloaded')
-            await page.wait_for_load_state('networkidle', timeout=10000)
+            response = await page.goto(url, wait_until='load')
+            # Brief delay for JS rendering - don't use networkidle (never completes on dynamic sites)
+            await page.wait_for_timeout(2000)
 
             status = response.status if response else None
             result = {
@@ -143,11 +144,11 @@ async def click_element(url: str, selector: str) -> str:
         async with PlaywrightBrowser() as page:
             logger.info(f"Navigating to {url} to click: {selector}")
 
-            # Navigate first
-            await page.goto(url, wait_until='domcontentloaded')
-            await page.wait_for_load_state('networkidle', timeout=10000)
+            # Navigate first - use 'load' event, not networkidle
+            await page.goto(url, wait_until='load')
+            await page.wait_for_timeout(2000)  # Brief delay for JS rendering
 
-            # Find and click the element
+            # Find the element with multiple strategies
             element = None
 
             # Try as CSS selector first
@@ -162,29 +163,47 @@ async def click_element(url: str, selector: str) -> str:
             if element is None:
                 try:
                     element = page.get_by_text(selector, exact=False).first
+                    if await element.count() == 0:
+                        element = None
                 except Exception:
-                    pass
+                    element = None
 
             # Try as link text
             if element is None:
                 try:
                     element = page.get_by_role("link", name=selector).first
+                    if await element.count() == 0:
+                        element = None
                 except Exception:
-                    pass
+                    element = None
 
-            if element is None or await element.count() == 0:
+            if element is None:
                 return json.dumps({
                     "success": False,
                     "error": f"Element not found: {selector}",
                     "url": url
                 })
 
+            # Wait for element to be visible before clicking
+            await element.wait_for(state='visible', timeout=5000)
+
             # Get element info before clicking
-            element_text = (await element.inner_text())[:100] if await element.inner_text() else ""
+            try:
+                element_text = (await element.inner_text())[:100]
+            except Exception:
+                element_text = selector
 
             # Click and wait for navigation
+            original_url = page.url
             await element.click()
-            await page.wait_for_load_state('networkidle', timeout=15000)
+
+            # Wait for either URL change or page load (whichever comes first)
+            try:
+                await page.wait_for_url(lambda u: u != original_url, timeout=5000)
+            except Exception:
+                pass  # URL didn't change - might be same-page navigation
+            await page.wait_for_load_state('load', timeout=10000)
+            await page.wait_for_timeout(2000)  # Brief delay for JS rendering
 
             # Extract new page content
             content = await page.inner_text('body')
@@ -228,8 +247,8 @@ async def extract_page_content(url: str, content_selector: Optional[str] = None)
         async with PlaywrightBrowser() as page:
             logger.info(f"Extracting content from: {url}")
 
-            await page.goto(url, wait_until='domcontentloaded')
-            await page.wait_for_load_state('networkidle', timeout=10000)
+            await page.goto(url, wait_until='load')
+            await page.wait_for_timeout(2000)  # Brief delay for JS rendering
 
             # Determine which selector to use
             selector = content_selector if content_selector else 'body'
