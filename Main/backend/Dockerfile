@@ -18,12 +18,17 @@ ENV PATH="/root/.local/bin:$PATH"
 
 WORKDIR /app
 
-RUN npm install -g @modelcontextprotocol/server-filesystem @playwright/mcp
+RUN npm install -g @modelcontextprotocol/server-filesystem
 
 COPY pyproject.toml uv.lock ./
 
+# Safety: regenerate lock file to ensure it matches pyproject.toml
+# Then sync with --frozen for deterministic install
 RUN uv venv --python 3.12 && \
-    uv sync --frozen --no-dev
+    uv lock && \
+    uv sync --frozen --no-dev && \
+    echo "Verifying Playwright installation..." && \
+    .venv/bin/python -c "from playwright.async_api import async_playwright; print('✓ Playwright package installed')"
 
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
@@ -41,6 +46,12 @@ RUN sed -i 's/\r$//' /app/entrypoint.sh && chmod +x /app/entrypoint.sh
 RUN mkdir -p /app/staticfiles /app/media /app/logs
 
 RUN ln -sf /ms-playwright/chromium-*/chrome-linux/chrome /usr/bin/chromium-bundled
+
+# Verify Playwright browsers are accessible
+RUN echo "Verifying Playwright browsers..." && \
+    ls -la /ms-playwright/ && \
+    test -d /ms-playwright/chromium-* && \
+    echo "✓ Chromium browser found at /ms-playwright"
 
 
 ENTRYPOINT ["/app/entrypoint.sh"]
