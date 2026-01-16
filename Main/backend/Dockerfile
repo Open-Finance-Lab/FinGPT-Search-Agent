@@ -18,7 +18,7 @@ ENV PATH="/root/.local/bin:$PATH"
 
 WORKDIR /app
 
-RUN npm install -g @modelcontextprotocol/server-filesystem @playwright/mcp
+RUN npm install -g @modelcontextprotocol/server-filesystem
 
 COPY pyproject.toml uv.lock ./
 

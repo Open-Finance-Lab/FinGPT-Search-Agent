@@ -16,6 +16,7 @@ sys.path.insert(0, str(backend_dir))
 from datascraper.models_config import get_model_config
 
 from datascraper.url_tools import get_url_tools
+from datascraper.playwright_tools import get_playwright_tools
 
 from .apps import get_global_mcp_manager
 
@@ -71,30 +72,49 @@ DEFAULT_PROMPT = (
     "1. After calling an MCP tool, verify the response contains the data needed "
     "to answer the user's question\n"
     "2. If the data is missing or incomplete, try a different tool or parameters\n"
-    "3. Only if MCP tools cannot provide the needed data, fall back to scraping\n"
-    "4. When using scraping fallback, ALWAYS tell the user: 'I couldn't directly "
-    "retrieve this data via API, so I scraped [URL] instead' and provide the source URL\n"
-    "Do NOT scrape finance.yahoo.com if an MCP tool can answer the question.\n\n"
+    "3. Only if MCP tools cannot provide the needed data, fall back to Playwright browser tools\n"
+    "4. When using Playwright fallback, navigate to the page and extract the data\n"
+    "Do NOT use Playwright for numerical data if an MCP tool can answer the question.\n\n"
 
-    "URL SCRAPING (for current page or Yahoo Finance fallback):\n"
-    "You can scrape web pages when MCP tools are insufficient:\n"
+    "PLAYWRIGHT BROWSER TOOLS (for news, content, dynamic pages):\n"
+    "Use these for non-numerical content that requires browser interaction:\n"
+    "- navigate_to_url(url): Open a URL, get page title and content preview\n"
+    "- click_element(url, selector): Navigate to URL, click an element (news link, tab), get new page content\n"
+    "- extract_page_content(url): Extract main text content from a page\n"
+    "Use Playwright for:\n"
+    "- Reading news articles and headlines\n"
+    "- Analyst opinions and commentary\n"
+    "- Sentiment analysis of written content\n"
+    "- Any dynamic content requiring clicking into pages\n\n"
+
+    "TOOL SELECTION LOGIC:\n"
+    "1. Numerical query (prices, ratios, financials) → Yahoo Finance MCP first\n"
+    "   - If MCP fails or returns incomplete data → Playwright fallback\n"
+    "2. Content query (news, opinions, articles) → Playwright only\n"
+    "3. Hybrid query (e.g., 'Is NVDA overvalued given recent news?') → Use both:\n"
+    "   - MCP for numerical data (P/E, growth metrics)\n"
+    "   - Playwright for news content and sentiment\n"
+    "   - Combine insights in your response\n\n"
+
+    "URL SCRAPING (legacy, for current page):\n"
+    "You can scrape web pages when needed:\n"
     "1. Call `resolve_url('generic_url', '{\"url\": \"<url>\"}')` to prepare\n"
     "2. Call `scrape_url(url)` to fetch page content\n"
-    "IMPORTANT: Only scrape URLs within the same domain as the user's current page, "
-    "OR finance.yahoo.com as a fallback when MCP tools fail. "
+    "IMPORTANT: Only scrape URLs within the same domain as the user's current page. "
     "If the user asks for information from a different external website, "
     "politely explain that you can only fetch data from the current page and "
     "suggest they switch to Research mode for external web searches.\n\n"
 
     "RULES:\n"
     "- SEC queries → Use SEC-EDGAR MCP tools (preferred)\n"
-    "- Yahoo Finance / stock queries → Use Yahoo Finance MCP tools (preferred)\n"
-    "- Yahoo Finance MCP insufficient → Scrape finance.yahoo.com (fallback, disclose to user)\n"
+    "- Yahoo Finance numerical data → Use Yahoo Finance MCP tools (preferred)\n"
+    "- Yahoo Finance news/content → Use Playwright browser tools\n"
+    "- Yahoo Finance MCP fails → Playwright fallback for numerical data\n"
     "- Current page queries → Use scrape_url (same domain only)\n"
     "- External domain queries → Decline, suggest Research mode\n"
     "- Never fabricate data\n"
-    "- When citing sources to the user, say 'Yahoo Finance API' or 'SEC EDGAR API' - "
-    "never mention 'MCP' or 'MCP tools' as these are internal implementation details\n\n"
+    "- When citing sources, say 'Yahoo Finance API' or 'SEC EDGAR API' - "
+    "never mention 'MCP' or internal implementation details\n\n"
 
     "MATH: Use $ for inline, $$ for display equations."
 )
@@ -176,6 +196,10 @@ async def create_fin_agent(model: str = "gpt-4o-mini",
     url_tools = get_url_tools()
     tools.extend(url_tools)
     print(f"[AGENT DEBUG] Added {len(url_tools)} URL tools (resolve_url, scrape_url)")
+
+    playwright_tools = get_playwright_tools()
+    tools.extend(playwright_tools)
+    print(f"[AGENT DEBUG] Added {len(playwright_tools)} Playwright tools (navigate_to_url, click_element, extract_page_content)")
 
     from .mcp_manager import MCPClientManager
     from .tool_wrapper import convert_mcp_tool_to_python_callable
