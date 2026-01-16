@@ -25,7 +25,7 @@ fi
 
 # Runtime verification: Playwright is available
 echo "Verifying Playwright runtime..."
-python -c "from playwright.sync_api import sync_playwright; print('✓ Playwright runtime OK')" || {
+python -c "from playwright.async_api import async_playwright; print('✓ Playwright runtime OK')" || {
     echo "ERROR: Playwright not available at runtime" >&2
     exit 1
 }

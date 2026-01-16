@@ -28,7 +28,7 @@ RUN uv venv --python 3.12 && \
     uv lock && \
     uv sync --frozen --no-dev && \
     echo "Verifying Playwright installation..." && \
-    .venv/bin/python -c "from playwright.sync_api import sync_playwright; print('✓ Playwright package installed')"
+    .venv/bin/python -c "from playwright.async_api import async_playwright; print('✓ Playwright package installed')"
 
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
