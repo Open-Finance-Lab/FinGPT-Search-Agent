@@ -36,9 +36,18 @@ class MCPClientConfig(AppConfig):
         import os
         import sys
 
-        if 'runserver' in sys.argv and os.environ.get('RUN_MAIN') != 'true':
-            print("[MCP DEBUG] Skipping MCP init in Django autoreload parent process")
-            return
+        # Skip initialization for management commands like collectstatic, migrate, etc.
+        # We only want MCP when running the actual web server.
+        is_manage_cmd = 'manage.py' in sys.argv[0] or (len(sys.argv) > 0 and sys.argv[0].endswith('manage.py'))
+        is_server_cmd = 'runserver' in sys.argv
+        is_gunicorn = 'gunicorn' in sys.argv[0] or any('gunicorn' in s for s in sys.argv)
+        
+        # If it's a management command BUT NOT runserver, skip it.
+        if is_manage_cmd and not is_server_cmd:
+            # Check for collectstatic specifically to be safe
+            if any(cmd in sys.argv for cmd in ['collectstatic', 'migrate', 'makemigrations', 'shell', 'test']):
+                print(f"[MCP DEBUG] Skipping MCP init for management command: {sys.argv}")
+                return
 
         _initialized = True
 
