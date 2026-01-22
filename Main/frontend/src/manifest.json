@@ -17,7 +17,9 @@
         "https://cdm.finos.org/*",
         "https://www.finos.org/*",
         "https://mathcup.com/*",
-        "https://www.cnbc.com/*"
+        "https://www.cnbc.com/*",
+        "https://www.tradingview.com/*",
+        "https://www.xyzterminal.com/*"
       ],
       "js": [
         "vendor/marked.min.js",
