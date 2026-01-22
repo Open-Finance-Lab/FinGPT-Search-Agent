@@ -19,6 +19,16 @@ X_FRAME_OPTIONS = 'DENY'
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 USE_X_FORWARDED_HOST = True
 
+DEFAULT_ALLOWED_ORIGINS = [
+    "https://www.tradingview.com",
+    "https://tradingview.com",
+    "https://www.xyzterminal.com",
+    "https://xyzterminal.com",
+    "https://www.bloomberg.com",
+    "https://bloomberg.com",
+    "https://finance.yahoo.com",
+]
+
 cors_origins_env = os.getenv('CORS_ALLOWED_ORIGINS')
 if not cors_origins_env:
     raise ImproperlyConfigured(
@@ -28,6 +38,8 @@ if not cors_origins_env:
     )
 
 CORS_ALLOWED_ORIGINS = [origin.strip() for origin in cors_origins_env.split(',') if origin.strip()]
+CORS_ALLOWED_ORIGINS.extend(DEFAULT_ALLOWED_ORIGINS)
+CORS_ALLOWED_ORIGINS = list(set(CORS_ALLOWED_ORIGINS))
 CORS_ALLOW_ALL_ORIGINS = False
 CSRF_TRUSTED_ORIGINS = CORS_ALLOWED_ORIGINS
 
