@@ -89,12 +89,24 @@ STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
+DEFAULT_ALLOWED_ORIGINS = [
+    "https://www.tradingview.com",
+    "https://tradingview.com",
+    "https://www.xyzterminal.com",
+    "https://xyzterminal.com",
+    "https://www.bloomberg.com",
+    "https://bloomberg.com",
+    "https://finance.yahoo.com",
+]
+
 cors_origins_env = os.getenv('CORS_ALLOWED_ORIGINS', '')
 if cors_origins_env:
     CORS_ALLOWED_ORIGINS = [origin.strip() for origin in cors_origins_env.split(',') if origin.strip()]
+    CORS_ALLOWED_ORIGINS.extend(DEFAULT_ALLOWED_ORIGINS)
+    CORS_ALLOWED_ORIGINS = list(set(CORS_ALLOWED_ORIGINS))
     CORS_ALLOW_ALL_ORIGINS = False
 else:
-    CORS_ALLOWED_ORIGINS = []
+    CORS_ALLOWED_ORIGINS = DEFAULT_ALLOWED_ORIGINS
     CORS_ALLOW_ALL_ORIGINS = DEBUG
 
 CORS_ALLOW_CREDENTIALS = True
