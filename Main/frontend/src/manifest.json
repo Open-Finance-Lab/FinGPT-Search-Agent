@@ -19,7 +19,7 @@
         "https://mathcup.com/*",
         "https://www.cnbc.com/*",
         "https://www.tradingview.com/*",
-        "https://www.xyzterminal.com/*"
+        "https://xyzterminal.com/*"
       ],
       "js": [
         "vendor/marked.min.js",
