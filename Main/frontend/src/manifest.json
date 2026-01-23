@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Agentic FinSearch",
-  "version": "0.11.1",
+  "version": "0.11.3",
   "description": "Agentic FinSearch companion extension. Defaults to the hosted backend at agenticfinsearch.org, with optional local backend support.",
   "icons": {
     "16": "assets/16x16_icon.png",
@@ -19,7 +19,8 @@
         "https://mathcup.com/*",
         "https://www.cnbc.com/*",
         "https://www.tradingview.com/*",
-        "https://xyzterminal.com/*"
+        "https://xyzterminal.com/*",
+        "https://app.xyzterminal.com/*"
       ],
       "js": [
         "vendor/marked.min.js",
