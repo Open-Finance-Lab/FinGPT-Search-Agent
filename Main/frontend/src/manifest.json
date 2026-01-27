@@ -20,7 +20,9 @@
         "https://www.cnbc.com/*",
         "https://www.tradingview.com/*",
         "https://xyzterminal.com/*",
-        "https://app.xyzterminal.com/*"
+        "https://app.xyzterminal.com/*",
+        "https://kalshi.com/*",
+        "https://polymarket.com/*"
       ],
       "js": [
         "vendor/marked.min.js",
