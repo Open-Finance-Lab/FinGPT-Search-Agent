@@ -28,6 +28,18 @@
         "mcp_server.yahoo_finance_server"
       ],
       "disabled": false
+    },
+    "tradingview": {
+      "command": "python",
+      "args": [
+        "-m",
+        "mcp_server.tradingview.server"
+      ],
+      "disabled": false,
+      "env": {
+        "TRADINGVIEW_RATE_LIMIT": "10",
+        "TRADINGVIEW_TIMEOUT": "30"
+      }
     }
   }
 }
