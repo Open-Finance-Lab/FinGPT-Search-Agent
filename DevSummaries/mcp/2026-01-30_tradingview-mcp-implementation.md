@@ -67,40 +67,6 @@ mcp_server/tradingview/
 
 ---
 
-## Implementation Phases
-
-### ✅ Phase 1: Foundation
-- Created `validation.py` with all validation functions
-- Created `handlers/base.py` with shared handler logic
-- Wrote 50+ validation unit tests
-
-### ✅ Phase 2: Primary Handler
-- Created `coin_analysis.py` (most important tool)
-- Created `server.py` with coin_analysis registered
-- Updated `mcp_server_config.json` to enable TradingView server
-
-### ✅ Phase 3: Market Screening
-- Created `top_gainers.py` and `top_losers.py`
-- Updated server to register both tools
-
-### ✅ Phase 4: Advanced Features
-- Created `bollinger_scan.py`, `rating_filter.py`, `consecutive_candles.py`, `advanced_candle_pattern.py`
-- Updated server to register all 7 tools
-
-### ✅ Phase 5: Agent Integration
-- Updated `agent.py` DEFAULT_PROMPT with TradingView instructions
-- Updated tool selection logic (technical indicators → TradingView)
-- Updated `site_map.json` with TradingView routes
-- Updated `preferred_links.json` with TradingView URL
-
-### ✅ Phase 6: Polish
-- Added EXCHANGE_ERROR and SYMBOL_ERROR to `errors.py`
-- Added comprehensive logging to all handlers
-- Created verification script
-- Created README and Quick Start documentation
-
----
-
 ## What's Pending
 
 ### ⏳ TradingView MCP Connection
@@ -126,8 +92,6 @@ async def _call_tradingview(self, tool_name: str, params: Dict[str, Any]) -> Dic
 - TradingView MCP server installation/availability
 - TradingView API credentials (if required)
 - Rate limiting implementation
-
-**Estimated Effort:** 2-4 hours once TradingView MCP available
 
 ---
 
@@ -306,26 +270,9 @@ mcp_server/<name>/
     └── <tool_handlers>.py
 ```
 
-### Design Principles
-
-1. **Separation of Concerns:** Validation → Handlers → Server
-2. **Base Handler Pattern:** All handlers extend base for consistent caching/filtering
-3. **Validation First:** Catch errors before expensive API calls
-4. **DRY Principle:** Shared functionality in base handler
-5. **Defensive Coding:** Comprehensive input validation
-
 ### Agent Integration
 
 - Add tool descriptions to `mcp_client/agent.py` DEFAULT_PROMPT
 - Update tool selection logic for automatic tool routing
 - Add routes to `data/site_map.json`
 - Add URL to `data/preferred_links.json`
-
----
-
-## Additional Resources
-
-- **Technical Documentation:** `mcp_server/tradingview/TRADINGVIEW_README.md`
-- **User Guide:** `mcp_server/tradingview/TRADINGVIEW_QUICK_START.md`
-- **Refactoring Details:** `TRADINGVIEW_REFACTORING_SUMMARY.md`
-- **Integration Summary:** `TRADINGVIEW_INTEGRATION_SUMMARY.md`
