@@ -3,10 +3,11 @@
   "preferred_links": [
     "https://finance.yahoo.com",
     "https://www.sec.gov/search-filings",
-    "https://bloomberg.com"
+    "https://bloomberg.com",
+    "https://www.tradingview.com"
   ],
   "metadata": {
     "last_updated": null,
-    "total_links": 3
+    "total_links": 4
   }
 }
