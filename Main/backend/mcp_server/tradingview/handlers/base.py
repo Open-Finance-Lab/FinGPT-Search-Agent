@@ -29,7 +29,7 @@ RELEVANT_TECHNICAL_FIELDS = [
     # Momentum
     'momentum', 'change_percent', 'change',
     # Metadata
-    'exchange', 'timeframe', 'timestamp', 'name'
+    'exchange', 'timeframe', 'timestamp', 'name', 'data', 'assets', 'gainers', 'losers', 'analysis'
 ]
 
 
@@ -134,10 +134,7 @@ class TradingViewBaseHandler(ToolHandler):
         tool_name: str,
         params: Dict[str, Any]
     ) -> Dict[str, Any]:
-        """Call TradingView MCP via subprocess.
-
-        This is a placeholder - actual implementation will call the TradingView MCP
-        server via subprocess or API.
+        """Call TradingView Scanner API.
 
         Args:
             tool_name: Name of the TradingView tool
@@ -145,11 +142,64 @@ class TradingViewBaseHandler(ToolHandler):
 
         Returns:
             Response data from TradingView
-
-        Raises:
-            Exception: If TradingView call fails
         """
-        # TODO: Implement actual TradingView MCP call
-        # For now, return empty structure
-        logger.info(f"Calling TradingView {tool_name} with params: {params}")
-        return {"data": []}
+        import asyncio
+        from mcp_server.tradingview import scanner_api
+        
+        exchange = params.get("exchange", "BINANCE")
+        symbol = params.get("symbol")
+        
+        try:
+            if tool_name == "get_coin_analysis":
+                data = await asyncio.to_thread(
+                    scanner_api.get_coin_analysis,
+                    exchange=exchange,
+                    symbol=symbol,
+                    timeframe=params.get("timeframe", "1D")
+                )
+                return {"data": data}
+            
+            elif tool_name == "get_top_gainers":
+                data = await asyncio.to_thread(
+                    scanner_api.get_top_movers,
+                    exchange=exchange,
+                    list_type="gainers",
+                    limit=params.get("limit", 10)
+                )
+                return {"data": data}
+                
+            elif tool_name == "get_top_losers":
+                data = await asyncio.to_thread(
+                    scanner_api.get_top_movers,
+                    exchange=exchange,
+                    list_type="losers",
+                    limit=params.get("limit", 10)
+                )
+                return {"data": data}
+            
+            elif tool_name == "get_bollinger_scan":
+                data = await asyncio.to_thread(
+                    scanner_api.get_bollinger_scan,
+                    exchange=exchange,
+                    timeframe=params.get("timeframe", "1D"),
+                    limit=params.get("limit", 10)
+                )
+                return {"data": data}
+
+            elif tool_name == "get_rating_filter":
+                data = await asyncio.to_thread(
+                    scanner_api.get_rating_filter,
+                    exchange=exchange,
+                    rating=params.get("rating", 0),
+                    timeframe=params.get("timeframe", "1D"),
+                    limit=params.get("limit", 10)
+                )
+                return {"data": data}
+            
+            # TODO: Implement get_consecutive_candles, get_advanced_candle_pattern
+            logger.warning(f"Tool {tool_name} not yet fully implemented in real scanner")
+            return {"data": []}
+
+        except Exception as e:
+            logger.error(f"TradingView call failed: {e}")
+            return {"error": str(e), "data": []}
