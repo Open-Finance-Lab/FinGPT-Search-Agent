@@ -167,9 +167,6 @@ Added: `https://www.tradingview.com`
 14. `mcp_server/tradingview/TRADINGVIEW_QUICK_START.md`
 15. `verify_tradingview_integration.py`
 
-**Tests:**
-- `tests/mcp_server/__init__.py`
-- `tests/mcp_server/test_tradingview_validation.py`
 
 ### Modified Files (5)
 
