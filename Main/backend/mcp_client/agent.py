@@ -19,6 +19,7 @@ from datascraper.url_tools import get_url_tools
 from datascraper.playwright_tools import get_playwright_tools
 
 from .apps import get_global_mcp_manager
+from .site_instructions import get_site_specific_instructions
 
 
 _mcp_init_lock = None
@@ -47,98 +48,55 @@ def apply_guardrails(prompt: str) -> str:
 
 
 DEFAULT_PROMPT = (
-    "You are a helpful financial assistant. "
-    "You have tools to fetch live financial data.\n\n"
-
-    "SEC FILINGS (10-K, 10-Q, 8-K, etc.):\n"
-    "ALWAYS use SEC-EDGAR MCP tools for SEC filing requests. These tools provide "
-    "direct access to official SEC EDGAR data. Available MCP tools include:\n"
-    "- search_filings: Search for filings by company, type, date\n"
-    "- get_filing_content: Get full text of a specific filing\n"
-    "- get_company_facts: Get standardized financial data (XBRL)\n"
-    "Do NOT use URL scraping for SEC filings - use the MCP tools.\n\n"
-
-    "YAHOO FINANCE DATA:\n"
-    "For any Yahoo Finance or stock market query, ALWAYS use the dedicated MCP tools first:\n"
-    "- get_stock_info: Current price, market cap, PE ratio, dividend yield, "
-    "52-week high/low, sector, industry, company description\n"
-    "- get_stock_history: Historical prices for any date range. "
-    "Use period param: '1d', '5d', '1mo', '3mo', '6mo', '1y', '2y', '5y', 'max'. "
-    "Use interval param: '1d', '1wk', '1mo'\n"
-    "- get_stock_financials: Income statement, balance sheet, cash flow\n"
-    "- get_stock_analysis: Analyst recommendations, price targets, EPS estimates\n"
-    "- get_stock_news: Recent news articles about the company\n\n"
-    "IMPORTANT for Yahoo Finance:\n"
-    "1. After calling an MCP tool, verify the response contains the data needed "
-    "to answer the user's question\n"
-    "2. If the data is missing or incomplete, try a different tool or parameters\n"
-    "3. Only if MCP tools cannot provide the needed data, fall back to Playwright browser tools\n"
-    "4. When using Playwright fallback, navigate to the page and extract the data\n"
-    "Do NOT use Playwright for numerical data if an MCP tool can answer the question.\n\n"
-
-    "TRADINGVIEW TECHNICAL ANALYSIS:\n"
-    "For technical indicators and crypto market screening, use TradingView MCP tools:\n"
-    "- get_coin_analysis: Complete technical analysis (RSI, MACD, Bollinger Bands, ADX, Stochastic, MAs)\n"
-    "  * Bollinger Band rating: -3 (very oversold) to +3 (very overbought)\n"
-    "- get_top_gainers/get_top_losers: Market screening by exchange and timeframe\n"
-    "  * Crypto: BINANCE, KUCOIN, BYBIT, BITGET, OKX, COINBASE, etc.\n"
-    "  * Stocks: NASDAQ, NYSE, BIST\n"
-    "  * Timeframes: 1m, 5m, 15m, 30m, 1h, 2h, 4h, 1D, 1W, 1M\n"
-    "- get_bollinger_scan: Find consolidation patterns (tight Bollinger Bands)\n"
-    "- get_rating_filter: Filter by Bollinger rating range\n"
-    "- get_consecutive_candles: Candlestick patterns\n"
-    "- get_advanced_candle_pattern: Multi-timeframe analysis\n\n"
-
-    "IMPORTANT for TradingView:\n"
-    "1. TradingView excels at technical indicators and crypto data\n"
-    "2. Prefer TradingView for crypto over Yahoo Finance (better exchange coverage)\n"
-    "3. Technical data is cached - multiple queries are fast\n"
-    "4. Bollinger ratings: -3=very oversold, 0=neutral, +3=very overbought\n\n"
-
-    "PLAYWRIGHT BROWSER TOOLS (for news, content, dynamic pages):\n"
-    "Use these for non-numerical content that requires browser interaction:\n"
-    "- navigate_to_url(url): Open a URL, get page title and content preview\n"
-    "- click_element(url, selector): Navigate to URL, click an element (news link, tab), get new page content\n"
-    "- extract_page_content(url): Extract main text content from a page\n"
-    "Use Playwright for:\n"
-    "- Reading news articles and headlines\n"
-    "- Analyst opinions and commentary\n"
-    "- Sentiment analysis of written content\n"
-    "- Any dynamic content requiring clicking into pages\n\n"
+    "You are a helpful financial assistant with access to real-time market data.\n\n"
 
     "TOOL SELECTION LOGIC:\n"
-    "1. Stock fundamentals (prices, ratios, financials) → Yahoo Finance MCP\n"
-    "2. Technical indicators (RSI, MACD, Bollinger) → TradingView MCP\n"
-    "3. Crypto market screening → TradingView MCP\n"
-    "4. Content queries (news, opinions, articles) → Playwright only\n"
-    "5. Hybrid query (e.g., 'Is BTC overbought?') → Use multiple tools:\n"
-    "   - TradingView MCP for RSI, Bollinger Bands\n"
-    "   - Yahoo Finance MCP for price history (if needed)\n"
-    "   - Combine insights in your response\n"
-    "6. If MCP fails or returns incomplete data → Playwright fallback\n\n"
+    "1. Stock Fundamentals (prices, PE, financials) → Yahoo Finance MCP tools.\n"
+    "2. Technical Analysis (RSI, MACD, Bollinger) → TradingView MCP tools.\n"
+    "3. SEC Filings (10-K, 10-Q) → SEC-EDGAR MCP tools.\n"
+    "4. Web Research (news, opinions, dynamic content) → Playwright browser tools.\n\n"
 
-    "URL SCRAPING (legacy, for current page):\n"
-    "You can scrape web pages when needed:\n"
-    "1. Call `resolve_url('generic_url', '{\"url\": \"<url>\"}')` to prepare\n"
-    "2. Call `scrape_url(url)` to fetch page content\n"
-    "IMPORTANT: Only scrape URLs within the same domain as the user's current page. "
-    "If the user asks for information from a different external website, "
-    "politely explain that you can only fetch data from the current page and "
-    "suggest they switch to Research mode for external web searches.\n\n"
-
-    "RULES:\n"
-    "- SEC queries → Use SEC-EDGAR MCP tools (preferred)\n"
-    "- Yahoo Finance numerical data → Use Yahoo Finance MCP tools (preferred)\n"
-    "- Yahoo Finance news/content → Use Playwright browser tools\n"
-    "- Yahoo Finance MCP fails → Playwright fallback for numerical data\n"
-    "- Current page queries → Use scrape_url (same domain only)\n"
-    "- External domain queries → Decline, suggest Research mode\n"
-    "- Never fabricate data\n"
-    "- When citing sources, say 'Yahoo Finance API' or 'SEC EDGAR API' - "
-    "never mention 'MCP' or internal implementation details\n\n"
-
-    "MATH: Use $ for inline, $$ for display equations."
+    "GENERAL RULES:\n"
+    "- ALWAYS use MCP tools first for numerical or official filing data.\n"
+    "- Use Playwright for reading articles, sentiment, or dynamic web content.\n"
+    "- Only use scrape_url for the domain currently being viewed by the user.\n"
+    "- NEVER disclose internal tool names like 'MCP' or 'Playwright' to the user.\n"
+    "- Use $ for inline math and $$ for display equations."
 )
+
+
+def get_dynamic_instructions(current_url: Optional[str]) -> str:
+    """Generate dynamic instructions based on the current URL context."""
+    if not current_url:
+        return ""
+
+    from urllib.parse import urlparse
+    parsed = urlparse(current_url)
+    domain = parsed.netloc or ""
+    domain = domain.lower()
+
+    # Get site-specific rules
+    site_rules = get_site_specific_instructions(domain)
+
+    context_parts = [
+        f"USER CONTEXT:\n- Current URL: {current_url}\n- Active Domain: {domain}"
+    ]
+
+    if site_rules:
+        context_parts.append(f"SITE-SPECIFIC RULES:\n{site_rules}")
+    else:
+        context_parts.append(
+            "GENERIC CONTEXT: You are on an external domain. "
+            "You may still use your tools, but prioritize the user's current domain "
+            "for scraping (if applicable) and use MCP tools for broad market data."
+        )
+
+    context_parts.append(
+        f"IMPORTANT: You may ONLY scrape/interact with URLs within {domain}. "
+        "For external domains, decline and suggest Research mode."
+    )
+
+    return "\n\n" + "\n".join(context_parts)
 
 @asynccontextmanager
 async def create_fin_agent(model: str = "gpt-4o-mini",
@@ -166,18 +124,10 @@ async def create_fin_agent(model: str = "gpt-4o-mini",
     else:
         instructions = DEFAULT_PROMPT
 
-    context_additions = []
-
-    if current_url:
-        from urllib.parse import urlparse
-        parsed = urlparse(current_url)
-        domain = parsed.netloc or "unknown"
-        context_additions.append(f"User is currently viewing: {current_url}")
-        context_additions.append(f"Active domain: {domain}")
-        context_additions.append(f"You may ONLY scrape URLs within {domain}. For external domains, decline and suggest Research mode.")
-
-    if context_additions:
-        instructions += "\n\n" + "\n".join(context_additions)
+    # Inject dynamic context-aware instructions
+    dynamic_context = get_dynamic_instructions(current_url)
+    if dynamic_context:
+        instructions += dynamic_context
 
     if user_timezone or user_time:
         from datetime import datetime
