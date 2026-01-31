@@ -736,6 +736,12 @@ async def _create_agent_response_async(user_input: str, message_list: list[dict]
     ) as agent:
         logging.info(f"[AGENT] Running agent with MCP tools")
         logging.info(f"[AGENT] Current URL: {current_url}")
+        
+        # If this a foundation model, prepend instructions to the first prompt
+        if hasattr(agent, "_foundation_instructions") and agent._foundation_instructions:
+            logging.info("[AGENT] Prepending foundation instructions to prompt")
+            full_prompt = f"[SYSTEM MESSAGE]: {agent._foundation_instructions}\n\n{full_prompt}"
+
         logging.info(f"[AGENT] Prompt preview: {full_prompt[:150]}...")
 
         result = await Runner.run(agent, full_prompt)
@@ -825,9 +831,16 @@ def create_agent_response_stream(
                         logging.info(f"[AGENT STREAM] Retry attempt {retry_count}/{MAX_RETRIES}")
                     else:
                         logging.info("[AGENT STREAM] Starting streamed agent run with MCP tools")
-                        logging.info(f"[AGENT STREAM] Prompt preview: {full_prompt[:150]}...")
                     
-                    result = Runner.run_streamed(agent, full_prompt)
+                    # If this a foundation model, prepend instructions to the first prompt
+                    current_full_prompt = full_prompt
+                    if hasattr(agent, "_foundation_instructions") and agent._foundation_instructions:
+                        logging.info("[AGENT STREAM] Prepending foundation instructions to prompt")
+                        current_full_prompt = f"[SYSTEM MESSAGE]: {agent._foundation_instructions}\n\n{full_prompt}"
+
+                    logging.info(f"[AGENT STREAM] Prompt preview: {current_full_prompt[:150]}...")
+                    
+                    result = Runner.run_streamed(agent, current_full_prompt)
 
                     async for event in result.stream_events():
                         event_type = getattr(event, "type", "")
