@@ -119,10 +119,9 @@ async def create_fin_agent(model: str = "gpt-4o-mini",
     Yields:
         Agent instance configured with tools
     """
+    instructions = DEFAULT_PROMPT
     if system_prompt:
-        instructions = system_prompt
-    else:
-        instructions = DEFAULT_PROMPT
+        instructions += "\n\nSYSTEM OVERRIDE:\n" + system_prompt
 
     # Inject dynamic context-aware instructions
     dynamic_context = get_dynamic_instructions(current_url)
