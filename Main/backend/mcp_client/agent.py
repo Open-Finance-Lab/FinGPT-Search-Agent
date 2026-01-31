@@ -24,7 +24,7 @@ from .site_instructions import get_site_specific_instructions
 
 _mcp_init_lock = None
 
-USER_ONLY_MODELS = {"o3-mini"}
+USER_ONLY_MODELS = {"o3-mini", "o1-mini", "o1-preview", "gpt-5-mini", "gpt-5.1-chat-latest"}
 
 SECURITY_GUARDRAILS = (
     "SECURITY REQUIREMENTS:\n"
@@ -53,7 +53,7 @@ DEFAULT_PROMPT = (
     "TOOL SELECTION LOGIC:\n"
     "1. Stock Fundamentals (prices, PE, financials) → Yahoo Finance MCP tools.\n"
     "2. Technical Analysis (RSI, MACD, Bollinger) → TradingView MCP tools.\n"
-    "3. SEC Filings (10-K, 10-Q) → SEC-EDGAR MCP tools.\n"
+    "3. SEC Filings (10-K, 10-Q) or any historical financial data like a company's revenue, earnings, etc. → SEC-EDGAR MCP tools.\n"
     "4. Web Research (news, opinions, dynamic content) → Playwright browser tools.\n\n"
 
     "GENERAL RULES:\n"
@@ -253,15 +253,26 @@ async def create_fin_agent(model: str = "gpt-4o-mini",
             logging.error(f"Error fetching/adding MCP tools: {e}", exc_info=True)
 
     try:
+        # Handle foundation models that don't support "system" roles
+        if actual_model in USER_ONLY_MODELS:
+            logging.info(f"[AGENT] Foundation model detected ({actual_model}). Moving instructions to message layer.")
+            agent_instructions = ""
+        else:
+            agent_instructions = instructions
+
         agent = Agent(
             name="FinGPT Search Agent",
-            instructions=instructions,
+            instructions=agent_instructions,
             model=actual_model,
             tools=tools if tools else [],
             model_settings=ModelSettings(
                 tool_choice="auto" if tools else None
             )
         )
+        
+        # Attach instructions as a property for the runner to use if agent_instructions is empty
+        if actual_model in USER_ONLY_MODELS:
+            agent._foundation_instructions = instructions
 
         yield agent
 
