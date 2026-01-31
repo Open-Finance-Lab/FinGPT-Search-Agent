@@ -8,10 +8,10 @@ SITE_INSTRUCTIONS = {
         "3. Do NOT use TradingView tools unless explicitly asked for technical indicators like RSI/MACD."
     ),
     "tradingview.com": (
-        "ACTIVE CONTEXT: TradingView\n"
-        "1. ALWAYS prefer TradingView MCP tools (get_coin_analysis, get_top_gainers) for technical analysis and market screening.\n"
-        "2. Use TradingView for crypto data as it has better exchange coverage.\n"
-        "3. Do NOT use Yahoo Finance tools unless the requested data (e.g., financials) is unavailable on TradingView."
+        "USER IS ON TRADINGVIEW.COM. THIS IS THE AUTHORITATIVE CONTEXT.\n"
+        "1. ALWAYS prioritize TradingView MCP tools for ANY stock or crypto data including prices, ratios, and technicals.\n"
+        "2. Do NOT use Yahoo Finance tools unless TradingView explicitly returns an 'error' or 'unsupported' message for the ticker.\n"
+        "3. TradingView handles basic market info (OHLCV, PE, Market Cap) via its technical markers."
     ),
     "sec.gov": (
         "ACTIVE CONTEXT: SEC EDGAR\n"

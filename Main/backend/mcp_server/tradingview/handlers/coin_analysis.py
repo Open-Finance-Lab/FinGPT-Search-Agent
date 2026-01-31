@@ -2,6 +2,7 @@
 
 import json
 import logging
+import re
 from typing import List
 
 import mcp.types as types
@@ -11,7 +12,9 @@ from mcp_server.tradingview.handlers.base import TradingViewBaseHandler
 from mcp_server.tradingview.validation import (
     validate_exchange,
     validate_timeframe,
-    validate_crypto_symbol
+    validate_crypto_symbol,
+    VALID_STOCK_EXCHANGES,
+    ValidationError
 )
 
 
@@ -46,9 +49,21 @@ class GetCoinAnalysisHandler(TradingViewBaseHandler):
             List containing technical analysis as JSON
         """
         try:
+            # Determine market type from exchange
+            raw_exchange = ctx.arguments.get("exchange", "").upper().strip()
+            market_type = 'stock' if raw_exchange in VALID_STOCK_EXCHANGES else 'crypto'
+            
             # Validate inputs
-            exchange = validate_exchange(ctx.arguments.get("exchange"), market_type='crypto')
-            symbol = validate_crypto_symbol(ctx.arguments.get("symbol"))
+            exchange = validate_exchange(raw_exchange, market_type=market_type)
+            
+            if market_type == 'crypto':
+                symbol = validate_crypto_symbol(ctx.arguments.get("symbol"))
+            else:
+                # Basic stock symbol validation (1-5 chars)
+                symbol = ctx.arguments.get("symbol", "").upper().strip()
+                if not re.match(r'^[A-Z.]{1,10}$', symbol):
+                    raise ValidationError(f"Invalid stock symbol: {symbol}")
+            
             timeframe = validate_timeframe(ctx.arguments.get("timeframe", "1D"))
 
             # Check cache

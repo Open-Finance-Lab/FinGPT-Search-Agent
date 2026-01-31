@@ -699,12 +699,17 @@ async def _create_agent_response_async(user_input: str, message_list: list[dict]
     from agents import Runner
 
     context = ""
+    extracted_system_prompt = None
+    
     for msg in message_list:
         content = msg.get("content", "")
 
         if content.startswith(SYSTEM_PREFIX):
             actual_content = content.replace(SYSTEM_PREFIX, "", 1)
-            context += f"System: {actual_content}\n"
+            if extracted_system_prompt:
+                extracted_system_prompt += "\n\n" + actual_content
+            else:
+                extracted_system_prompt = actual_content
             continue
 
         matched, actual_content = _strip_any_prefix(content, USER_PREFIXES)
@@ -723,6 +728,7 @@ async def _create_agent_response_async(user_input: str, message_list: list[dict]
 
     async with create_fin_agent(
         model=model,
+        system_prompt=extracted_system_prompt,
         user_input=user_input,
         current_url=current_url,
         user_timezone=user_timezone,
@@ -774,14 +780,14 @@ def create_agent_response_stream(
 
     async def _stream() -> AsyncIterator[str]:
         from agents import Runner
-        import asyncio
-
         context = ""
+        extracted_system_prompt = None
+        
         for msg in message_list:
             content = msg.get("content", "")
             if content.startswith(SYSTEM_PREFIX):
                 actual_content = content.replace(SYSTEM_PREFIX, "", 1)
-                context += f"System: {actual_content}\n"
+                extracted_system_prompt = actual_content
                 continue
 
             matched, actual_content = _strip_any_prefix(content, USER_PREFIXES)
@@ -809,6 +815,7 @@ def create_agent_response_stream(
             try:
                 async with create_fin_agent(
                     model=model,
+                    system_prompt=extracted_system_prompt,
                     user_input=user_input,
                     current_url=current_url,
                     user_timezone=user_timezone,
