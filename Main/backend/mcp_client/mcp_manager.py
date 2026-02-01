@@ -97,7 +97,6 @@ class MCPClientManager:
                         self._log(f"[MCP DEBUG] Connecting to server: {server_name}...")
                         await self._connect_server(server_name, server_config)
                         self._log(f"[MCP DEBUG] Successfully connected to: {server_name}")
-                        logger.info(f"Connected to MCP server: {server_name}")
                     except Exception as e:
                         self._log(f"[MCP DEBUG] Failed to connect to {server_name}: {e}", force=True)
                         logger.error(f"Failed to connect to MCP server {server_name}: {e}")
@@ -145,6 +144,12 @@ class MCPClientManager:
                         return os.environ.get(var_name, match.group(0))
                     value = re.sub(r'\$\{([^}]+)\}|\$(\w+)', replace_var, value)
                 full_env[key] = value
+
+            # Pass log level control to subprocesses
+            if not self.verbose:
+                full_env["MCP_LOG_LEVEL"] = "WARNING"
+            else:
+                full_env["MCP_LOG_LEVEL"] = "INFO"
 
             executable = shutil.which(command) or command
 

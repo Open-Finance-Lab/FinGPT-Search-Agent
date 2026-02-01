@@ -48,12 +48,18 @@ def get_market_from_exchange(exchange: str) -> str:
 def call_scanner_api(market: str, payload: Dict[str, Any]) -> Dict[str, Any]:
     """Perform request to TradingView Scanner API."""
     url = SCANNER_URL.format(market=market)
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+        "Content-Type": "application/json"
+    }
     try:
-        response = requests.post(url, json=payload, timeout=15)
+        response = requests.post(url, json=payload, headers=headers, timeout=15)
         response.raise_for_status()
         return response.json()
     except Exception as e:
         logger.error(f"TradingView Scanner API error: {e}")
+        # Log payload for debugging
+        logger.debug(f"Failed payload: {payload}")
         raise e
 
 def get_coin_analysis(exchange: str, symbol: str, timeframe: str = "1D") -> Dict[str, Any]:
@@ -100,22 +106,37 @@ def get_coin_analysis(exchange: str, symbol: str, timeframe: str = "1D") -> Dict
     
     return normalized
 
-def get_top_movers(exchange: str, list_type: str = "gainers", limit: int = 10) -> List[Dict[str, Any]]:
+def get_timeframe_suffix(timeframe: str) -> str:
+    """Get the TradingView column suffix for a given timeframe."""
+    tf_map = {
+        "1m": "|1", "5m": "|5", "15m": "|15", "30m": "|30",
+        "1h": "|60", "2h": "|120", "4h": "|240",
+        "1D": "", "1W": "|1W", "1M": "|1M"
+    }
+    return tf_map.get(timeframe, "")
+
+def get_top_movers(exchange: str, list_type: str = "gainers", limit: int = 10, timeframe: str = "1D") -> List[Dict[str, Any]]:
     """Fetch top gainers or losers for an exchange."""
     market = get_market_from_exchange(exchange)
+    suffix = get_timeframe_suffix(timeframe)
     
-    sort_field = "change"
+    # Use timeframe-specific change column
+    change_col = f"change{suffix}" if suffix else "change"
+    close_col = f"close{suffix}" if suffix else "close"
+    volume_col = f"volume{suffix}" if suffix else "volume"
+    
+    sort_field = change_col
     sort_order = "desc" if list_type == "gainers" else "asc"
     
     payload = {
         "filter": [
             {"left": "exchange", "operation": "equal", "value": exchange.upper()},
-            {"left": "change", "operation": "nempty"}
+            {"left": change_col, "operation": "nempty"}
         ],
         "options": {"lang": "en"},
         "markets": [market],
         "symbols": {"query": {"types": []}, "tickers": []},
-        "columns": ["name", "description", "close", "change", "volume"],
+        "columns": ["name", "description", close_col, change_col, volume_col],
         "sort": {"sort_by": sort_field, "order_order": sort_order},
         "range": [0, limit]
     }
@@ -130,9 +151,9 @@ def get_top_movers(exchange: str, list_type: str = "gainers", limit: int = 10) -
         results.append({
             "symbol": item["name"],
             "name": item["description"],
-            "close": item["close"],
-            "change_percent": item["change"],
-            "volume": item["volume"]
+            "close": item[close_col],
+            "change_percent": item[change_col],
+            "volume": item[volume_col]
         })
         
     return results

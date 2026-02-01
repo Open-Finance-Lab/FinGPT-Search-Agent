@@ -164,7 +164,8 @@ class TradingViewBaseHandler(ToolHandler):
                     scanner_api.get_top_movers,
                     exchange=exchange,
                     list_type="gainers",
-                    limit=params.get("limit", 10)
+                    limit=params.get("limit", 10),
+                    timeframe=params.get("timeframe", "1D")
                 )
                 return {"data": data}
                 
@@ -173,7 +174,8 @@ class TradingViewBaseHandler(ToolHandler):
                     scanner_api.get_top_movers,
                     exchange=exchange,
                     list_type="losers",
-                    limit=params.get("limit", 10)
+                    limit=params.get("limit", 10),
+                    timeframe=params.get("timeframe", "1D")
                 )
                 return {"data": data}
             

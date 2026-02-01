@@ -12,7 +12,7 @@ class ValidationError(Exception):
 # Exchange validation sets
 VALID_CRYPTO_EXCHANGES = {
     'KUCOIN', 'BINANCE', 'BYBIT', 'BITGET', 'OKX', 'COINBASE',
-    'GATEIO', 'HUOBI', 'BITFINEX', 'KRAKEN', 'MEXC', 'GEMINI'
+    'GATEIO', 'HUOBI', 'BITFINEX', 'KRAKEN', 'MEXC', 'GEMINI', 'BITSTAMP'
 }
 
 VALID_STOCK_EXCHANGES = {
