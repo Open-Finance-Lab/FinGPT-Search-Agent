@@ -1,0 +1,136 @@
+"""Handler for get_coin_analysis tool - complete technical analysis."""
+
+import json
+import logging
+import re
+from typing import List
+
+import mcp.types as types
+
+from mcp_server.handlers.base import ToolContext
+from mcp_server.tradingview.handlers.base import TradingViewBaseHandler
+from mcp_server.tradingview.validation import (
+    validate_exchange,
+    validate_timeframe,
+    validate_crypto_symbol,
+    VALID_STOCK_EXCHANGES,
+    ValidationError
+)
+
+
+logger = logging.getLogger(__name__)
+
+
+class GetCoinAnalysisHandler(TradingViewBaseHandler):
+    """Handler for get_coin_analysis tool.
+
+    Provides complete technical analysis including:
+    - Price data (OHLCV)
+    - Bollinger Bands (upper, middle, lower, width, rating)
+    - Oscillators (RSI, MACD, Stochastic, ADX)
+    - Moving Averages (SMA, EMA)
+    """
+
+    def __init__(self):
+        """Initialize with longer cache TTL for technical data."""
+        # Cache TTL varies by timeframe, default to 10 minutes
+        super().__init__(cache_ttl_seconds=600)
+
+    async def execute(self, ctx: ToolContext) -> List[types.TextContent]:
+        """Execute get_coin_analysis tool.
+
+        Args:
+            ctx: Tool execution context with arguments:
+                - exchange: Exchange name (e.g., 'BINANCE', 'KUCOIN')
+                - symbol: Trading pair symbol (e.g., 'BTCUSDT')
+                - timeframe: Timeframe (e.g., '1D', '4h', '1h')
+
+        Returns:
+            List containing technical analysis as JSON
+        """
+        try:
+            # Determine market type from exchange
+            raw_exchange = ctx.arguments.get("exchange", "").upper().strip()
+            market_type = 'stock' if raw_exchange in VALID_STOCK_EXCHANGES else 'crypto'
+            
+            # Validate inputs
+            exchange = validate_exchange(raw_exchange, market_type=market_type)
+            
+            if market_type == 'crypto':
+                symbol = validate_crypto_symbol(ctx.arguments.get("symbol"))
+            else:
+                # Basic stock symbol validation (1-5 chars)
+                symbol = ctx.arguments.get("symbol", "").upper().strip()
+                if not re.match(r'^[A-Z.]{1,10}$', symbol):
+                    raise ValidationError(f"Invalid stock symbol: {symbol}")
+            
+            timeframe = validate_timeframe(ctx.arguments.get("timeframe", "1D"))
+
+            # Check cache
+            cache_key = self._get_cache_key(
+                exchange=exchange,
+                symbol=symbol,
+                timeframe=timeframe
+            )
+
+            cached = self._cache.get(cache_key)
+            if cached:
+                logger.info(f"Cache hit for {exchange}:{symbol}:{timeframe}")
+                return [types.TextContent(
+                    type="text",
+                    text=cached
+                )]
+
+            logger.info(f"Cache miss for {exchange}:{symbol}:{timeframe}")
+
+            # Call TradingView MCP
+            response = await self._call_tradingview(
+                tool_name="get_coin_analysis",
+                params={
+                    "exchange": exchange,
+                    "symbol": symbol,
+                    "timeframe": timeframe
+                }
+            )
+
+            # Filter to relevant fields
+            filtered = self._filter_numerical_fields(response)
+
+            # Enforce numerical types
+            if 'data' in filtered and filtered['data']:
+                # Assuming response has single analysis object
+                analysis = filtered['data']
+                if isinstance(analysis, dict):
+                    analysis = self._enforce_numerical_types(analysis)
+                    filtered['data'] = analysis
+
+            # Format response
+            result = {
+                "exchange": exchange,
+                "symbol": symbol,
+                "timeframe": timeframe,
+                "analysis": filtered.get('data', {})
+            }
+
+            # Serialize and cache
+            result_json = json.dumps(result, indent=2)
+            self._cache.set(cache_key, result_json)
+
+            return [types.TextContent(
+                type="text",
+                text=result_json
+            )]
+
+        except Exception as e:
+            logger.error(f"Error in get_coin_analysis: {e}", exc_info=True)
+            error_msg = {
+                "error": "analysis_error",
+                "message": str(e),
+                "exchange": ctx.arguments.get("exchange"),
+                "symbol": ctx.arguments.get("symbol"),
+                "timeframe": ctx.arguments.get("timeframe")
+            }
+            return [types.TextContent(
+                type="text",
+                text=json.dumps(error_msg, indent=2)
+            )]
