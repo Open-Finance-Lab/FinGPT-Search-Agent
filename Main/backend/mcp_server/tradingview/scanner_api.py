@@ -1,23 +1,18 @@
-"""TradingView Scanner API client logic."""
+"""TradingView Scanner API client logic.
+
+Uses tradingview-ta for individual symbol analysis and
+tradingview-screener for exchange-wide screening queries.
+"""
 
 import logging
-import requests
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
+
+from tradingview_ta import Interval, get_multiple_analysis
+from tradingview_screener import Query, col
 
 logger = logging.getLogger(__name__)
 
-# Scanner endpoints
-SCANNER_URL = "https://scanner.tradingview.com/{market}/scan"
-
-# Column mapping for technical indicators
-TECHNICAL_COLUMNS = [
-    "name", "description", "logoid", "update_mode", "type", "typespecs", "close", "pricescale", "minmov", "fractional", "minmove2", "change", "change_abs", "recommendation", "volume", "market_cap_basic",
-    "RSI", "RSI[1]", "Stoch.K", "Stoch.D", "Stoch.K[1]", "Stoch.D[1]", "CCI20", "CCI20[1]", "ADX", "ADX+DI", "ADX-DI", "ADX+DI[1]", "ADX-DI[1]", "AO", "AO[1]", "AO[2]", "Mom", "Mom[1]", "MACD.macd", "MACD.signal", "Rec.Stoch.RSI", "Stoch.RSI.K", "Rec.WR", "W.R", "Rec.BBPower", "BBPower", "Rec.UO", "UO",
-    "EMA10", "SMA10", "EMA20", "SMA20", "EMA30", "SMA30", "EMA50", "SMA50", "EMA100", "SMA100", "EMA200", "SMA200", "Rec.Ichimoku", "Ichimoku.BLine", "Rec.VWMA", "VWMA", "Rec.HullMA9", "HullMA9",
-    "BB.lower", "BB.upper", "Pivot.M.Classic.S3", "Pivot.M.Classic.S2", "Pivot.M.Classic.S1", "Pivot.M.Classic.Middle", "Pivot.M.Classic.R1", "Pivot.M.Classic.R2", "Pivot.M.Classic.R3", "Pivot.M.Fibonacci.S3", "Pivot.M.Fibonacci.S2", "Pivot.M.Fibonacci.S1", "Pivot.M.Fibonacci.Middle", "Pivot.M.Fibonacci.R1", "Pivot.M.Fibonacci.R2", "Pivot.M.Fibonacci.R3", "Pivot.M.Camarilla.S3", "Pivot.M.Camarilla.S2", "Pivot.M.Camarilla.S1", "Pivot.M.Camarilla.Middle", "Pivot.M.Camarilla.R1", "Pivot.M.Camarilla.R2", "Pivot.M.Camarilla.R3", "Pivot.M.Woodie.S3", "Pivot.M.Woodie.S2", "Pivot.M.Woodie.S1", "Pivot.M.Woodie.Middle", "Pivot.M.Woodie.R1", "Pivot.M.Woodie.R2", "Pivot.M.Woodie.R3", "Pivot.M.DeMark.S1", "Pivot.M.DeMark.Middle", "Pivot.M.DeMark.R1", "open", "high", "low"
-]
-
-# Field mapping for internal tool keys to TradingView columns
+# Field mapping for internal tool keys to TradingView indicator names
 FIELD_MAP = {
     "RSI": "RSI",
     "MACD": "MACD.macd",
@@ -31,195 +26,318 @@ FIELD_MAP = {
     "EMA_50": "EMA50",
     "EMA_200": "EMA200",
     "volume_24h": "volume",
-    "change_percent": "change"
+    "change_percent": "change",
 }
 
+# Map our timeframe strings to tradingview-ta Interval constants
+INTERVAL_MAP = {
+    "1m": Interval.INTERVAL_1_MINUTE,
+    "5m": Interval.INTERVAL_5_MINUTES,
+    "15m": Interval.INTERVAL_15_MINUTES,
+    "30m": Interval.INTERVAL_30_MINUTES,
+    "1h": Interval.INTERVAL_1_HOUR,
+    "2h": Interval.INTERVAL_2_HOURS,
+    "4h": Interval.INTERVAL_4_HOURS,
+    "1D": Interval.INTERVAL_1_DAY,
+    "1W": Interval.INTERVAL_1_WEEK,
+    "1M": Interval.INTERVAL_1_MONTH,
+}
+
+# Map timeframe to tradingview-screener column suffix
+SCREENER_SUFFIX_MAP = {
+    "1m": "|1", "5m": "|5", "15m": "|15", "30m": "|30",
+    "1h": "|60", "2h": "|120", "4h": "|240",
+    "1D": "", "1W": "|1W", "1M": "|1M",
+}
+
+
 def get_market_from_exchange(exchange: str) -> str:
-    """Map exchange to TradingView market folder."""
+    """Map exchange to TradingView screener market name."""
     exchange = exchange.upper()
-    if exchange in ['BINANCE', 'KUCOIN', 'BYBIT', 'BITGET', 'OKX', 'COINBASE', 'GATEIO', 'HUOBI', 'BITFINEX']:
+    if exchange in [
+        "BINANCE", "KUCOIN", "BYBIT", "BITGET", "OKX",
+        "COINBASE", "GATEIO", "HUOBI", "BITFINEX",
+    ]:
         return "crypto"
-    if exchange in ['NASDAQ', 'NYSE', 'AMEX']:
+    if exchange in ["NASDAQ", "NYSE", "AMEX"]:
         return "america"
-    if exchange == 'BIST':
+    if exchange == "BIST":
         return "turkey"
-    return "world"
+    return "america"
 
-def call_scanner_api(market: str, payload: Dict[str, Any]) -> Dict[str, Any]:
-    """Perform request to TradingView Scanner API."""
-    url = SCANNER_URL.format(market=market)
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-        "Content-Type": "application/json"
-    }
-    try:
-        response = requests.post(url, json=payload, headers=headers, timeout=15)
-        response.raise_for_status()
-        return response.json()
-    except Exception as e:
-        logger.error(f"TradingView Scanner API error: {e}")
-        # Log payload for debugging
-        logger.debug(f"Failed payload: {payload}")
-        raise e
 
-def get_coin_analysis(exchange: str, symbol: str, timeframe: str = "1D") -> Dict[str, Any]:
-    """Fetch complete technical analysis for a symbol."""
+def _get_interval(timeframe: str) -> str:
+    """Convert our timeframe string to a tradingview-ta Interval constant."""
+    return INTERVAL_MAP.get(timeframe, Interval.INTERVAL_1_DAY)
+
+
+def _get_suffix(timeframe: str) -> str:
+    """Get the tradingview-screener column suffix for a timeframe."""
+    return SCREENER_SUFFIX_MAP.get(timeframe, "")
+
+
+def get_coin_analysis(
+    exchange: str, symbol: str, timeframe: str = "1D"
+) -> Dict[str, Any]:
+    """Fetch complete technical analysis for a symbol.
+
+    Uses tradingview-ta's get_multiple_analysis() for reliable data retrieval.
+    """
     market = get_market_from_exchange(exchange)
-    
-    # TradingView expects symbol as "EXCHANGE:SYMBOL"
+    interval = _get_interval(timeframe)
     full_symbol = f"{exchange.upper()}:{symbol.upper()}"
-    
-    payload = {
-        "symbols": {
-            "tickers": [full_symbol],
-            "query": {"types": []}
-        },
-        "columns": TECHNICAL_COLUMNS
-    }
-    
-    # Note: Timeframe handling in the scanner API is complex; 
-    # usually done via specific column suffixes if needed, 
-    # but the base columns return the default (usually 1D).
-    
-    data = call_scanner_api(market, payload)
-    
-    if not data.get("data"):
+
+    try:
+        analyses = get_multiple_analysis(
+            screener=market,
+            interval=interval,
+            symbols=[full_symbol],
+        )
+    except Exception as e:
+        logger.error(f"tradingview-ta analysis failed for {full_symbol}: {e}")
+        raise
+
+    analysis = analyses.get(full_symbol)
+    if analysis is None:
+        logger.warning(f"No analysis data returned for {full_symbol}")
         return {}
-        
-    raw_item = data["data"][0]["d"]
-    # Map raw list to dict using TECHNICAL_COLUMNS
-    result = {TECHNICAL_COLUMNS[i]: raw_item[i] for i in range(len(TECHNICAL_COLUMNS))}
-    
-    # Internal normalization
-    normalized = {}
+
+    indicators = analysis.indicators or {}
+
+    # Build normalized result using FIELD_MAP
+    normalized: Dict[str, Any] = {}
     for internal_key, tv_key in FIELD_MAP.items():
-        if tv_key in result:
-            normalized[internal_key] = result[tv_key]
-            
-    # Add basics
-    normalized["close"] = result.get("close")
-    normalized["open"] = result.get("open")
-    normalized["high"] = result.get("high")
-    normalized["low"] = result.get("low")
-    normalized["volume"] = result.get("volume")
-    normalized["name"] = symbol
-    
+        val = indicators.get(tv_key)
+        if val is not None:
+            normalized[internal_key] = val
+
+    # Add price basics
+    normalized["close"] = indicators.get("close")
+    normalized["open"] = indicators.get("open")
+    normalized["high"] = indicators.get("high")
+    normalized["low"] = indicators.get("low")
+    normalized["volume"] = indicators.get("volume")
+    normalized["name"] = symbol.upper()
+
+    # Add recommendation summaries (bonus data from the library)
+    normalized["recommendation"] = analysis.summary.get("RECOMMENDATION")
+    normalized["oscillators_recommendation"] = analysis.oscillators.get(
+        "RECOMMENDATION"
+    )
+    normalized["moving_averages_recommendation"] = analysis.moving_averages.get(
+        "RECOMMENDATION"
+    )
+
     return normalized
 
-def get_timeframe_suffix(timeframe: str) -> str:
-    """Get the TradingView column suffix for a given timeframe."""
-    tf_map = {
-        "1m": "|1", "5m": "|5", "15m": "|15", "30m": "|30",
-        "1h": "|60", "2h": "|120", "4h": "|240",
-        "1D": "", "1W": "|1W", "1M": "|1M"
-    }
-    return tf_map.get(timeframe, "")
 
-def get_top_movers(exchange: str, list_type: str = "gainers", limit: int = 10, timeframe: str = "1D") -> List[Dict[str, Any]]:
-    """Fetch top gainers or losers for an exchange."""
+def get_top_movers(
+    exchange: str,
+    list_type: str = "gainers",
+    limit: int = 10,
+    timeframe: str = "1D",
+) -> List[Dict[str, Any]]:
+    """Fetch top gainers or losers for an exchange.
+
+    Uses tradingview-screener Query builder for reliable scanning.
+    """
     market = get_market_from_exchange(exchange)
-    suffix = get_timeframe_suffix(timeframe)
-    
-    # Use timeframe-specific change column
+    suffix = _get_suffix(timeframe)
+
     change_col = f"change{suffix}" if suffix else "change"
     close_col = f"close{suffix}" if suffix else "close"
     volume_col = f"volume{suffix}" if suffix else "volume"
-    
-    sort_field = change_col
-    sort_order = "desc" if list_type == "gainers" else "asc"
-    
-    payload = {
-        "filter": [
-            {"left": "exchange", "operation": "equal", "value": exchange.upper()},
-            {"left": change_col, "operation": "nempty"}
-        ],
-        "options": {"lang": "en"},
-        "markets": [market],
-        "symbols": {"query": {"types": []}, "tickers": []},
-        "columns": ["name", "description", close_col, change_col, volume_col],
-        "sort": {"sort_by": sort_field, "order_order": sort_order},
-        "range": [0, limit]
-    }
-    
-    data = call_scanner_api(market, payload)
-    
+
+    ascending = list_type != "gainers"
+
+    try:
+        _count, df = (
+            Query()
+            .select("name", "description", close_col, change_col, volume_col)
+            .set_markets(market)
+            .where(
+                col("exchange") == exchange.upper(),
+                col(change_col).not_empty(),
+            )
+            .order_by(change_col, ascending=ascending)
+            .limit(limit)
+            .get_scanner_data()
+        )
+    except Exception as e:
+        logger.error(f"tradingview-screener top_movers failed: {e}")
+        raise
+
     results = []
-    columns = payload["columns"]
-    for row in data.get("data", []):
-        item = {columns[i]: row["d"][i] for i in range(len(columns))}
-        # Map to internal expected fields
+    for _, row in df.iterrows():
         results.append({
-            "symbol": item["name"],
-            "name": item["description"],
-            "close": item[close_col],
-            "change_percent": item[change_col],
-            "volume": item[volume_col]
+            "symbol": row.get("name", ""),
+            "name": row.get("description", ""),
+            "close": row.get(close_col),
+            "change_percent": row.get(change_col),
+            "volume": row.get(volume_col),
         })
-        
+
     return results
 
-def get_bollinger_scan(exchange: str, timeframe: str = "1D", limit: int = 10) -> List[Dict[str, Any]]:
-    """Find assets with tight Bollinger Bands (BB Width < 0.05)."""
-    market = get_market_from_exchange(exchange)
-    
-    payload = {
-        "filter": [
-            {"left": "exchange", "operation": "equal", "value": exchange.upper()},
-            {"left": "BB.width", "operation": "less", "value": 0.05}
-        ],
-        "options": {"lang": "en"},
-        "markets": [market],
-        "symbols": {"query": {"types": []}, "tickers": []},
-        "columns": ["name", "description", "close", "BB.width", "volume"],
-        "sort": {"sort_by": "BB.width", "order_order": "asc"},
-        "range": [0, limit]
-    }
-    
-    data = call_scanner_api(market, payload)
-    
-    results = []
-    columns = payload["columns"]
-    for row in data.get("data", []):
-        item = {columns[i]: row["d"][i] for i in range(len(columns))}
-        results.append({
-            "symbol": item["name"],
-            "name": item["description"],
-            "close": item["close"],
-            "BB_width": item["BB.width"],
-            "volume": item["volume"]
-        })
-        
-    return results
 
-def get_rating_filter(exchange: str, rating: int = 0, timeframe: str = "1D", limit: int = 10) -> List[Dict[str, Any]]:
-    """Filter assets by Bollinger Band rating."""
+def get_bollinger_scan(
+    exchange: str, timeframe: str = "1D", limit: int = 10
+) -> List[Dict[str, Any]]:
+    """Find assets with tight Bollinger Bands (BBW < 0.05).
+
+    Uses tradingview-screener to fetch BB components, then computes
+    Bollinger Band Width in Python as (BB.upper - BB.lower) / SMA20.
+    """
     market = get_market_from_exchange(exchange)
-    
-    payload = {
-        "filter": [
-            {"left": "exchange", "operation": "equal", "value": exchange.upper()},
-            {"left": "BB.rating", "operation": "equal", "value": rating}
-        ],
-        "options": {"lang": "en"},
-        "markets": [market],
-        "symbols": {"query": {"types": []}, "tickers": []},
-        "columns": ["name", "description", "close", "BB.rating", "volume"],
-        "sort": {"sort_by": "volume", "order_order": "desc"},
-        "range": [0, limit]
-    }
-    
-    data = call_scanner_api(market, payload)
-    
+    suffix = _get_suffix(timeframe)
+
+    close_col = f"close{suffix}" if suffix else "close"
+    sma20_col = f"SMA20{suffix}" if suffix else "SMA20"
+    bb_upper_col = f"BB.upper{suffix}" if suffix else "BB.upper"
+    bb_lower_col = f"BB.lower{suffix}" if suffix else "BB.lower"
+    volume_col = f"volume{suffix}" if suffix else "volume"
+
+    # Fetch more than needed so we can filter by computed BBW
+    fetch_limit = max(limit * 5, 100)
+
+    try:
+        _count, df = (
+            Query()
+            .select(
+                "name", "description", close_col,
+                sma20_col, bb_upper_col, bb_lower_col, volume_col,
+            )
+            .set_markets(market)
+            .where(
+                col("exchange") == exchange.upper(),
+                col(sma20_col).not_empty(),
+                col(bb_upper_col).not_empty(),
+                col(bb_lower_col).not_empty(),
+            )
+            .order_by(volume_col, ascending=False)
+            .limit(fetch_limit)
+            .get_scanner_data()
+        )
+    except Exception as e:
+        logger.error(f"tradingview-screener bollinger_scan failed: {e}")
+        raise
+
     results = []
-    columns = payload["columns"]
-    for row in data.get("data", []):
-        item = {columns[i]: row["d"][i] for i in range(len(columns))}
-        results.append({
-            "symbol": item["name"],
-            "name": item["description"],
-            "close": item["close"],
-            "BB_rating": item["BB.rating"],
-            "volume": item["volume"]
-        })
-        
-    return results
+    for _, row in df.iterrows():
+        sma20 = row.get(sma20_col)
+        bb_upper = row.get(bb_upper_col)
+        bb_lower = row.get(bb_lower_col)
+
+        if sma20 is None or bb_upper is None or bb_lower is None or sma20 == 0:
+            continue
+
+        bbw = (bb_upper - bb_lower) / sma20
+
+        if bbw < 0.05:
+            results.append({
+                "symbol": row.get("name", ""),
+                "name": row.get("description", ""),
+                "close": row.get(close_col),
+                "BB_width": round(bbw, 6),
+                "volume": row.get(volume_col),
+            })
+
+    # Sort by BB_width ascending (tightest first)
+    results.sort(key=lambda x: x.get("BB_width", float("inf")))
+    return results[:limit]
+
+
+def get_rating_filter(
+    exchange: str, rating: int = 0, timeframe: str = "1D", limit: int = 10
+) -> List[Dict[str, Any]]:
+    """Filter assets by computed Bollinger Band position rating.
+
+    Rating scale (-3 to +3):
+      +3: price above upper BB
+      +2: price in upper 33% of bands
+      +1: price in middle-upper 33%
+       0: price near middle (SMA20)
+      -1: price in middle-lower 33%
+      -2: price in lower 33% of bands
+      -3: price below lower BB
+
+    Uses tradingview-screener to fetch BB data, computes rating in Python.
+    """
+    market = get_market_from_exchange(exchange)
+    suffix = _get_suffix(timeframe)
+
+    close_col = f"close{suffix}" if suffix else "close"
+    sma20_col = f"SMA20{suffix}" if suffix else "SMA20"
+    bb_upper_col = f"BB.upper{suffix}" if suffix else "BB.upper"
+    bb_lower_col = f"BB.lower{suffix}" if suffix else "BB.lower"
+    volume_col = f"volume{suffix}" if suffix else "volume"
+
+    # Fetch a larger batch to filter by computed rating
+    fetch_limit = max(limit * 10, 200)
+
+    try:
+        _count, df = (
+            Query()
+            .select(
+                "name", "description", close_col,
+                sma20_col, bb_upper_col, bb_lower_col, volume_col,
+            )
+            .set_markets(market)
+            .where(
+                col("exchange") == exchange.upper(),
+                col(bb_upper_col).not_empty(),
+                col(bb_lower_col).not_empty(),
+                col(close_col).not_empty(),
+            )
+            .order_by(volume_col, ascending=False)
+            .limit(fetch_limit)
+            .get_scanner_data()
+        )
+    except Exception as e:
+        logger.error(f"tradingview-screener rating_filter failed: {e}")
+        raise
+
+    results = []
+    for _, row in df.iterrows():
+        close = row.get(close_col)
+        bb_upper = row.get(bb_upper_col)
+        bb_lower = row.get(bb_lower_col)
+
+        if close is None or bb_upper is None or bb_lower is None:
+            continue
+
+        band_range = bb_upper - bb_lower
+        if band_range == 0:
+            continue
+
+        # Compute position within bands as 0..1 (0 = lower, 1 = upper)
+        position = (close - bb_lower) / band_range
+
+        # Map position to rating scale -3 to +3
+        if close > bb_upper:
+            computed_rating = 3
+        elif position >= 0.67:
+            computed_rating = 2
+        elif position >= 0.5:
+            computed_rating = 1
+        elif position >= 0.33:
+            computed_rating = 0
+        elif position >= 0.17:
+            computed_rating = -1
+        elif close >= bb_lower:
+            computed_rating = -2
+        else:
+            computed_rating = -3
+
+        if computed_rating == rating:
+            results.append({
+                "symbol": row.get("name", ""),
+                "name": row.get("description", ""),
+                "close": close,
+                "BB_rating": computed_rating,
+                "volume": row.get(volume_col),
+            })
+
+    # Sort by volume descending
+    results.sort(key=lambda x: x.get("volume") or 0, reverse=True)
+    return results[:limit]

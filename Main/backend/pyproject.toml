@@ -35,6 +35,8 @@ dependencies = [
     "mammoth>=1.9.0,<2 ; sys_platform == 'darwin'",
     "yfinance>=0.2.51",
     "playwright==1.48.0",
+    "tradingview-ta>=3.3.0",
+    "tradingview-screener>=3.0.0",
 ]
 
 [dependency-groups]
