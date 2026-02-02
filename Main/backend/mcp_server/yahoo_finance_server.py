@@ -20,9 +20,11 @@ from mcp_server.errors import ErrorType, ToolError
 from mcp_server.executor import get_executor
 
 
+import os
+
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
+    level=getattr(logging, os.getenv("MCP_LOG_LEVEL", "INFO").upper()),
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger("yahoo-finance-server")

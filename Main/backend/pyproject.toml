@@ -1,6 +1,6 @@
 [project]
 name = "fingpt-backend"
-version = "0.11.2"
+version = "0.12.0"
 description = "FinGPT Backend - Financial GPT Assistant"
 authors = [{ name = "FinGPT Team" }]
 requires-python = ">=3.12,<3.13"
@@ -35,6 +35,8 @@ dependencies = [
     "mammoth>=1.9.0,<2 ; sys_platform == 'darwin'",
     "yfinance>=0.2.51",
     "playwright==1.48.0",
+    "tradingview-ta>=3.3.0",
+    "tradingview-screener>=3.0.0",
 ]
 
 [dependency-groups]
