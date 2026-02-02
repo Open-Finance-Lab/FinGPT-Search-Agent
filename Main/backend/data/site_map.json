@@ -107,6 +107,24 @@
       "params": ["ticker"],
       "example": "seeking_alpha with ticker=AAPL"
     },
+    "tradingview_technicals": {
+      "description": "TradingView technical analysis page - shows indicators, oscillators, moving averages",
+      "url_pattern": "https://www.tradingview.com/symbols/{symbol}/technicals/",
+      "params": ["symbol"],
+      "example": "tradingview_technicals with symbol=BTCUSDT"
+    },
+    "tradingview_gainers": {
+      "description": "TradingView top gainers page for cryptocurrencies",
+      "url_pattern": "https://www.tradingview.com/markets/cryptocurrencies/gainers/",
+      "params": [],
+      "example": "tradingview_gainers"
+    },
+    "tradingview_losers": {
+      "description": "TradingView top losers page for cryptocurrencies",
+      "url_pattern": "https://www.tradingview.com/markets/cryptocurrencies/losers/",
+      "params": [],
+      "example": "tradingview_losers"
+    },
     "tipranks_stock": {
       "description": "TipRanks stock page - shows analyst ratings, price targets, insider trades",
       "url_pattern": "https://www.tipranks.com/stocks/{ticker}",
@@ -126,6 +144,8 @@
     "financials": ["yahoo_financials", "marketwatch_financials"],
     "analysis": ["yahoo_analysis", "tipranks_stock", "seeking_alpha"],
     "sec_filings": ["sec_filings_search", "sec_full_text_search"],
-    "company_info": ["yahoo_profile", "yahoo_holders", "yahoo_statistics"]
+    "company_info": ["yahoo_profile", "yahoo_holders", "yahoo_statistics"],
+    "technical_analysis": ["tradingview_technicals"],
+    "crypto_screening": ["tradingview_gainers", "tradingview_losers"]
   }
 }

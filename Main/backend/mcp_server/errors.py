@@ -15,6 +15,8 @@ class ErrorType(Enum):
     RATE_LIMIT = "rate_limit"
     NETWORK = "network_error"
     INTERNAL = "internal_error"
+    EXCHANGE_ERROR = "exchange_error"
+    SYMBOL_ERROR = "symbol_error"
 
 
 @dataclass
