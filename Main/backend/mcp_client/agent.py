@@ -184,6 +184,6 @@ async def create_fin_agent(model: str = "gpt-4o-mini",
         try:
             if hasattr(agent, 'close'):
                 await agent.close()
-            logger.debug("Agent cleanup completed")
+            logging.debug("Agent cleanup completed")
         except Exception as e:
-            logger.warning(f"Error during agent cleanup: {e}")
+            logging.warning(f"Error during agent cleanup: {e}")
