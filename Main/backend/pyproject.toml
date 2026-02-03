@@ -59,6 +59,9 @@ docs = [
 
 [tool.uv]
 package = false
+override-dependencies = [
+    "protobuf>=6.33.5",  # CVE-2026-0994: JSON recursion depth bypass (overrides mem0ai's <6 pin)
+]
 
 [build-system]
 requires = ["hatchling"]
