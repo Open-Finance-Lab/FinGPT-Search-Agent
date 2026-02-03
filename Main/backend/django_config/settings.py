@@ -39,6 +39,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'api.middleware.memory_tracker.MemoryTrackerMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'corsheaders.middleware.CorsMiddleware',
@@ -144,14 +145,19 @@ WHITENOISE_MANIFEST_STRICT = False
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
+    'filters': {
+        'request_id': {
+            '()': 'api.utils.logging_filters.RequestIdFilter',
+        },
+    },
     'formatters': {
         'verbose': {
-            'format': '{levelname} {asctime} {name} {module} {funcName} {message}',
+            'format': '{levelname} {asctime} [{request_id}] {name} {message}',
             'style': '{',
             'datefmt': '%Y-%m-%d %H:%M:%S',
         },
         'simple': {
-            'format': '{levelname} {asctime} {message}',
+            'format': '{levelname} {asctime} [{request_id}] {message}',
             'style': '{',
             'datefmt': '%Y-%m-%d %H:%M:%S',
         },
@@ -161,6 +167,7 @@ LOGGING = {
             'class': 'logging.StreamHandler',
             'formatter': 'verbose' if not DEBUG else 'simple',
             'level': 'DEBUG' if DEBUG else 'INFO',
+            'filters': ['request_id'],
         },
     },
     'root': {

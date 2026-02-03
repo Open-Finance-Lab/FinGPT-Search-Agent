@@ -67,9 +67,14 @@ STATIC_URL = '/static/'
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
+    'filters': {
+        'request_id': {
+            '()': 'api.utils.logging_filters.RequestIdFilter',
+        },
+    },
     'formatters': {
         'verbose': {
-            'format': '{levelname} {asctime} {module} {message}',
+            'format': '{levelname} {asctime} [{request_id}] {module} {message}',
             'style': '{',
         },
     },
@@ -77,6 +82,7 @@ LOGGING = {
         'console': {
             'class': 'logging.StreamHandler',
             'formatter': 'verbose',
+            'filters': ['request_id'],
         },
     },
     'root': {
@@ -87,6 +93,11 @@ LOGGING = {
         'django': {
             'handlers': ['console'],
             'level': os.getenv('DJANGO_LOG_LEVEL', 'INFO'),
+            'propagate': False,
+        },
+        'api.middleware.memory_tracker': {
+            'handlers': ['console'],
+            'level': 'INFO',
             'propagate': False,
         },
     },
