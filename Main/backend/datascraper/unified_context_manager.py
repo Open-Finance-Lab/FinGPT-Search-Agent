@@ -413,9 +413,17 @@ class UnifiedContextManager:
         """Get stats for a session"""
         session = self._get_or_create_session(session_id)
         metadata = session["metadata"]
+        
+        fetched_counts = {
+            k: len(v) for k, v in session["fetched_context"].items()
+        }
+        
         return {
+            "mode": metadata.mode.value if isinstance(metadata.mode, ContextMode) else metadata.mode,
             "message_count": metadata.message_count if hasattr(metadata, 'message_count') else metadata.get('message_count', 0),
-            "token_count": metadata.token_count if hasattr(metadata, 'token_count') else metadata.get('token_count', 0)
+            "token_count": metadata.token_count if hasattr(metadata, 'token_count') else metadata.get('token_count', 0),
+            "fetched_context_counts": fetched_counts,
+            "total_fetched_items": sum(fetched_counts.values())
         }
 
 
