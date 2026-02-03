@@ -115,10 +115,19 @@ class UnifiedContextManager:
         self.sessions: Dict[str, Dict[str, Any]] = {}
         self.session_ttl = 3600
         self.max_sessions = 100
+        self._request_count = 0
+        self._cleanup_interval = 10  # Run cleanup every N requests
         logger.info("UnifiedContextManager initialized (no compression, no legacy support)")
 
     def _get_or_create_session(self, session_id: str) -> Dict[str, Any]:
         """Get existing session or create new one"""
+        # Periodically cleanup expired sessions
+        self._request_count += 1
+        if self._request_count % self._cleanup_interval == 0:
+            cleaned = self.cleanup_expired_sessions()
+            if cleaned > 0:
+                logger.info(f"Periodic cleanup removed {cleaned} expired sessions")
+
         if session_id not in self.sessions:
             self._enforce_session_limit()
 

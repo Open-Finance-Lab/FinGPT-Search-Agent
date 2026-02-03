@@ -180,5 +180,10 @@ async def create_fin_agent(model: str = "gpt-4o-mini",
         yield agent
 
     finally:
-
-        pass
+        # Clean up agent resources
+        try:
+            if hasattr(agent, 'close'):
+                await agent.close()
+            logger.debug("Agent cleanup completed")
+        except Exception as e:
+            logger.warning(f"Error during agent cleanup: {e}")
