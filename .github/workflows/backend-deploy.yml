@@ -170,9 +170,6 @@ jobs:
             set -euo pipefail
             export XDG_RUNTIME_DIR=/run/user/$(id -u)
 
-            echo "Waiting for service to start..."
-            sleep 5
-
             echo "Checking service status..."
             systemctl --user is-active "$SYSTEMD_UNIT" || {
               echo "ERROR: Service is not active"
@@ -180,10 +177,20 @@ jobs:
               exit 1
             }
 
-            echo "Checking health endpoint..."
-            curl -f -m 10 http://localhost:8000/health/ || {
-              echo "ERROR: Health check failed"
-              exit 1
-            }
+            echo "Waiting 30s for service to start..."
+            sleep 30
 
-            echo "Deployment verification successful!"
+            echo "Checking health endpoint..."
+            for i in 1 2 3; do
+              if curl -sf -m 10 http://localhost:8000/health/; then
+                echo ""
+                echo "Deployment verification successful!"
+                exit 0
+              fi
+              echo "Attempt $i/3 failed, retrying in 5s..."
+              sleep 5
+            done
+
+            echo "ERROR: Health check failed"
+            systemctl --user status "$SYSTEMD_UNIT" || true
+            exit 1
