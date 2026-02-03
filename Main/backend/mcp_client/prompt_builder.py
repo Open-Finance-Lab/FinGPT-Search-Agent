@@ -67,9 +67,9 @@ class PromptBuilder:
         if time_block:
             parts.append(time_block)
 
-        # 4. System override
+        # 4. Session context (fetched page data, system prompt overrides from API)
         if system_prompt:
-            parts.append(f"SYSTEM OVERRIDE:\n{system_prompt}")
+            parts.append(system_prompt)
 
         return "\n\n".join(parts)
 

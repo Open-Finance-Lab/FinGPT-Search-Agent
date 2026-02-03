@@ -69,6 +69,21 @@ WSGI_APPLICATION = 'django_config.wsgi.application'
 
 DATABASES = {}
 
+# Cache backend: shared across all gunicorn workers.
+# FileBasedCache for now — swap to Redis later with one-line change:
+#   CACHES = {"default": {"BACKEND": "django.core.cache.backends.redis.RedisCache",
+#                          "LOCATION": "redis://redis:6379/0"}}
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.filebased.FileBasedCache",
+        "LOCATION": os.getenv("CACHE_FILE_PATH", "/tmp/fingpt_cache"),
+        "TIMEOUT": 3600,  # 1 hour default TTL
+        "OPTIONS": {
+            "MAX_ENTRIES": 500,
+        },
+    }
+}
+
 SESSION_ENGINE = 'django.contrib.sessions.backends.signed_cookies'
 SESSION_COOKIE_NAME = 'fingpt_sessionid'
 

@@ -116,9 +116,8 @@ def chat_completions(request: HttpRequest) -> JsonResponse:
     integration = get_context_integration()
 
     # 2. Reset Context (Statelessness)
-    if session_id in context_mgr.sessions:
-        integration.clear_messages(request, session_id=session_id, preserve_web_content=False)
-        context_mgr.sessions[session_id]["system_prompt"] = "You are a helpful financial assistant." 
+    integration.clear_messages(request, session_id=session_id, preserve_web_content=False)
+    context_mgr.set_system_prompt(session_id, "You are a helpful financial assistant.")
     
     # Handle URL initialization (Scraping)
     if target_url:
@@ -150,8 +149,7 @@ def chat_completions(request: HttpRequest) -> JsonResponse:
         role = msg.get('role')
         content = msg.get('content', '')
         if role == 'system':
-            session = context_mgr._get_or_create_session(session_id)
-            session["system_prompt"] = content
+            context_mgr.set_system_prompt(session_id, content)
         elif role == 'user':
             context_mgr.add_user_message(session_id, content)
         elif role == 'assistant':
@@ -196,29 +194,28 @@ def chat_completions(request: HttpRequest) -> JsonResponse:
 def _handle_sync(context_mgr, session_id, question, messages, model, preferred_links=None):
     try:
         start_time = time.time()
-        
-        mode = context_mgr.sessions[session_id]['metadata'].mode
-        current_url = context_mgr.sessions[session_id]['metadata'].current_url
+
+        meta = context_mgr.get_session_metadata(session_id)
+        mode = meta.mode
+        current_url = meta.current_url
 
         if mode == ContextMode.RESEARCH:
-             # Advanced / Research Mode
             response_content, sources = ds.create_advanced_response(
                 user_input=question,
                 message_list=messages,
                 model=model,
                 preferred_links=preferred_links or [],
-                user_timezone=context_mgr.sessions[session_id]['metadata'].user_timezone,
-                user_time=context_mgr.sessions[session_id]['metadata'].user_time
+                user_timezone=meta.user_timezone,
+                user_time=meta.user_time
             )
         else:
-            # Agent / Thinking Mode
             response_content = ds.create_agent_response(
                 user_input=question,
                 message_list=messages,
                 model=model,
                 current_url=current_url,
-                user_timezone=context_mgr.sessions[session_id]['metadata'].user_timezone,
-                user_time=context_mgr.sessions[session_id]['metadata'].user_time
+                user_timezone=meta.user_timezone,
+                user_time=meta.user_time
             )
         
         # Record response
@@ -277,26 +274,26 @@ def _handle_streaming(context_mgr, session_id, question, messages, model, prefer
         yield f"data: {json.dumps(initial_chunk)}\n\n"
         
         try:
-            mode = context_mgr.sessions[session_id]['metadata'].mode
-            current_url = context_mgr.sessions[session_id]['metadata'].current_url
-            
+            meta = context_mgr.get_session_metadata(session_id)
+            mode = meta.mode
+            current_url = meta.current_url
+
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
-            
+
             full_content = []
 
             if mode == ContextMode.RESEARCH:
-                # Advanced Stream: yield (text_chunk, sources)
                 stream_generator, _ = ds.create_advanced_response_streaming(
                     user_input=question,
                     message_list=messages,
                     model=model,
                     preferred_links=preferred_links or [],
-                    user_timezone=context_mgr.sessions[session_id]['metadata'].user_timezone,
-                    user_time=context_mgr.sessions[session_id]['metadata'].user_time
+                    user_timezone=meta.user_timezone,
+                    user_time=meta.user_time
                 )
                 stream_iter = stream_generator.__aiter__()
-                
+
                 while True:
                     try:
                         chunk_tuple = loop.run_until_complete(stream_iter.__anext__())
@@ -315,14 +312,13 @@ def _handle_streaming(context_mgr, session_id, question, messages, model, prefer
                         break
 
             else:
-                # Agent Stream: yield text_chunk
                 stream_generator, _ = ds.create_agent_response_stream(
                     user_input=question,
                     message_list=messages,
                     model=model,
                     current_url=current_url,
-                    user_timezone=context_mgr.sessions[session_id]['metadata'].user_timezone,
-                    user_time=context_mgr.sessions[session_id]['metadata'].user_time
+                    user_timezone=meta.user_timezone,
+                    user_time=meta.user_time
                 )
                 stream_iter = stream_generator.__aiter__()
             
