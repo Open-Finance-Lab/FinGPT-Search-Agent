@@ -66,12 +66,14 @@ def check_session_cleanup():
     with open(context_manager_path) as f:
         content = f.read()
 
-    has_periodic_cleanup = 'cleanup_expired_sessions()' in content and '_cleanup_interval' in content
+    has_cache_backend = 'django.core.cache' in content
+    has_ttl = 'session_ttl' in content
 
     print("\nSession Cleanup:")
-    print(f"  Periodic cleanup: {'OK' if has_periodic_cleanup else 'MISSING'}")
+    print(f"  Cache-backed sessions: {'OK' if has_cache_backend else 'MISSING'}")
+    print(f"  TTL configured: {'OK' if has_ttl else 'MISSING'}")
 
-    return has_periodic_cleanup
+    return has_cache_backend and has_ttl
 
 
 def check_monitoring_middleware():
