@@ -37,6 +37,7 @@ dependencies = [
     "playwright==1.48.0",
     "tradingview-ta>=3.3.0",
     "tradingview-screener>=3.0.0",
+    "psutil>=6.1.0,<7",
 ]
 
 [dependency-groups]
