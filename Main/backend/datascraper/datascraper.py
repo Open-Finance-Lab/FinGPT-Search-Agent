@@ -711,7 +711,7 @@ async def _create_agent_response_async(user_input: str, message_list: list[dict]
 
     context = ""
     extracted_system_prompt = None
-    
+
     for msg in message_list:
         content = msg.get("content", "")
 
@@ -735,7 +735,9 @@ async def _create_agent_response_async(user_input: str, message_list: list[dict]
 
         context += f"User: {content}\n"
 
-    full_prompt = f"{context}User: {user_input}"
+    # Use context directly - current user message is already in message_list
+    # (views.py calls add_user_message before calling this function)
+    full_prompt = context.rstrip()
 
     async with create_fin_agent(
         model=model,
@@ -799,7 +801,7 @@ def create_agent_response_stream(
         from agents import Runner
         context = ""
         extracted_system_prompt = None
-        
+
         for msg in message_list:
             content = msg.get("content", "")
             if content.startswith(SYSTEM_PREFIX):
@@ -819,7 +821,9 @@ def create_agent_response_stream(
 
             context += f"User: {content}\n"
 
-        full_prompt = f"{context}User: {user_input}"
+        # Use context directly - current user message is already in message_list
+        # (views.py calls add_user_message before calling this function)
+        full_prompt = context.rstrip()
         
         MAX_RETRIES = 2
         retry_count = 0
