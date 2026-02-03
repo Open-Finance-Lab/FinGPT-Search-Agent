@@ -322,5 +322,14 @@ class MCPClientManager:
                 await self._connection_task
             except asyncio.CancelledError:
                 pass
+
+        # Properly close all async contexts in the exit stack
+        try:
+            await self.exit_stack.aclose()
+            self._log("[MCP DEBUG] Exit stack closed successfully", force=True)
+        except Exception as e:
+            self._log(f"[MCP DEBUG] Error closing exit stack: {e}", force=True)
+            logger.error(f"Error closing MCP exit stack: {e}")
+
         self.sessions.clear()
         self.tools_map.clear()
