@@ -21,6 +21,8 @@ load_dotenv(backend_dir / '.env')
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
+from api.utils.llm_debug_logger import log_llm_payload
+
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 if not OPENAI_API_KEY:
@@ -449,6 +451,12 @@ async def create_responses_api_search_async(
         logger.info(f"Calling OpenAI Responses API with model: {model} (stream={stream})")
         logger.info(f"Web search enabled for query: {user_query[:100]}...")
         logger.info(f"Including {len(message_history)} messages from conversation history")
+        log_llm_payload(
+            call_site="create_responses_api_search_async",
+            model=model, provider="openai_responses",
+            messages=combined_input, stream=stream,
+            extra={"tools": "web_search", "history_count": len(message_history)},
+        )
 
         response = await async_client.responses.create(
             model=model,
