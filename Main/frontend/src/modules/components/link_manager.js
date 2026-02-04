@@ -117,15 +117,28 @@ export function createLinkManager() {
     }
 
     function addLink(value, wrapper, skipSave = false) {
-        wrapper.innerHTML = `
-          <div class="link-preview">
-            <span>${value}</span>
-            <button class="delete-btn" title="Delete Link">&times;</button>
-          </div>
-        `;
-        wrapper.dataset.linkUrl = value; // Store URL in dataset
+        // Create DOM elements safely to prevent XSS
+        const preview = document.createElement('div');
+        preview.className = 'link-preview';
 
-        const deleteBtn = wrapper.querySelector('.delete-btn');
+        const span = document.createElement('span');
+        span.textContent = value; // Use textContent to prevent XSS
+
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'delete-btn';
+        deleteBtn.title = 'Delete Link';
+        deleteBtn.textContent = '×'; // Use textContent for the × character
+
+        preview.appendChild(span);
+        preview.appendChild(deleteBtn);
+
+        // Clear and append safely
+        while (wrapper.firstChild) {
+            wrapper.removeChild(wrapper.firstChild);
+        }
+        wrapper.appendChild(preview);
+
+        wrapper.dataset.linkUrl = value; // Store URL in dataset
         deleteBtn.addEventListener('click', () => {
             linkToDelete = wrapper;
             modal.style.display = 'block';

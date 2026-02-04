@@ -36,6 +36,29 @@ from datascraper.url_tools import _scrape_url_impl as scrape_url
 
 logger = logging.getLogger(__name__)
 
+
+def _safe_error_message(exception: Exception, context: str = "") -> str:
+    """
+    Return a safe error message for client responses.
+    Logs full error details server-side, returns generic message in production.
+
+    Args:
+        exception: The exception that occurred
+        context: Optional context about where the error occurred
+
+    Returns:
+        Safe error message string for client
+    """
+    # Log full error details server-side for debugging
+    logger.error(f"Error in {context}: {type(exception).__name__}: {str(exception)}", exc_info=True)
+
+    # Return detailed errors only in DEBUG mode, generic message in production
+    if settings.DEBUG:
+        return f"{type(exception).__name__}: {str(exception)}"
+    else:
+        return "An error occurred while processing your request. Please try again."
+
+
 def _get_version():
     """Dynamically fetch version from pyproject.toml"""
     try:
@@ -152,8 +175,7 @@ def chat_response(request: HttpRequest) -> JsonResponse:
                 )
 
             except Exception as e:
-                logger.error(f"Error with model {model}: {e}", exc_info=True)
-                responses[model] = f"Error: {str(e)}"
+                responses[model] = f"Error: {_safe_error_message(e, f'model {model}')}"
 
         stats = context_mgr.get_session_stats(session_id)
 
@@ -175,7 +197,7 @@ def chat_response(request: HttpRequest) -> JsonResponse:
 
     except Exception as e:
         logger.error(f"Chat response error: {e}", exc_info=True)
-        return JsonResponse({'error': str(e)}, status=500)
+        return JsonResponse({'error': _safe_error_message(e, request.path)}, status=500)
 
 
 @csrf_exempt
@@ -255,8 +277,7 @@ def adv_response(request: HttpRequest) -> JsonResponse:
                 )
 
             except Exception as e:
-                logger.error(f"Error with model {model}: {e}", exc_info=True)
-                responses[model] = f"Error: {str(e)}"
+                responses[model] = f"Error: {_safe_error_message(e, f'model {model}')}"
 
         stats = context_mgr.get_session_stats(session_id)
 
@@ -280,7 +301,7 @@ def adv_response(request: HttpRequest) -> JsonResponse:
 
     except Exception as e:
         logger.error(f"Advanced response error: {e}", exc_info=True)
-        return JsonResponse({'error': str(e)}, status=500)
+        return JsonResponse({'error': _safe_error_message(e, request.path)}, status=500)
 
 
 @csrf_exempt
@@ -342,8 +363,7 @@ def agent_chat_response(request: HttpRequest) -> JsonResponse:
                 )
 
             except Exception as e:
-                logger.error(f"Error with model {model}: {e}", exc_info=True)
-                responses[model] = f"Error: {str(e)}"
+                responses[model] = f"Error: {_safe_error_message(e, f'model {model}')}"
 
         stats = context_mgr.get_session_stats(session_id)
 
@@ -365,7 +385,7 @@ def agent_chat_response(request: HttpRequest) -> JsonResponse:
 
     except Exception as e:
         logger.error(f"Agent response error: {e}", exc_info=True)
-        return JsonResponse({'error': str(e)}, status=500)
+        return JsonResponse({'error': _safe_error_message(e, request.path)}, status=500)
 
 
 
@@ -488,8 +508,8 @@ def chat_response_stream(request: HttpRequest) -> StreamingHttpResponse:
                 logger.info(f"Interaction [normal_stream]: URL={current_url}, Q='{question[:50]}...', Resp='{final_response[:50]}...'")
 
             except Exception as e:
-                logger.error(f"Streaming error: {e}", exc_info=True)
-                yield f'data: {json.dumps({"error": str(e), "done": True})}\n\n'.encode('utf-8')
+                error_msg = _safe_error_message(e, "streaming")
+                yield f'data: {json.dumps({"error": error_msg, "done": True})}\n\n'.encode('utf-8')
 
         response = StreamingHttpResponse(
             event_stream(),
@@ -502,7 +522,7 @@ def chat_response_stream(request: HttpRequest) -> StreamingHttpResponse:
 
     except Exception as e:
         logger.error(f"Stream error: {e}", exc_info=True)
-        return JsonResponse({'error': str(e)}, status=500)
+        return JsonResponse({'error': _safe_error_message(e, request.path)}, status=500)
 
 
 @csrf_exempt
@@ -620,8 +640,8 @@ def adv_response_stream(request: HttpRequest) -> StreamingHttpResponse:
                 logger.info(f"Interaction [advanced_stream]: URL={current_url}, Q='{question[:50]}...', Resp='{full_response[:50]}...'")
 
             except Exception as e:
-                logger.error(f"Advanced streaming error: {e}", exc_info=True)
-                yield f'data: {json.dumps({"error": str(e), "done": True})}\n\n'.encode('utf-8')
+                error_msg = _safe_error_message(e, "advanced_streaming")
+                yield f'data: {json.dumps({"error": error_msg, "done": True})}\n\n'.encode('utf-8')
 
         response = StreamingHttpResponse(
             event_stream(),
@@ -634,7 +654,7 @@ def adv_response_stream(request: HttpRequest) -> StreamingHttpResponse:
 
     except Exception as e:
         logger.error(f"Advanced stream error: {e}", exc_info=True)
-        return JsonResponse({'error': str(e)}, status=500)
+        return JsonResponse({'error': _safe_error_message(e, request.path)}, status=500)
 
 
 
@@ -686,7 +706,7 @@ def auto_scrape(request: HttpRequest) -> JsonResponse:
         
     except Exception as e:
         logger.error(f"Auto-scrape error: {e}", exc_info=True)
-        return JsonResponse({'error': str(e)}, status=500)
+        return JsonResponse({'error': _safe_error_message(e, request.path)}, status=500)
 
 
 @csrf_exempt
@@ -739,7 +759,7 @@ def add_webtext(request: HttpRequest) -> JsonResponse:
 
     except Exception as e:
         logger.error(f"Input webtext error: {e}", exc_info=True)
-        return JsonResponse({'error': str(e)}, status=500)
+        return JsonResponse({'error': _safe_error_message(e, request.path)}, status=500)
 
 
 @csrf_exempt
@@ -769,7 +789,7 @@ def clear(request: HttpRequest) -> JsonResponse:
 
     except Exception as e:
         logger.error(f"Clear messages error: {e}", exc_info=True)
-        return JsonResponse({'error': str(e)}, status=500)
+        return JsonResponse({'error': _safe_error_message(e, request.path)}, status=500)
 
 
 @csrf_exempt
@@ -800,8 +820,7 @@ def get_memory_stats(request: HttpRequest) -> JsonResponse:
         })
 
     except Exception as e:
-        logger.error(f"Get stats error: {e}", exc_info=True)
-        return JsonResponse({'stats': {"error": str(e), "using_unified_context": False}}, status=500)
+        return JsonResponse({'stats': {"error": _safe_error_message(e, "get_stats"), "using_unified_context": False}}, status=500)
 
 
 
@@ -875,7 +894,7 @@ def add_preferred_url(request: HttpRequest) -> JsonResponse:
                     return JsonResponse({'status': 'exists'})
         except Exception as e:
             logger.error(f"Error adding preferred URL: {e}")
-            return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+            return JsonResponse({'status': 'error', 'message': _safe_error_message(e, request.path)}, status=500)
 
     return JsonResponse({'status': 'failed'}, status=400)
 
@@ -894,7 +913,7 @@ def sync_preferred_urls(request: HttpRequest) -> JsonResponse:
             return JsonResponse({'status': 'success', 'synced': len(urls)})
         except Exception as e:
             logger.error(f"Error syncing preferred URLs: {e}")
-            return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+            return JsonResponse({'status': 'error', 'message': _safe_error_message(e, request.path)}, status=500)
 
     return JsonResponse({'status': 'failed'}, status=400)
 

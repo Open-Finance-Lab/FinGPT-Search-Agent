@@ -5,8 +5,16 @@ import { fetchAvailableModels } from './modules/config.js';
 import { initializeWithCurrentPage } from './modules/sourcesCache.js';
 import { getBackendBaseUrl } from './modules/backendConfig.js';
 
-// Generate a unique session ID for this page load
-const sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+// Generate a cryptographically secure unique session ID for this page load
+function generateSecureSessionId() {
+    const timestamp = Date.now();
+    const randomBytes = new Uint8Array(9);
+    crypto.getRandomValues(randomBytes);
+    const randomString = Array.from(randomBytes, byte => byte.toString(36)).join('').substr(0, 9);
+    return `session_${timestamp}_${randomString}`;
+}
+
+const sessionId = generateSecureSessionId();
 setSessionId(sessionId);
 console.log("Agentic FinSearch Session ID: ", sessionId);
 

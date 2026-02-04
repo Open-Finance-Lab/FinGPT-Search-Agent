@@ -12,6 +12,7 @@ from typing import List, Dict, Any, Optional
 
 from django.http import JsonResponse, StreamingHttpResponse, HttpRequest
 from django.views.decorators.csrf import csrf_exempt
+from django.conf import settings
 
 from datascraper import datascraper as ds
 from datascraper.url_tools import _scrape_url_impl as scrape_url
@@ -27,6 +28,28 @@ from datascraper.context_integration import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _safe_error_message(exception: Exception, context: str = "") -> str:
+    """
+    Return a safe error message for client responses.
+    Logs full error details server-side, returns generic message in production.
+
+    Args:
+        exception: The exception that occurred
+        context: Optional context about where the error occurred
+
+    Returns:
+        Safe error message string for client
+    """
+    # Log full error details server-side for debugging
+    logger.error(f"Error in {context}: {type(exception).__name__}: {str(exception)}", exc_info=True)
+
+    # Return detailed errors only in DEBUG mode, generic message in production
+    if settings.DEBUG:
+        return f"{type(exception).__name__}: {str(exception)}"
+    else:
+        return "An error occurred while processing your request. Please try again."
 
 def _get_api_session_id(request: HttpRequest, user_id: Optional[str] = None) -> str:
     """
@@ -253,8 +276,7 @@ def _handle_sync(context_mgr, session_id, question, messages, model, preferred_l
         })
         
     except Exception as e:
-        logger.error(f"API Sync Error: {e}", exc_info=True)
-        return JsonResponse({'error': {'message': str(e), 'type': 'server_error'}}, status=500)
+        return JsonResponse({'error': {'message': _safe_error_message(e, 'API Sync'), 'type': 'server_error'}}, status=500)
 
 
 def _handle_streaming(context_mgr, session_id, question, messages, model, preferred_links=None):
@@ -356,9 +378,8 @@ def _handle_streaming(context_mgr, session_id, question, messages, model, prefer
             context_mgr.add_assistant_message(session_id, final_text, model=model)
             
         except Exception as e:
-            logger.error(f"API Stream Error: {e}", exc_info=True)
             err_chunk = {
-                "error": {"message": str(e), "type": "server_error"}
+                "error": {"message": _safe_error_message(e, 'API Stream'), "type": "server_error"}
             }
             yield f"data: {json.dumps(err_chunk)}\n\n"
 
