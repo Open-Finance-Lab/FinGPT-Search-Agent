@@ -1,0 +1,871 @@
+manifest:
+  version: "0.1.2"
+  schema: https://a2as.org/cert/schema
+  subject:
+    name: open-finance-lab/fingpt-search-agent
+    source: https://github.com/open-finance-lab/fingpt-search-agent
+    branch: main
+    commit: "ad9f9059"
+    scope: [Docs/source/conf.py, Main/backend/api/openai_views.py, Main/backend/api/views.py, Main/backend/datascraper/context_integration.py,
+      Main/backend/datascraper/context_integration_enhanced.py, Main/backend/datascraper/datascraper.py, Main/backend/datascraper/datascraper_refactored.py,
+      Main/backend/datascraper/playwright_tools.py, Main/backend/datascraper/url_tools.py, Main/backend/mcp_client/agent.py,
+      Main/backend/mcp_client/apps.py, Main/backend/mcp_client/mcp_manager.py, Main/backend/mcp_client/tool_wrapper.py]
+  issued:
+    by: A2AS.org
+    at: '2026-01-26T16:13:49Z'
+  signatures:
+    digest: sha256:PMXNVxelY6CAQMs7_bw99peREZmMPMrxr3hdlFWWHNU
+    key: ed25519:WiCB_CGL8xK0VvJyiSG49aMWYEs-LqifyKU8U1AyVuY
+    sig: ed25519:dgjKKh9FNPEL0IgJQHpDPk4RhTMVu_v2hohR-88m57LBzrKQB7m2W2kHfCmLTKKriTZauE6Dc5mUBgl1WPL8BQ
+
+agents:
+  agent:
+    type: instance
+    models: [actual_model]
+    params:
+      function: create_fin_agent
+      name: FinGPT Search Agent
+      model_settings: ModelSettings()
+      instructions: [instructions]
+
+models:
+  actual_model:
+    type: variable
+    agents: [agent]
+
+tools:
+  click_element:
+    type: decorator
+    params:
+      description: |-
+        Navigate to URL, click an element, and return the resulting page content.
+
+        Args:
+            url: The URL to navigate to first
+            selector: CSS selector or text content to click (e.g., 'a:has-text("Read more")')
+
+        Returns:
+            JSON with clicked element info and new page content
+  extract_page_content:
+    type: decorator
+    params:
+      description: |-
+        Navigate to URL and extract the main text content.
+
+        Args:
+            url: The URL to extract content from
+            content_selector: Optional CSS selector to extract specific content
+                             (defaults to body if not provided)
+
+        Returns:
+            JSON with extracted text content
+  navigate_to_url:
+    type: decorator
+    params:
+      description: |-
+        Navigate to a URL and wait for page load.
+
+        Args:
+            url: The URL to navigate to
+
+        Returns:
+            JSON with page title, URL, and status
+  resolve_url:
+    type: decorator
+    params:
+      description: |-
+        Build a URL from route_id and parameters.
+
+        Args:
+            route_id: Route name (e.g., 'yahoo_quote', 'yahoo_news', 'generic_url')
+            params: JSON string with parameters (e.g., '{"ticker": "AAPL"}')
+
+        Returns:
+            JSON with the constructed URL
+  scrape_url:
+    type: decorator
+    params:
+      description: "Fetch a URL and return the visible text content.\nUses requests first, falls back to Playwright for SPAs.\n\
+        Uses smart compression for long pages.\n\nNOTE: For Yahoo Finance URLs (finance.yahoo.com), you should use the \n\
+        dedicated 'yahoo-finance' MCP tools (get_stock_info, get_stock_history,\nget_stock_financials, get_stock_analysis,\
+        \ get_stock_news) instead of \nthis tool. Only use scraping as a fallback when MCP tools cannot \nprovide the needed\
+        \ data.\n\nArgs:\n    url: The URL to scrape\n\nReturns:\n    JSON with page content or error"
+  wrapped_func:
+    type: wrapper
+    params:
+      wraps: dynamic_func
+
+imports:
+  '*': datascraper.*
+  Agent: agents.Agent
+  Anthropic: anthropic.Anthropic
+  Any: typing.Any
+  AppConfig: django.apps.AppConfig
+  apply_guardrails: mcp_client.agent.apply_guardrails
+  async_playwright: playwright.async_api.async_playwright
+  AsyncAnthropic: anthropic.AsyncAnthropic
+  asynccontextmanager: contextlib.asynccontextmanager
+  AsyncExitStack: contextlib.AsyncExitStack
+  asyncio: asyncio
+  AsyncIterator: collections.abc.AsyncIterator
+  AsyncOpenAI: openai.AsyncOpenAI
+  BeautifulSoup: bs4.BeautifulSoup
+  cache_page: django.views.decorators.cache.cache_page
+  Callable: typing.Callable
+  CallToolResult: mcp.types.CallToolResult
+  ClientSession: mcp.ClientSession
+  ContextIntegration: datascraper.context_integration.ContextIntegration
+  ContextMode: unified_context_manager.ContextMode
+  convert_mcp_tool_to_python_callable: tool_wrapper.convert_mcp_tool_to_python_callable
+  create_fin_agent: mcp_client.agent.create_fin_agent
+  create_responses_api_search: openai_search.create_responses_api_search
+  create_responses_api_search_async: datascraper.openai_search.create_responses_api_search_async
+  csrf_exempt: django.views.decorators.csrf.csrf_exempt
+  csv: csv
+  datetime: datetime.datetime
+  DEFAULT_PROMPT: mcp_client.agent.DEFAULT_PROMPT
+  Dict: typing.Dict
+  ds: datascraper.datascraper
+  Enum: enum.Enum
+  format_sources_for_frontend: openai_search.format_sources_for_frontend
+  function_tool: agents.function_tool
+  futures: concurrent.futures
+  get_context_integration: datascraper.context_integration.get_context_integration
+  get_context_manager: unified_context_manager.get_context_manager
+  get_global_mcp_manager: apps.get_global_mcp_manager
+  get_manager: preferred_links_manager.get_manager
+  get_model_config: models_config.get_model_config
+  get_playwright_tools: datascraper.playwright_tools.get_playwright_tools
+  get_provider_config: models_config.get_provider_config
+  get_url_tools: datascraper.url_tools.get_url_tools
+  HttpRequest: django.http.HttpRequest
+  inspect: inspect
+  is_responses_api_available: openai_search.is_responses_api_available
+  json: json
+  JsonResponse: django.http.JsonResponse
+  List: typing.List
+  Literal: typing.Literal
+  load_dotenv: dotenv.load_dotenv
+  logging: logging
+  MCPClientManager: mcp_manager.MCPClientManager
+  MCPTool: mcp.types.Tool
+  Mem0ContextManager: mem0_context_manager.Mem0ContextManager
+  MODEL_CONFIGS: models_config.MODEL_CONFIGS
+  MODELS_CONFIG: models_config.MODELS_CONFIG
+  ModelSettings: agents.model_settings.ModelSettings
+  OpenAI: openai.OpenAI
+  openai_views: api.openai_views
+  Optional: typing.Optional
+  os: os
+  path: django.urls.path
+  Path: pathlib.Path
+  PROVIDER_CONFIGS: models_config.PROVIDER_CONFIGS
+  pytz: pytz
+  re: re
+  requests: requests
+  Runner: agents.Runner
+  scrape_url: datascraper.url_tools._scrape_url_impl
+  settings: django.conf.settings
+  shutil: shutil
+  sse_client: mcp.client.sse.sse_client
+  stdio_client: mcp.client.stdio.stdio_client
+  StdioServerParameters: mcp.StdioServerParameters
+  StreamingHttpResponse: django.http.StreamingHttpResponse
+  sync_playwright: playwright.sync_api.sync_playwright
+  sys: sys
+  threading: threading
+  time: time
+  Tuple: typing.Tuple
+  UnifiedContextManager: unified_context_manager.UnifiedContextManager
+  urlparse: urllib.parse.urlparse
+  USER_ONLY_MODELS: mcp_client.agent.USER_ONLY_MODELS
+  uuid: uuid
+  validate_model_support: models_config.validate_model_support
+  views: api.views
+
+functions:
+  __init__:
+    type: sync
+    module: Main.backend.mcp_client.mcp_manager
+    args: [self, config_path]
+  _build_api_messages:
+    type: sync
+    module: Main.backend.datascraper.datascraper_refactored
+    args: [self, context, current_question]
+    params:
+      returns: List[Dict]
+  _build_status_frame:
+    type: sync
+    module: Main.backend.api.views
+    args: [label, detail, url]
+    params:
+      returns: bytes
+  _call_buffet_agent:
+    type: sync
+    module: Main.backend.datascraper.datascraper
+    args: [model_config, msgs]
+    params:
+      returns: str
+  _clean_extracted_text:
+    type: sync
+    module: Main.backend.datascraper.playwright_tools
+    args: [text]
+    params:
+      returns: str
+  _clean_text:
+    type: sync
+    module: Main.backend.datascraper.url_tools
+    args: [text]
+    params:
+      returns: str
+  _connect_server:
+    type: async
+    module: Main.backend.mcp_client.mcp_manager
+    args: [self, server_name, config]
+  _create_advanced_response_stream_async:
+    type: async
+    module: Main.backend.datascraper.datascraper
+    args: [user_input, message_list, actual_model, preferred_urls, user_timezone, user_time]
+  _create_agent_response_async:
+    type: async
+    module: Main.backend.datascraper.datascraper
+    args: [user_input, message_list, model, current_url, user_timezone, user_time]
+    params:
+      returns: str
+  _create_buffet_response_stream:
+    type: sync
+    module: Main.backend.datascraper.datascraper
+    args: [model_config, msgs]
+  _create_buffet_response_sync:
+    type: sync
+    module: Main.backend.datascraper.datascraper
+    args: [model_config, msgs]
+    params:
+      returns: str
+  _create_response_stream:
+    type: sync
+    module: Main.backend.datascraper.datascraper
+    args: [client, provider, model_name, model_config, msgs]
+  _create_response_sync:
+    type: sync
+    module: Main.backend.datascraper.datascraper
+    args: [client, provider, model_name, model_config, msgs]
+    params:
+      returns: str
+  _determine_mode:
+    type: sync
+    module: Main.backend.datascraper.context_integration_enhanced
+    args: [self, request, endpoint]
+    params:
+      returns: Any
+  _extract_text_from_buffet_response:
+    type: sync
+    module: Main.backend.datascraper.datascraper
+    args: [payload]
+    params:
+      returns: Optional[str]
+  _fallback_stream:
+    type: async
+    module: Main.backend.datascraper.datascraper
+    params:
+      returns: AsyncIterator[str]
+  _format_context_for_llm:
+    type: sync
+    module: Main.backend.datascraper.datascraper_refactored
+    args: [self, context]
+    params:
+      returns: str
+  _format_messages_for_buffet:
+    type: sync
+    module: Main.backend.datascraper.datascraper
+    args: [msgs]
+    params:
+      returns: str
+  _generator:
+    type: sync
+    module: Main.backend.datascraper.datascraper
+  _get_api_session_id:
+    type: sync
+    module: Main.backend.api.openai_views
+    args: [request, user_id]
+    params:
+      returns: str
+  _get_page_summary:
+    type: sync
+    module: Main.backend.datascraper.playwright_tools
+    args: [page]
+    params:
+      returns: dict
+  _get_session_id:
+    type: sync
+    module: Main.backend.datascraper.context_integration_enhanced
+    args: [self, request]
+    params:
+      returns: str
+  _get_version:
+    type: sync
+    module: Main.backend.api.views
+  _handle_streaming:
+    type: sync
+    module: Main.backend.api.openai_views
+    args: [context_mgr, session_id, question, messages, model, preferred_links]
+  _handle_sync:
+    type: sync
+    module: Main.backend.api.openai_views
+    args: [context_mgr, session_id, question, messages, model, preferred_links]
+  _int_env:
+    type: sync
+    module: Main.backend.api.views
+    args: [name, default]
+    params:
+      returns: int
+  _load_site_map:
+    type: sync
+    module: Main.backend.datascraper.url_tools
+    params:
+      returns: Dict
+  _log:
+    type: sync
+    module: Main.backend.mcp_client.mcp_manager
+    args: [self, message]
+  _prepare_advanced_search_inputs:
+    type: sync
+    module: Main.backend.datascraper.datascraper
+    args: [model, preferred_links]
+    params:
+      returns: tuple
+  _prepare_messages:
+    type: sync
+    module: Main.backend.datascraper.datascraper
+    args: [message_list, user_input, model]
+  _run_servers:
+    type: async
+    module: Main.backend.mcp_client.mcp_manager
+    args: [self]
+  _sanitize_buffet_output:
+    type: sync
+    module: Main.backend.datascraper.datascraper
+    args: [text]
+    params:
+      returns: str
+  _scrape_url_impl:
+    type: sync
+    module: Main.backend.datascraper.url_tools
+    args: [url]
+    params:
+      returns: str
+  _smart_compress:
+    type: sync
+    module: Main.backend.datascraper.url_tools
+    args: [text, url]
+    params:
+      returns: str
+  _stream:
+    type: async
+    module: Main.backend.datascraper.datascraper
+    params:
+      returns: AsyncIterator[str]
+  _strip_any_prefix:
+    type: sync
+    module: Main.backend.datascraper.datascraper
+    args: [content, prefixes]
+    params:
+      returns: tuple
+  _truncate_for_log:
+    type: sync
+    module: Main.backend.datascraper.datascraper
+    args: [value, limit]
+    params:
+      returns: str
+  add_playwright_content:
+    type: sync
+    module: Main.backend.datascraper.context_integration_enhanced
+    args: [self, session_id, content, url, action]
+    params:
+      returns: None
+  add_preferred_url:
+    type: sync
+    module: Main.backend.api.views
+    args: [request]
+    params:
+      returns: JsonResponse
+  add_response_to_context:
+    type: sync
+    module: Main.backend.datascraper.context_integration_enhanced
+    args: [self, session_id, response, model, sources_used, tools_used, response_time_ms]
+    params:
+      returns: None
+  add_search_results:
+    type: sync
+    module: Main.backend.datascraper.context_integration_enhanced
+    args: [self, session_id, search_results]
+    params:
+      returns: None
+  add_web_content:
+    type: sync
+    module: Main.backend.datascraper.context_integration_enhanced
+    args: [self, request, text_content, current_url, source_type]
+    params:
+      returns: str
+  add_webtext:
+    type: sync
+    module: Main.backend.api.views
+    args: [request]
+    params:
+      returns: JsonResponse
+  adv_response:
+    type: sync
+    module: Main.backend.api.views
+    args: [request]
+    params:
+      returns: JsonResponse
+  adv_response_stream:
+    type: sync
+    module: Main.backend.api.views
+    args: [request]
+    params:
+      returns: StreamingHttpResponse
+  agent_chat_response:
+    type: sync
+    module: Main.backend.api.views
+    args: [request]
+    params:
+      returns: JsonResponse
+  apply_guardrails:
+    type: sync
+    module: Main.backend.mcp_client.agent
+    args: [prompt]
+    params:
+      returns: str
+  auto_scrape:
+    type: sync
+    module: Main.backend.api.views
+    args: [request]
+    params:
+      returns: JsonResponse
+  chat_completions:
+    type: sync
+    module: Main.backend.api.openai_views
+    args: [request]
+    params:
+      returns: JsonResponse
+  chat_response:
+    type: sync
+    module: Main.backend.api.views
+    args: [request]
+    params:
+      returns: JsonResponse
+  chat_response_stream:
+    type: sync
+    module: Main.backend.api.views
+    args: [request]
+    params:
+      returns: StreamingHttpResponse
+  claim_verbose_slot:
+    type: sync
+    module: Main.backend.mcp_client.apps
+    params:
+      returns: bool
+  cleanup:
+    type: async
+    module: Main.backend.mcp_client.mcp_manager
+    args: [self]
+  clear:
+    type: sync
+    module: Main.backend.api.views
+    args: [request]
+    params:
+      returns: JsonResponse
+  clear_messages:
+    type: sync
+    module: Main.backend.datascraper.context_integration_enhanced
+    args: [self, request, preserve_web_content]
+    params:
+      returns: str
+  click_element:
+    type: tool
+    module: Main.backend.datascraper.playwright_tools
+    args: [url, selector]
+    params:
+      returns: str
+  connect_to_servers:
+    type: async
+    module: Main.backend.mcp_client.mcp_manager
+    args: [self]
+  convert_mcp_tool_to_python_callable:
+    type: sync
+    module: Main.backend.mcp_client.tool_wrapper
+    args: [tool, execute_fn]
+    params:
+      returns: Callable
+  create_advanced_response:
+    type: sync
+    module: Main.backend.datascraper.datascraper
+    args: [user_input, message_list, model, preferred_links, stream, user_timezone, user_time]
+  create_advanced_response_streaming:
+    type: sync
+    module: Main.backend.datascraper.datascraper
+    args: [user_input, message_list, model, preferred_links, user_timezone, user_time]
+    params:
+      returns: Tuple
+  create_agent_response:
+    type: sync
+    module: Main.backend.datascraper.datascraper
+    args: [user_input, message_list, model, current_url, user_timezone, user_time]
+    params:
+      returns: str
+  create_agent_response_async:
+    type: async
+    module: Main.backend.datascraper.datascraper_refactored
+    args: [self, session_id, model, use_playwright, restricted_domain, current_url]
+    params:
+      returns: str
+  create_agent_response_stream:
+    type: sync
+    module: Main.backend.datascraper.datascraper
+    args: [user_input, message_list, model, current_url, user_timezone, user_time]
+    params:
+      returns: Tuple
+  create_fin_agent:
+    type: async
+    module: Main.backend.mcp_client.agent
+    args: [model, system_prompt, current_url, user_input, user_timezone, user_time]
+  create_response:
+    type: sync
+    module: Main.backend.datascraper.datascraper
+    args: [user_input, message_list, model, stream]
+  create_response_async:
+    type: async
+    module: Main.backend.datascraper.datascraper_refactored
+    args: [self, session_id, model, stream]
+    params:
+      returns: str
+  create_web_search_response:
+    type: sync
+    module: Main.backend.datascraper.datascraper_refactored
+    args: [self, session_id, model, preferred_domains]
+    params:
+      returns: Tuple
+  create_web_search_response_async:
+    type: async
+    module: Main.backend.datascraper.datascraper_refactored
+    args: [self, session_id, model, preferred_domains]
+    params:
+      returns: Tuple
+  error_gen:
+    type: async
+    module: Main.backend.datascraper.datascraper
+  event_stream:
+    type: sync
+    module: Main.backend.api.views
+  execute_mcp_tool:
+    type: async
+    module: Main.backend.mcp_client.agent
+    args: [name, args, mgr]
+  execute_tool:
+    type: async
+    module: Main.backend.mcp_client.mcp_manager
+    args: [self, tool_name, arguments]
+    params:
+      returns: Any
+  extract_page_content:
+    type: tool
+    module: Main.backend.datascraper.playwright_tools
+    args: [url, content_selector]
+    params:
+      returns: str
+  get_all_tools:
+    type: async
+    module: Main.backend.mcp_client.mcp_manager
+    args: [self]
+    params:
+      returns: List[MCPTool]
+  get_available_models:
+    type: sync
+    module: Main.backend.api.views
+    args: [request]
+    params:
+      returns: JsonResponse
+  get_context_integration:
+    type: sync
+    module: Main.backend.datascraper.context_integration_enhanced
+    args: [use_mem0]
+    params:
+      returns: EnhancedContextIntegration
+  get_context_stats:
+    type: sync
+    module: Main.backend.datascraper.context_integration_enhanced
+    args: [self, session_id]
+    params:
+      returns: Dict
+  get_full_context_json:
+    type: sync
+    module: Main.backend.datascraper.context_integration_enhanced
+    args: [self, session_id]
+    params:
+      returns: str
+  get_global_mcp_manager:
+    type: sync
+    module: Main.backend.mcp_client.apps
+  get_memory_stats:
+    type: sync
+    module: Main.backend.api.views
+    args: [request]
+    params:
+      returns: JsonResponse
+  get_playwright_tools:
+    type: sync
+    module: Main.backend.datascraper.playwright_tools
+  get_preferred_urls:
+    type: sync
+    module: Main.backend.api.views
+    args: [request]
+    params:
+      returns: JsonResponse
+  get_scraped_urls:
+    type: sync
+    module: Main.backend.datascraper.context_integration
+    args: [self, session_id]
+    params:
+      returns: List[str]
+  get_sources:
+    type: sync
+    module: Main.backend.datascraper.datascraper
+    args: [query, current_url, session_id]
+    params:
+      returns: Dict
+  get_unified_scraper:
+    type: sync
+    module: Main.backend.datascraper.datascraper_refactored
+    params:
+      returns: UnifiedDataScraper
+  get_url_tools:
+    type: sync
+    module: Main.backend.datascraper.url_tools
+  get_website_icon:
+    type: sync
+    module: Main.backend.datascraper.datascraper
+    args: [url]
+  handle_multiple_models:
+    type: sync
+    module: Main.backend.datascraper.datascraper
+    args: [question, message_list, models]
+  health:
+    type: sync
+    module: Main.backend.api.views
+    args: [request]
+    params:
+      returns: JsonResponse
+  initialize_global_manager:
+    type: async
+    module: Main.backend.mcp_client.apps
+    args: [verbose]
+  load_config:
+    type: async
+    module: Main.backend.mcp_client.mcp_manager
+    args: [self]
+    params:
+      returns: Dict
+  log:
+    type: sync
+    module: Main.backend.mcp_client.apps
+    args: [msg]
+  log_question:
+    type: sync
+    module: Main.backend.api.views
+    args: [request]
+    params:
+      returns: JsonResponse
+  models_list:
+    type: sync
+    module: Main.backend.api.openai_views
+    args: [request]
+    params:
+      returns: JsonResponse
+  navigate_to_url:
+    type: tool
+    module: Main.backend.datascraper.playwright_tools
+    args: [url]
+    params:
+      returns: str
+  PlaywrightBrowser:
+    type: async
+    module: Main.backend.datascraper.playwright_tools
+    args: [timeout]
+  prepare_context_for_request:
+    type: sync
+    module: Main.backend.datascraper.context_integration_enhanced
+    args: [self, request, question, current_url, endpoint]
+    params:
+      returns: tuple
+  ready:
+    type: sync
+    module: Main.backend.mcp_client.apps
+    args: [self]
+  replace_var:
+    type: sync
+    module: Main.backend.mcp_client.mcp_manager
+    args: [match]
+  resolve_url:
+    type: tool
+    module: Main.backend.datascraper.url_tools
+    args: [route_id, params]
+    params:
+      returns: str
+  run_async_from_sync:
+    type: sync
+    module: Main.backend.mcp_client.mcp_manager
+    args: [self, coro]
+  run_async_init:
+    type: sync
+    module: Main.backend.mcp_client.apps
+  scrape_url:
+    type: tool
+    module: Main.backend.datascraper.url_tools
+    args: [url]
+    params:
+      returns: str
+  scrape_with_playwright:
+    type: sync
+    module: Main.backend.datascraper.url_tools
+    args: [url]
+    params:
+      returns: str
+  set_global_mcp_manager:
+    type: sync
+    module: Main.backend.mcp_client.apps
+    args: [manager]
+  sync_preferred_urls:
+    type: sync
+    module: Main.backend.api.views
+    args: [request]
+    params:
+      returns: JsonResponse
+
+variables:
+  ANTHROPIC_API_KEY:
+    type: env
+    params:
+      caller: [os.getenv]
+      path: [Main.backend.datascraper.datascraper]
+  BUFFET_AGENT_API_KEY:
+    type: env
+    params:
+      caller: [os.getenv]
+      path: [Main.backend.datascraper.datascraper]
+  BUFFET_AGENT_ENDPOINT:
+    type: env
+    params:
+      caller: [os.getenv]
+      path: [Main.backend.datascraper.datascraper]
+  BUFFET_AGENT_TIMEOUT:
+    type: env
+    params:
+      caller: [os.getenv]
+      path: [Main.backend.datascraper.datascraper]
+  CONTEXT_MANAGER_MODE:
+    type: env
+    params:
+      caller: [os.getenv]
+      path: [Main.backend.datascraper.context_integration_enhanced]
+  DEEPSEEK_API_KEY:
+    type: env
+    params:
+      caller: [os.getenv]
+      path: [Main.backend.datascraper.datascraper]
+  GUNICORN_WORKER_ID:
+    type: env
+    params:
+      caller: [os.getenv]
+      path: [Main.backend.mcp_client.apps]
+  mcp_client:
+    type: env
+    params:
+      caller: [os.getenv]
+      path: [Main.backend.api.views]
+  MCP_DEBUG_FORCE_QUIET:
+    type: env
+    params:
+      caller: [os.getenv]
+      path: [Main.backend.mcp_client.apps]
+  MCP_DEBUG_FORCE_VERBOSE:
+    type: env
+    params:
+      caller: [os.getenv]
+      path: [Main.backend.mcp_client.apps]
+  MCP_VERBOSE_MARKER_PATH:
+    type: env
+    params:
+      caller: [os.getenv]
+      path: [Main.backend.mcp_client.apps]
+  MCP_VERBOSE_WORKERS:
+    type: env
+    params:
+      caller: [os.getenv]
+      path: [Main.backend.mcp_client.apps]
+  OPENAI_API_KEY:
+    type: env
+    params:
+      caller: [os.getenv, OpenAI]
+      path: [Main.backend.datascraper.url_tools, Main.backend.datascraper.datascraper]
+  var_name:
+    type: env
+    params:
+      caller: [os.environ.get]
+      path: [Main.backend.mcp_client.mcp_manager]
+
+files:
+  .env:
+    type: literal
+    actions: [read]
+    params:
+      path: [backend_dir]
+  config_path:
+    type: variable
+    actions: [read]
+    params:
+      caller: [Path]
+  mcp_server_config.json:
+    type: literal
+    actions: [read]
+    params:
+      caller: [__init__]
+      path: [Path.resolve.parent.parent]
+  pyproject.toml:
+    type: literal
+    actions: [read]
+    params:
+      caller: [_get_version]
+      path: [Path.resolve.parent.parent]
+  pyproject_path:
+    type: variable
+    actions: [read]
+    params:
+      caller: [open, json.load]
+      alias: [f]
+  site_map.json:
+    type: literal
+    actions: [read]
+    params:
+      path: [Path.resolve.parent.parent]
+  SITE_MAP_PATH:
+    type: variable
+    actions: [read]
+    params:
+      caller: [open, json.load]
+      alias: [f]
+  verbose_marker_path:
+    type: variable
+    actions: [read]
+    params:
+      caller: [os.open]
+
+networks:
+  api.deepseek.com:
+    type: api
+    actions: [GET]
+    urls: [/]
+    protocols: [https]
+    ports: ["443"]
+    params:
+      links: [base_url]
