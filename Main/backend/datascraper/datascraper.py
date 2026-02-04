@@ -25,6 +25,7 @@ from .openai_search import (
     is_responses_api_available
 )
 from .unified_context_manager import get_context_manager
+from api.utils.llm_debug_logger import log_llm_payload
 
 from pathlib import Path
 backend_dir = Path(__file__).resolve().parent.parent
@@ -435,6 +436,11 @@ def create_response(
 
 def _create_response_sync(client, provider: str, model_name: str, model_config: dict, msgs: list) -> str:
     """Non-streaming response - returns a string directly."""
+    log_llm_payload(
+        call_site="_create_response_sync",
+        model=model_name, provider=provider,
+        messages=msgs, stream=False,
+    )
     if provider == "anthropic":
         anthropic_msgs = [msg for msg in msgs if msg.get("role") != "system"]
 
@@ -459,6 +465,11 @@ def _create_response_sync(client, provider: str, model_name: str, model_config: 
 
 def _create_response_stream(client, provider: str, model_name: str, model_config: dict, msgs: list):
     """Streaming response - returns a generator."""
+    log_llm_payload(
+        call_site="_create_response_stream",
+        model=model_name, provider=provider,
+        messages=msgs, stream=True,
+    )
     if provider == "anthropic":
         anthropic_msgs = [msg for msg in msgs if msg.get("role") != "system"]
 
@@ -756,6 +767,12 @@ async def _create_agent_response_async(user_input: str, message_list: list[dict]
             full_prompt = f"[SYSTEM MESSAGE]: {agent._foundation_instructions}\n\n{full_prompt}"
 
         logging.info(f"[AGENT] Prompt preview: {full_prompt[:150]}...")
+        log_llm_payload(
+            call_site="_create_agent_response_async",
+            model=model, provider="agent",
+            messages=full_prompt, stream=False,
+            extra={"current_url": current_url, "has_system_prompt": bool(extracted_system_prompt)},
+        )
 
         result = await Runner.run(agent, full_prompt)
 
@@ -854,7 +871,13 @@ def create_agent_response_stream(
                         current_full_prompt = f"[SYSTEM MESSAGE]: {agent._foundation_instructions}\n\n{full_prompt}"
 
                     logging.info(f"[AGENT STREAM] Prompt preview: {current_full_prompt[:150]}...")
-                    
+                    log_llm_payload(
+                        call_site="create_agent_response_stream",
+                        model=model, provider="agent",
+                        messages=current_full_prompt, stream=True,
+                        extra={"current_url": current_url, "has_system_prompt": bool(extracted_system_prompt)},
+                    )
+
                     result = Runner.run_streamed(agent, current_full_prompt)
 
                     async for event in result.stream_events():

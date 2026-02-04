@@ -18,6 +18,9 @@ EOF
     exit 1
 fi
 
+# Ensure cache directory exists (shared across gunicorn workers)
+mkdir -p "${CACHE_FILE_PATH:-/tmp/fingpt_cache}"
+
 if [ "${RUN_COLLECTSTATIC:-1}" = "1" ] && [ "${DJANGO_SETTINGS_MODULE:-django_config.settings}" = "django_config.settings_prod" ]; then
     echo "Running collectstatic for production assets..."
     python manage.py collectstatic --noinput
