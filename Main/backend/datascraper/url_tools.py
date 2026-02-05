@@ -10,6 +10,7 @@ import os
 import re
 from pathlib import Path
 from typing import Dict, Any, Optional
+from urllib.parse import urlparse
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 from openai import OpenAI
@@ -246,7 +247,15 @@ def scrape_url(url: str) -> str:
     Returns:
         JSON with page content or error
     """
-    if "finance.yahoo.com" in url.lower():
+    # Properly validate Yahoo Finance URL by checking hostname
+    try:
+        parsed = urlparse(url)
+        hostname = parsed.netloc.lower()
+        is_yahoo_finance = hostname == "finance.yahoo.com" or hostname.endswith(".finance.yahoo.com")
+    except Exception:
+        is_yahoo_finance = False
+
+    if is_yahoo_finance:
         logger.warning(f"Yahoo Finance scraping fallback triggered: {url}. MCP tools should be preferred.")
         result_json = _scrape_url_impl(url)
         try:

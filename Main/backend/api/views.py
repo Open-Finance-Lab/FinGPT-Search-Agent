@@ -40,23 +40,22 @@ logger = logging.getLogger(__name__)
 def _safe_error_message(exception: Exception, context: str = "") -> str:
     """
     Return a safe error message for client responses.
-    Logs full error details server-side, returns generic message in production.
+    NEVER returns exception details to prevent information disclosure.
+    Full error details are logged server-side for debugging.
 
     Args:
         exception: The exception that occurred
         context: Optional context about where the error occurred
 
     Returns:
-        Safe error message string for client
+        Safe generic error message for client (never contains exception details)
     """
     # Log full error details server-side for debugging
+    # Developers should check server logs, not client responses
     logger.error(f"Error in {context}: {type(exception).__name__}: {str(exception)}", exc_info=True)
 
-    # Return detailed errors only in DEBUG mode, generic message in production
-    if settings.DEBUG:
-        return f"{type(exception).__name__}: {str(exception)}"
-    else:
-        return "An error occurred while processing your request. Please try again."
+    # Always return generic message - never expose exception details to clients
+    return "An error occurred while processing your request. Please check server logs for details."
 
 
 def _get_version():
