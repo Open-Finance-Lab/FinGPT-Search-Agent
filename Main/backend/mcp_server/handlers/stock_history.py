@@ -40,11 +40,13 @@ class GetStockHistoryHandler(ToolHandler):
                 text=f"No historical data found for {ctx.ticker}"
             )]
 
-        # Log warning for large datasets
-        if len(history) > 1000:
-            logger.warning(f"Large history dataset for {ctx.ticker}: {len(history)} rows")
+        # Cap at 500 rows to avoid bloating the LLM context window
+        if len(history) > 500:
+            logger.warning(f"Large history dataset for {ctx.ticker}: {len(history)} rows, truncating to 500")
+            history = history.tail(500)
 
+        # Use "split" orient: compact format without schema metadata
         return [types.TextContent(
             type="text",
-            text=history.to_json(orient="table")
+            text=history.to_json(orient="split", date_format="iso")
         )]

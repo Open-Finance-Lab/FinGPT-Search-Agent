@@ -37,6 +37,7 @@ BUFFET_AGENT_API_KEY = os.getenv("BUFFET_AGENT_API_KEY", "")
 BUFFET_AGENT_DEFAULT_ENDPOINT = "https://l7d6yqg7nzbkumx8.us-east-1.aws.endpoints.huggingface.cloud"
 BUFFET_AGENT_ENDPOINT = os.getenv("BUFFET_AGENT_ENDPOINT", BUFFET_AGENT_DEFAULT_ENDPOINT)
 BUFFET_AGENT_TIMEOUT = float(os.getenv("BUFFET_AGENT_TIMEOUT", "60"))
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "")
 
 
 
@@ -57,6 +58,12 @@ if DEEPSEEK_API_KEY:
 
 if ANTHROPIC_API_KEY:
     clients["anthropic"] = Anthropic(api_key=ANTHROPIC_API_KEY)
+
+if GOOGLE_API_KEY:
+    clients["google"] = OpenAI(
+        api_key=GOOGLE_API_KEY,
+        base_url="https://generativelanguage.googleapis.com/v1beta/openai/"
+    )
 
 _SECURITY_GUARDRAILS = (
     "SECURITY REQUIREMENTS:\n"
@@ -454,6 +461,8 @@ def _create_response_sync(client, provider: str, model_name: str, model_config: 
         kwargs = {}
         if provider == "deepseek" and "recommended_temperature" in model_config:
             kwargs["temperature"] = model_config["recommended_temperature"]
+        if "reasoning_effort" in model_config:
+            kwargs["reasoning_effort"] = model_config["reasoning_effort"]
 
         response = client.chat.completions.create(
             model=model_name,
@@ -484,6 +493,8 @@ def _create_response_stream(client, provider: str, model_name: str, model_config
         kwargs = {}
         if provider == "deepseek" and "recommended_temperature" in model_config:
             kwargs["temperature"] = model_config["recommended_temperature"]
+        if "reasoning_effort" in model_config:
+            kwargs["reasoning_effort"] = model_config["reasoning_effort"]
 
         stream_response = client.chat.completions.create(
             model=model_name,

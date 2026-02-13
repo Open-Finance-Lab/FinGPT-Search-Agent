@@ -6,18 +6,19 @@ Central configuration for all supported LLM models.
 MODELS_CONFIG = {
     "FinGPT-Light": {
         "provider": "openai",
-        "model_name": "gpt-5-mini",
+        "model_name": "gpt-5.1-chat-latest",
         "supports_mcp": True,
         "supports_advanced": True,
         "max_tokens": 128000,
         "description": "Fast and efficient light-weight model"
     },
     "FinGPT": {
-        "provider": "openai",
-        "model_name": "gpt-5.1-chat-latest",
+        "provider": "google",
+        "model_name": "gemini-3-flash-preview",
         "supports_mcp": True,
         "supports_advanced": True,
-        "max_tokens": 128000,
+        "max_tokens": 1048576,
+        "reasoning_effort": "low",
         "description": "State-of-the-art financial model"
     },
     "Buffet-Agent": {
@@ -48,6 +49,11 @@ PROVIDER_CONFIGS = {
         "base_url": None,
         "env_key": "ANTHROPIC_API_KEY",
         "client_class": "Anthropic"
+    },
+    "google": {
+        "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
+        "env_key": "GOOGLE_API_KEY",
+        "client_class": "OpenAI"
     },
     "buffet": {
         "base_url": "https://l7d6yqg7nzbkumx8.us-east-1.aws.endpoints.huggingface.cloud",

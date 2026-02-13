@@ -15,6 +15,9 @@ from mcp_server.handlers.stock_financials import GetStockFinancialsHandler
 from mcp_server.handlers.stock_news import GetStockNewsHandler
 from mcp_server.handlers.stock_history import GetStockHistoryHandler
 from mcp_server.handlers.stock_analysis import GetStockAnalysisHandler
+from mcp_server.handlers.earnings_info import GetEarningsInfoHandler
+from mcp_server.handlers.options_chain import GetOptionsChainHandler
+from mcp_server.handlers.holders import GetHoldersHandler
 from mcp_server.validation import validate_ticker, ValidationError
 from mcp_server.errors import ErrorType, ToolError
 from mcp_server.executor import get_executor
@@ -39,6 +42,9 @@ TOOL_HANDLERS: dict[str, ToolHandler] = {
     "get_stock_news": GetStockNewsHandler(),
     "get_stock_history": GetStockHistoryHandler(),
     "get_stock_analysis": GetStockAnalysisHandler(),
+    "get_earnings_info": GetEarningsInfoHandler(),
+    "get_options_chain": GetOptionsChainHandler(),
+    "get_holders": GetHoldersHandler(),
 }
 
 
@@ -48,13 +54,13 @@ async def handle_list_tools() -> List[types.Tool]:
     return [
         types.Tool(
             name="get_stock_info",
-            description="Get general information about a stock, including current price, market cap, PE ratio, and dividend yield.",
+            description="Get general information about a stock or market index, including current price, market cap, PE ratio, and dividend yield.",
             inputSchema={
                 "type": "object",
                 "properties": {
                     "ticker": {
                         "type": "string",
-                        "description": "The stock ticker symbol (e.g., 'AAPL', 'MSFT')."
+                        "description": "The ticker symbol (e.g., 'AAPL', 'MSFT'). For market indices use the ^ prefix (e.g., '^GSPC' for S&P 500, '^DJI' for Dow Jones, '^IXIC' for NASDAQ, '^VIX' for VIX). For futures use =F suffix (e.g., 'GC=F'), for forex use =X suffix (e.g., 'EURUSD=X')."
                     }
                 },
                 "required": ["ticker"],
@@ -68,7 +74,7 @@ async def handle_list_tools() -> List[types.Tool]:
                 "properties": {
                     "ticker": {
                         "type": "string",
-                        "description": "The stock ticker symbol."
+                        "description": "The ticker symbol (e.g., 'AAPL', 'MSFT'). Note: financial statements are only available for individual stocks, not indices."
                     }
                 },
                 "required": ["ticker"],
@@ -76,13 +82,13 @@ async def handle_list_tools() -> List[types.Tool]:
         ),
         types.Tool(
             name="get_stock_news",
-            description="Get the latest news articles for a specific stock.",
+            description="Get the latest news articles for a specific stock or market index.",
             inputSchema={
                 "type": "object",
                 "properties": {
                     "ticker": {
                         "type": "string",
-                        "description": "The stock ticker symbol."
+                        "description": "The ticker symbol (e.g., 'AAPL', '^GSPC' for S&P 500)."
                     }
                 },
                 "required": ["ticker"],
@@ -90,13 +96,13 @@ async def handle_list_tools() -> List[types.Tool]:
         ),
         types.Tool(
             name="get_stock_history",
-            description="Get historical price data for a stock.",
+            description="Get historical price data for a stock or market index.",
             inputSchema={
                 "type": "object",
                 "properties": {
                     "ticker": {
                         "type": "string",
-                        "description": "The stock ticker symbol."
+                        "description": "The ticker symbol (e.g., 'AAPL', '^GSPC' for S&P 500, '^DJI' for Dow Jones)."
                     },
                     "period": {
                         "type": "string",
@@ -114,13 +120,59 @@ async def handle_list_tools() -> List[types.Tool]:
         ),
         types.Tool(
             name="get_stock_analysis",
-            description="Get analyst recommendations, price targets, and earnings estimates.",
+            description="Get analyst recommendations, consensus price targets (mean, median, high, low), and recent upgrades/downgrades for a stock.",
             inputSchema={
                 "type": "object",
                 "properties": {
                     "ticker": {
                         "type": "string",
-                        "description": "The stock ticker symbol."
+                        "description": "The ticker symbol (e.g., 'AAPL', 'MSFT'). Note: analyst data is primarily available for individual stocks."
+                    }
+                },
+                "required": ["ticker"],
+            },
+        ),
+        types.Tool(
+            name="get_earnings_info",
+            description="Get earnings calendar, upcoming/past earnings dates, EPS and revenue estimates, EPS trends, and growth estimates for a stock.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "ticker": {
+                        "type": "string",
+                        "description": "The ticker symbol (e.g., 'AAPL', 'MSFT'). Use this to find next earnings date, expected EPS, revenue estimates, and growth projections."
+                    }
+                },
+                "required": ["ticker"],
+            },
+        ),
+        types.Tool(
+            name="get_options_chain",
+            description="Get options chain data for a stock. Without an expiration date, returns available expiration dates. With an expiration date, returns the full calls and puts chain for that date.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "ticker": {
+                        "type": "string",
+                        "description": "The ticker symbol (e.g., 'AAPL', 'MSFT')."
+                    },
+                    "expiration": {
+                        "type": "string",
+                        "description": "Optional expiration date (e.g., '2026-03-21'). If omitted, returns the list of available expiration dates instead."
+                    }
+                },
+                "required": ["ticker"],
+            },
+        ),
+        types.Tool(
+            name="get_holders",
+            description="Get ownership data for a stock: major holders breakdown, top institutional holders, top mutual fund holders, and recent insider transactions.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "ticker": {
+                        "type": "string",
+                        "description": "The ticker symbol (e.g., 'AAPL', 'MSFT'). Holder data is only available for individual stocks."
                     }
                 },
                 "required": ["ticker"],
@@ -199,7 +251,7 @@ async def main():
             write_stream,
             InitializationOptions(
                 server_name="yahoo-finance",
-                server_version="0.2.0",
+                server_version="0.3.0",
                 capabilities=server.get_capabilities(
                     notification_options=NotificationOptions(),
                     experimental_capabilities={},

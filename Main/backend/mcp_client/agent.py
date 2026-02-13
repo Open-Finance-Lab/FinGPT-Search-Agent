@@ -3,7 +3,7 @@ import os
 from typing import Optional, List
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
-from agents import Agent
+from agents import Agent, AsyncOpenAI, OpenAIChatCompletionsModel
 from agents.model_settings import ModelSettings
 import logging
 
@@ -63,6 +63,24 @@ async def create_fin_agent(model: str = "gpt-4o-mini",
     else:
         actual_model = model_config["model_name"]
         logging.info(f"Model resolution: {model} -> {actual_model}")
+
+    # Build model object — string for OpenAI, OpenAIChatCompletionsModel for other providers
+    model_obj = actual_model
+    if model_config and model_config.get("provider") == "google":
+        google_api_key = os.getenv("GOOGLE_API_KEY", "")
+        if google_api_key:
+            google_client = AsyncOpenAI(
+                api_key=google_api_key,
+                base_url="https://generativelanguage.googleapis.com/v1beta/openai/"
+            )
+            model_obj = OpenAIChatCompletionsModel(
+                model=actual_model,
+                openai_client=google_client
+            )
+            logging.info(f"[AGENT] Using Google OpenAI-compat client for {actual_model}")
+        else:
+            logging.error("[AGENT] GOOGLE_API_KEY not set but Google model requested")
+            raise ValueError("GOOGLE_API_KEY environment variable is required for Google models")
 
     tools: List = []
 
@@ -163,14 +181,16 @@ async def create_fin_agent(model: str = "gpt-4o-mini",
         else:
             agent_instructions = instructions
 
+        model_settings_kwargs = {"tool_choice": "auto" if tools else None}
+        if model_config and "reasoning_effort" in model_config:
+            model_settings_kwargs["extra_body"] = {"reasoning_effort": model_config["reasoning_effort"]}
+
         agent = Agent(
             name="FinGPT Search Agent",
             instructions=agent_instructions,
-            model=actual_model,
+            model=model_obj,
             tools=tools if tools else [],
-            model_settings=ModelSettings(
-                tool_choice="auto" if tools else None
-            )
+            model_settings=ModelSettings(**model_settings_kwargs)
         )
 
         # Attach instructions as a property for the runner to use if agent_instructions is empty

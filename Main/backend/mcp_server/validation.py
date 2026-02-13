@@ -33,7 +33,9 @@ def validate_ticker(ticker: Optional[str]) -> str:
 
     # Allow basic ticker patterns: letters, numbers, hyphens, dots
     # Most tickers are 1-5 chars but some (like BRK-B) can be longer
-    if not re.match(r'^[A-Z][A-Z0-9.-]{0,9}$', ticker):
+    # Index symbols use ^ prefix (^GSPC, ^DJI), some use . prefix (.INX)
+    # Futures use =F suffix (GC=F), forex uses =X suffix (EURUSD=X)
+    if not re.match(r'^[\^.]?[A-Z][A-Z0-9.\-=]{0,9}$', ticker):
         raise ValidationError(f"Invalid ticker format: {ticker}")
 
     return ticker
