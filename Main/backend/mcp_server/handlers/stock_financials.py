@@ -1,5 +1,6 @@
 """Handler for get_stock_financials tool."""
 
+import asyncio
 import json
 import logging
 from typing import List
@@ -29,15 +30,25 @@ class GetStockFinancialsHandler(ToolHandler):
         stock = await get_ticker(ctx.ticker)
 
         # Get all financial statements in parallel
-        income_stmt = await run_in_executor(lambda: stock.income_stmt)
-        balance_sheet = await run_in_executor(lambda: stock.balance_sheet)
-        cashflow = await run_in_executor(lambda: stock.cashflow)
+        income_stmt, balance_sheet, cashflow = await asyncio.gather(
+            run_in_executor(lambda: stock.income_stmt),
+            run_in_executor(lambda: stock.balance_sheet),
+            run_in_executor(lambda: stock.cashflow),
+        )
 
         financials = {
             "income_statement": income_stmt.to_dict() if not income_stmt.empty else {},
             "balance_sheet": balance_sheet.to_dict() if not balance_sheet.empty else {},
             "cash_flow": cashflow.to_dict() if not cashflow.empty else {}
         }
+
+        # If all statements are empty, return a clear message (e.g. for indices)
+        if all(v == {} for v in financials.values()):
+            return [types.TextContent(
+                type="text",
+                text=f"No financial statements available for {ctx.ticker}. "
+                     "Financial data is only available for individual stocks, not indices or funds."
+            )]
 
         return [types.TextContent(
             type="text",

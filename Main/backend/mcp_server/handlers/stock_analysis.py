@@ -1,5 +1,6 @@
 """Handler for get_stock_analysis tool."""
 
+import asyncio
 import json
 import logging
 from typing import List
@@ -28,15 +29,30 @@ class GetStockAnalysisHandler(ToolHandler):
         """
         stock = await get_ticker(ctx.ticker)
 
-        # Get all analysis data
-        recommendations = await run_in_executor(lambda: stock.recommendations)
-        recommendations_summary = await run_in_executor(lambda: stock.recommendations_summary)
-        upgrades_downgrades = await run_in_executor(lambda: stock.upgrades_downgrades)
+        # Get all analysis data in parallel
+        recommendations, recommendations_summary, upgrades_downgrades, price_targets = await asyncio.gather(
+            run_in_executor(lambda: stock.recommendations),
+            run_in_executor(lambda: stock.recommendations_summary),
+            run_in_executor(lambda: stock.upgrades_downgrades),
+            run_in_executor(lambda: stock.analyst_price_targets),
+        )
+
+        def _safe_dict(df):
+            if df is None:
+                return {}
+            if hasattr(df, 'empty') and df.empty:
+                return {}
+            if hasattr(df, 'to_dict'):
+                return df.to_dict()
+            if isinstance(df, dict):
+                return df
+            return {}
 
         analysis = {
-            "recommendations": recommendations.to_dict() if recommendations is not None and not recommendations.empty else {},
-            "recommendations_summary": recommendations_summary.to_dict() if recommendations_summary is not None and not recommendations_summary.empty else {},
-            "upgrades_downgrades": upgrades_downgrades.to_dict() if upgrades_downgrades is not None and not upgrades_downgrades.empty else {}
+            "recommendations": _safe_dict(recommendations),
+            "recommendations_summary": _safe_dict(recommendations_summary),
+            "upgrades_downgrades": _safe_dict(upgrades_downgrades),
+            "analyst_price_targets": _safe_dict(price_targets),
         }
 
         return [types.TextContent(

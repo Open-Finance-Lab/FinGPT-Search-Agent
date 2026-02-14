@@ -37,8 +37,7 @@ BUFFET_AGENT_API_KEY = os.getenv("BUFFET_AGENT_API_KEY", "")
 BUFFET_AGENT_DEFAULT_ENDPOINT = "https://l7d6yqg7nzbkumx8.us-east-1.aws.endpoints.huggingface.cloud"
 BUFFET_AGENT_ENDPOINT = os.getenv("BUFFET_AGENT_ENDPOINT", BUFFET_AGENT_DEFAULT_ENDPOINT)
 BUFFET_AGENT_TIMEOUT = float(os.getenv("BUFFET_AGENT_TIMEOUT", "60"))
-
-
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "")
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -57,6 +56,12 @@ if DEEPSEEK_API_KEY:
 
 if ANTHROPIC_API_KEY:
     clients["anthropic"] = Anthropic(api_key=ANTHROPIC_API_KEY)
+
+if GOOGLE_API_KEY:
+    clients["google"] = OpenAI(
+        api_key=GOOGLE_API_KEY,
+        base_url="https://generativelanguage.googleapis.com/v1beta/openai/"
+    )
 
 _SECURITY_GUARDRAILS = (
     "SECURITY REQUIREMENTS:\n"
@@ -454,6 +459,8 @@ def _create_response_sync(client, provider: str, model_name: str, model_config: 
         kwargs = {}
         if provider == "deepseek" and "recommended_temperature" in model_config:
             kwargs["temperature"] = model_config["recommended_temperature"]
+        if "reasoning_effort" in model_config and provider == "openai":
+            kwargs["reasoning_effort"] = model_config["reasoning_effort"]
 
         response = client.chat.completions.create(
             model=model_name,
@@ -484,6 +491,8 @@ def _create_response_stream(client, provider: str, model_name: str, model_config
         kwargs = {}
         if provider == "deepseek" and "recommended_temperature" in model_config:
             kwargs["temperature"] = model_config["recommended_temperature"]
+        if "reasoning_effort" in model_config and provider == "openai":
+            kwargs["reasoning_effort"] = model_config["reasoning_effort"]
 
         stream_response = client.chat.completions.create(
             model=model_name,
@@ -878,25 +887,50 @@ def create_agent_response_stream(
                         extra={"current_url": current_url, "has_system_prompt": bool(extracted_system_prompt)},
                     )
 
-                    result = Runner.run_streamed(agent, current_full_prompt)
+                    # Resolve streaming & tracing: .env override > model config > default (true)
+                    env_streaming = os.getenv("AGENT_STREAMING")
+                    if env_streaming is not None:
+                        use_streaming = env_streaming.lower() in ("true", "1")
+                    else:
+                        use_streaming = model_config.get("streaming", True) if model_config else True
 
-                    async for event in result.stream_events():
-                        event_type = getattr(event, "type", "")
-                        if event_type == "raw_response_event":
-                            data = getattr(event, "data", None)
-                            data_type = getattr(data, "type", "")
-                            if data_type == "response.output_text.delta":
-                                chunk = getattr(data, "delta", "")
-                                if chunk:
-                                    aggregated_chunks.append(chunk)
-                                    yield chunk
-                                    has_yielded = True
-                        elif event_type == "run_item_stream_event":
-                            event_name = getattr(event, "name", "")
-                            if event_name in {"tool_called", "tool_output"}:
-                                tool_item = getattr(event, "item", None)
-                                tool_type = getattr(tool_item, "type", "")
-                                logging.debug(f"[AGENT STREAM] Tool event: {event_name} ({tool_type})")
+                    env_tracing = os.getenv("AGENT_TRACING")
+                    if env_tracing is not None:
+                        tracing_enabled = env_tracing.lower() in ("true", "1")
+                    else:
+                        tracing_enabled = model_config.get("tracing", True) if model_config else True
+
+                    from agents import set_tracing_disabled
+                    set_tracing_disabled(not tracing_enabled)
+
+                    if not use_streaming:
+                        logging.info(f"[AGENT STREAM] Non-streaming mode for {model}")
+                        result = await Runner.run(agent, current_full_prompt)
+                        final_text = result.final_output if isinstance(result.final_output, str) else str(result.final_output)
+                        if final_text:
+                            yield final_text
+                            has_yielded = True
+                            aggregated_chunks.append(final_text)
+                    else:
+                        result = Runner.run_streamed(agent, current_full_prompt)
+
+                        async for event in result.stream_events():
+                            event_type = getattr(event, "type", "")
+                            if event_type == "raw_response_event":
+                                data = getattr(event, "data", None)
+                                data_type = getattr(data, "type", "")
+                                if data_type == "response.output_text.delta":
+                                    chunk = getattr(data, "delta", "")
+                                    if chunk:
+                                        aggregated_chunks.append(chunk)
+                                        yield chunk
+                                        has_yielded = True
+                            elif event_type == "run_item_stream_event":
+                                event_name = getattr(event, "name", "")
+                                if event_name in {"tool_called", "tool_output"}:
+                                    tool_item = getattr(event, "item", None)
+                                    tool_type = getattr(tool_item, "type", "")
+                                    logging.debug(f"[AGENT STREAM] Tool event: {event_name} ({tool_type})")
                 
                 break
 

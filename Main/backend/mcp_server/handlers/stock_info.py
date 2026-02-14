@@ -41,10 +41,20 @@ async def get_ticker(symbol: str) -> yf.Ticker:
 class GetStockInfoHandler(ToolHandler):
     """Handler for get_stock_info tool."""
 
-    RELEVANT_KEYS = [
+    # Keys relevant for stocks
+    STOCK_KEYS = [
         'longName', 'symbol', 'currentPrice', 'marketCap', 'trailingPE',
         'forwardPE', 'dividendYield', 'fiftyTwoWeekHigh', 'fiftyTwoWeekLow',
         'averageVolume', 'sector', 'industry', 'longBusinessSummary'
+    ]
+
+    # Keys relevant for indices (^GSPC, ^DJI, etc.) and broader instruments
+    INDEX_KEYS = [
+        'shortName', 'symbol', 'regularMarketPrice', 'regularMarketDayHigh',
+        'regularMarketDayLow', 'regularMarketOpen', 'regularMarketVolume',
+        'regularMarketPreviousClose', 'regularMarketChange',
+        'regularMarketChangePercent', 'fiftyTwoWeekHigh', 'fiftyTwoWeekLow',
+        'fiftyDayAverage', 'twoHundredDayAverage'
     ]
 
     async def execute(self, ctx: ToolContext) -> List[types.TextContent]:
@@ -59,7 +69,10 @@ class GetStockInfoHandler(ToolHandler):
         stock = await get_ticker(ctx.ticker)
         info = await run_in_executor(lambda: stock.info)
 
-        filtered_info = {k: info.get(k) for k in self.RELEVANT_KEYS if k in info}
+        # Use index-specific keys for tickers with ^ or . prefix
+        is_index = ctx.ticker.startswith('^') or ctx.ticker.startswith('.')
+        keys = self.INDEX_KEYS if is_index else self.STOCK_KEYS
+        filtered_info = {k: info.get(k) for k in keys if k in info}
 
         if not filtered_info:
             return [types.TextContent(

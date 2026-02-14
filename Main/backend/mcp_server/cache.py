@@ -42,12 +42,19 @@ class TimedCache:
     def set(self, key: str, value: Any) -> None:
         """Cache value with current timestamp.
 
+        Also evicts expired entries to prevent unbounded growth.
+
         Args:
             key: Cache key
             value: Value to cache
         """
+        now = datetime.now()
         with self._lock:
-            self._cache[key] = (value, datetime.now())
+            # Evict expired entries on write to prevent memory leaks
+            expired = [k for k, (_, ts) in self._cache.items() if now - ts >= self.ttl]
+            for k in expired:
+                del self._cache[k]
+            self._cache[key] = (value, now)
 
     def clear(self) -> None:
         """Clear all cached values."""

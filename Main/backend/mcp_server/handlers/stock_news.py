@@ -29,6 +29,12 @@ class GetStockNewsHandler(ToolHandler):
         stock = await get_ticker(ctx.ticker)
         news = await run_in_executor(lambda: stock.news)
 
+        if not news:
+            return [types.TextContent(
+                type="text",
+                text=f"No recent news found for {ctx.ticker}"
+            )]
+
         return [types.TextContent(
             type="text",
             text=json.dumps(news, indent=2)

@@ -34,6 +34,6 @@ async def run_in_executor(func: Callable[..., T], *args: Any) -> T:
     Returns:
         The result from the function
     """
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     executor = get_executor()
     return await loop.run_in_executor(executor, partial(func, *args))
