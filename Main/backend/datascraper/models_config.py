@@ -18,7 +18,6 @@ MODELS_CONFIG = {
         "supports_mcp": True,
         "supports_advanced": True,
         "max_tokens": 1048576,
-        "reasoning_effort": "low",
         "description": "State-of-the-art financial model"
     },
     "Buffet-Agent": {

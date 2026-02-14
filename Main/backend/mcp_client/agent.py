@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 from agents import Agent, AsyncOpenAI, OpenAIChatCompletionsModel
 from agents.model_settings import ModelSettings
+from openai.types.shared import Reasoning
 import logging
 
 from pathlib import Path
@@ -182,8 +183,10 @@ async def create_fin_agent(model: str = "gpt-4o-mini",
             agent_instructions = instructions
 
         model_settings_kwargs = {"tool_choice": "auto" if tools else None}
-        if model_config and "reasoning_effort" in model_config:
-            model_settings_kwargs["extra_body"] = {"reasoning_effort": model_config["reasoning_effort"]}
+        if (model_config
+                and "reasoning_effort" in model_config
+                and model_config.get("provider") == "openai"):
+            model_settings_kwargs["reasoning"] = Reasoning(effort=model_config["reasoning_effort"])
 
         agent = Agent(
             name="FinGPT Search Agent",

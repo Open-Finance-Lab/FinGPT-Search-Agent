@@ -461,7 +461,7 @@ def _create_response_sync(client, provider: str, model_name: str, model_config: 
         kwargs = {}
         if provider == "deepseek" and "recommended_temperature" in model_config:
             kwargs["temperature"] = model_config["recommended_temperature"]
-        if "reasoning_effort" in model_config:
+        if "reasoning_effort" in model_config and provider == "openai":
             kwargs["reasoning_effort"] = model_config["reasoning_effort"]
 
         response = client.chat.completions.create(
@@ -493,7 +493,7 @@ def _create_response_stream(client, provider: str, model_name: str, model_config
         kwargs = {}
         if provider == "deepseek" and "recommended_temperature" in model_config:
             kwargs["temperature"] = model_config["recommended_temperature"]
-        if "reasoning_effort" in model_config:
+        if "reasoning_effort" in model_config and provider == "openai":
             kwargs["reasoning_effort"] = model_config["reasoning_effort"]
 
         stream_response = client.chat.completions.create(
