@@ -30,135 +30,56 @@ class MCPClientConfig(AppConfig):
         global _initialized
 
         if _initialized:
-            print("[MCP DEBUG] MCP already initialized in this process, skipping")
             return
 
         import os
         import sys
 
         # Skip initialization for management commands like collectstatic, migrate, etc.
-        # We only want MCP when running the actual web server.
         is_manage_cmd = 'manage.py' in sys.argv[0] or (len(sys.argv) > 0 and sys.argv[0].endswith('manage.py'))
         is_server_cmd = 'runserver' in sys.argv
-        is_gunicorn = 'gunicorn' in sys.argv[0] or any('gunicorn' in s for s in sys.argv)
-        
-        # If it's a management command BUT NOT runserver, skip it.
+
         if is_manage_cmd and not is_server_cmd:
-            # Check for collectstatic specifically to be safe
             if any(cmd in sys.argv for cmd in ['collectstatic', 'migrate', 'makemigrations', 'shell', 'test']):
-                print(f"[MCP DEBUG] Skipping MCP init for management command: {sys.argv}")
+                logger.debug(f"Skipping MCP init for management command: {sys.argv}")
                 return
 
         _initialized = True
 
-        worker_id = os.getenv('GUNICORN_WORKER_ID')
-        verbose_marker_path = os.getenv('MCP_VERBOSE_MARKER_PATH', '/tmp/mcp_verbose_worker')
-        force_verbose = os.getenv('MCP_DEBUG_FORCE_VERBOSE') == '1'
-        force_quiet = os.getenv('MCP_DEBUG_FORCE_QUIET') == '1'
-        configured_workers = {
-            w.strip() for w in os.getenv('MCP_VERBOSE_WORKERS', '1').split(',') if w.strip()
-        }
-
-        def claim_verbose_slot() -> bool:
-            """Allow only the first worker without an ID to log verbosely."""
-            try:
-                fd = os.open(verbose_marker_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-                os.close(fd)
-                return True
-            except FileExistsError:
-                return False
-
-        if force_quiet:
-            is_verbose = False
-        elif force_verbose:
-            is_verbose = True
-        elif worker_id:
-            is_verbose = worker_id in configured_workers
-        else:
-            is_verbose = claim_verbose_slot()
-
-        if is_verbose:
-            print("\n" + "="*60)
-            print("[MCP DEBUG] --- MCP Client App Starting ---")
-            print(f"[MCP DEBUG] Process ID: {os.getpid()}")
-            print("="*60)
-        else:
-            worker_label = worker_id if worker_id is not None else str(os.getpid())
-            print(f"[MCP DEBUG] Worker {worker_label} initializing MCP (quiet mode)...")
-
         from .mcp_manager import MCPClientManager
 
-        async def initialize_global_manager(verbose=True):
+        async def initialize_global_manager():
             """Initialize and maintain the global MCP manager"""
             global _global_mcp_manager
 
-            def log(msg):
-                """Conditional logging based on verbose flag"""
-                if verbose:
-                    print(msg)
-
             try:
-                log("[MCP DEBUG] Creating MCP Client Manager...")
-                manager = MCPClientManager(verbose=verbose)
+                manager = MCPClientManager(verbose=False)
 
-                log("[MCP DEBUG] Loading MCP server configuration...")
                 config = await manager.load_config()
                 server_count = len(config.get("mcpServers", {}))
-                log(f"[MCP DEBUG] Found {server_count} MCP servers in config")
 
                 if server_count > 0:
-                    log("[MCP DEBUG] Initiating connections to MCP servers...")
                     await manager.connect_to_servers()
-
                     tools = await manager.get_all_tools()
-                    if verbose:
-                        print("-" * 60)
-                        print(f"[MCP DEBUG] Successfully connected to all MCP servers!")
-                        print(f"[MCP DEBUG] Total tools discovered: {len(tools)}")
-                        print("-" * 60)
 
                     with _global_mcp_lock:
                         set_global_mcp_manager(manager)
 
-                    if verbose:
-                        print("-" * 60)
-                        print("[MCP DEBUG] Global MCP Manager initialized and ready!")
-                        print("[MCP DEBUG] MCP connections will persist for process lifetime")
-                        print("=" * 60 + "\n")
-                    else:
-                        print(f"[MCP DEBUG] MCP ready ({len(tools)} tools)")
+                    logger.info(f"MCP ready ({len(tools)} tools from {server_count} servers)")
                 else:
-                    log("[MCP DEBUG] No MCP servers configured. MCP is disabled.")
-                    if verbose:
-                        print("=" * 60 + "\n")
+                    logger.info("No MCP servers configured")
 
             except Exception as e:
-                if verbose:
-                    print("=" * 60)
-                    print(f"[MCP DEBUG] Failed to initialize global MCP manager: {e}")
-                    print("=" * 60 + "\n")
-                else:
-                    print(f"[MCP DEBUG] MCP init failed: {e}")
                 logger.error(f"MCP initialization failed: {e}", exc_info=True)
 
         def run_async_init():
             """Run MCP initialization and keep event loop alive for async operations"""
             try:
-                if is_verbose:
-                    print("[MCP DEBUG] Starting async initialization in background thread...")
-
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
-
-                loop.run_until_complete(initialize_global_manager(verbose=is_verbose))
-
-                if is_verbose:
-                    print("[MCP DEBUG] Event loop now running to maintain connections...")
-
+                loop.run_until_complete(initialize_global_manager())
                 loop.run_forever()
-
             except Exception as e:
-                print(f"[MCP DEBUG] ✗ Error in MCP initialization thread: {e}")
                 logger.error(f"Error in MCP initialization thread: {e}", exc_info=True)
             finally:
                 try:
@@ -168,8 +89,3 @@ class MCPClientConfig(AppConfig):
 
         thread = threading.Thread(target=run_async_init, name="MCPManagerThread", daemon=True)
         thread.start()
-
-        if is_verbose:
-            print("[MCP DEBUG] Background initialization thread started")
-            print("[MCP DEBUG] Waiting for MCP initialization to complete...")
-            print("")
