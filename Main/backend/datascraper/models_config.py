@@ -10,6 +10,8 @@ MODELS_CONFIG = {
         "supports_mcp": True,
         "supports_advanced": True,
         "max_tokens": 128000,
+        "streaming": True,
+        "tracing": True,
         "description": "Fast and efficient light-weight model"
     },
     "FinGPT": {
@@ -18,6 +20,8 @@ MODELS_CONFIG = {
         "supports_mcp": True,
         "supports_advanced": True,
         "max_tokens": 1048576,
+        "streaming": False,
+        "tracing": False,
         "description": "State-of-the-art financial model"
     },
     "Buffet-Agent": {
@@ -27,6 +31,8 @@ MODELS_CONFIG = {
         "supports_mcp": True,
         "supports_advanced": True,
         "max_tokens": 400000,
+        "streaming": True,
+        "tracing": True,
         "description": "The power of the Warren, in the palm of my hands"
     },
 

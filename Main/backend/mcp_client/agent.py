@@ -1,11 +1,13 @@
 
 import os
+import json as _json
 from typing import Optional, List
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 from agents import Agent, AsyncOpenAI, OpenAIChatCompletionsModel
 from agents.model_settings import ModelSettings
 from openai.types.shared import Reasoning
+import httpx
 import logging
 
 from pathlib import Path
@@ -27,6 +29,32 @@ _mcp_init_lock = None
 _prompt_builder = PromptBuilder()
 
 USER_ONLY_MODELS = {"o3-mini", "o1-mini", "o1-preview", "gpt-5-mini", "gpt-5.1-chat-latest"}
+
+
+async def _gemini_error_hook(response: httpx.Response):
+    """Capture full Gemini error responses for debugging."""
+    if response.status_code < 400:
+        return
+    await response.aread()
+    logging.error(
+        f"[GEMINI] HTTP {response.status_code} | {response.url}\n"
+        f"  Response body: {response.text[:3000]}"
+    )
+    try:
+        req_body = response.request.content.decode("utf-8")
+        parsed = _json.loads(req_body)
+        summary = {
+            "model": parsed.get("model"),
+            "stream": parsed.get("stream"),
+            "n_messages": len(parsed.get("messages", [])),
+            "n_tools": len(parsed.get("tools", [])),
+        }
+        logging.error(f"[GEMINI] Request summary: {_json.dumps(summary, default=str)}")
+        with open("/tmp/gemini_failed_request.json", "w") as f:
+            _json.dump(parsed, f, indent=2, default=str)
+        logging.error("[GEMINI] Full request dumped to /tmp/gemini_failed_request.json")
+    except Exception as exc:
+        logging.error(f"[GEMINI] Could not parse request: {exc}")
 
 
 @asynccontextmanager
@@ -70,28 +98,31 @@ async def create_fin_agent(model: str = "gpt-4o-mini",
     if model_config and model_config.get("provider") == "google":
         google_api_key = os.getenv("GOOGLE_API_KEY", "")
         if google_api_key:
+            gemini_http = httpx.AsyncClient(
+                timeout=httpx.Timeout(600.0, connect=10.0),
+                event_hooks={"response": [_gemini_error_hook]},
+            )
             google_client = AsyncOpenAI(
                 api_key=google_api_key,
-                base_url="https://generativelanguage.googleapis.com/v1beta/openai/"
+                base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
+                http_client=gemini_http,
             )
             model_obj = OpenAIChatCompletionsModel(
                 model=actual_model,
                 openai_client=google_client
             )
-            logging.info(f"[AGENT] Using Google OpenAI-compat client for {actual_model}")
+            logging.info(f"Using Google OpenAI-compat client for {actual_model}")
         else:
-            logging.error("[AGENT] GOOGLE_API_KEY not set but Google model requested")
+            logging.error("GOOGLE_API_KEY not set but Google model requested")
             raise ValueError("GOOGLE_API_KEY environment variable is required for Google models")
 
     tools: List = []
 
     url_tools = get_url_tools()
     tools.extend(url_tools)
-    print(f"[AGENT DEBUG] Added {len(url_tools)} URL tools (resolve_url, scrape_url)")
 
     playwright_tools = get_playwright_tools()
     tools.extend(playwright_tools)
-    print(f"[AGENT DEBUG] Added {len(playwright_tools)} Playwright tools (navigate_to_url, click_element, extract_page_content)")
 
     from .mcp_manager import MCPClientManager
     from .tool_wrapper import convert_mcp_tool_to_python_callable
@@ -102,11 +133,7 @@ async def create_fin_agent(model: str = "gpt-4o-mini",
     _mcp_manager = get_global_mcp_manager()
 
     if _mcp_manager is None:
-        print("="*60)
-        print("[MCP DEBUG] ⚠ Global MCP manager not found!")
-        print("[MCP DEBUG] This should have been initialized on backend startup.")
-        print("[MCP DEBUG] Creating fallback instance for this request...")
-        print("="*60)
+        logging.warning("Global MCP manager not found, creating fallback instance")
 
         if _mcp_init_lock is None:
             _mcp_init_lock = asyncio.Lock()
@@ -114,25 +141,17 @@ async def create_fin_agent(model: str = "gpt-4o-mini",
         async with _mcp_init_lock:
             _mcp_manager = get_global_mcp_manager()
             if _mcp_manager is None:
-                print("[MCP DEBUG] Connecting to MCP servers (fallback mode)...")
                 manager = MCPClientManager()
                 try:
                     await manager.connect_to_servers()
                     _mcp_manager = manager
-                    print("[MCP DEBUG] ✓ Fallback MCP Client Manager connected.")
-                    print("="*60)
+                    logging.info("Fallback MCP manager connected")
                 except Exception as e:
-                    print(f"[MCP DEBUG] ✗ Failed to initialize MCP tools: {e}")
-                    print("="*60)
                     logging.error(f"Failed to initialize MCP tools: {e}")
                     _mcp_manager = None
-    else:
-        print("[MCP DEBUG] ✓ Using pre-initialized global MCP manager")
 
     if _mcp_manager:
         try:
-            print("[MCP DEBUG] Fetching MCP tools...")
-
             if _mcp_manager._loop:
                 import concurrent.futures
                 future = asyncio.run_coroutine_threadsafe(
@@ -142,15 +161,13 @@ async def create_fin_agent(model: str = "gpt-4o-mini",
                 try:
                     mcp_tools = future.result(timeout=10)
                 except concurrent.futures.TimeoutError:
-                    print("[MCP DEBUG] ✗ Timeout fetching MCP tools")
+                    logging.warning("Timeout fetching MCP tools")
                     mcp_tools = []
             else:
-                print("[MCP DEBUG] Warning: MCP loop not found, trying direct await")
                 mcp_tools = await _mcp_manager.get_all_tools()
 
             if mcp_tools:
-                print(f"[MCP DEBUG] ✓ Agent configured with {len(mcp_tools)} MCP tools")
-                logging.info(f"Found {len(mcp_tools)} MCP tools from connected servers.")
+                logging.info(f"Agent configured with {len(mcp_tools)} MCP tools")
 
                 for tool in mcp_tools:
 
@@ -168,16 +185,15 @@ async def create_fin_agent(model: str = "gpt-4o-mini",
                     tools.append(agent_tool)
 
             else:
-                print("[MCP DEBUG] ⚠ No MCP tools found")
+                logging.warning("No MCP tools found")
 
         except Exception as e:
-            print(f"[MCP DEBUG] ✗ Error fetching/adding MCP tools: {e}")
             logging.error(f"Error fetching/adding MCP tools: {e}", exc_info=True)
 
     try:
         # Handle foundation models that don't support "system" roles
         if actual_model in USER_ONLY_MODELS:
-            logging.info(f"[AGENT] Foundation model detected ({actual_model}). Moving instructions to message layer.")
+            logging.info(f"Foundation model detected ({actual_model}), moving instructions to message layer")
             agent_instructions = ""
         else:
             agent_instructions = instructions
@@ -187,6 +203,11 @@ async def create_fin_agent(model: str = "gpt-4o-mini",
                 and "reasoning_effort" in model_config
                 and model_config.get("provider") == "openai"):
             model_settings_kwargs["reasoning"] = Reasoning(effort=model_config["reasoning_effort"])
+
+        # Disable parallel tool calls for Gemini — its streaming format causes
+        # the SDK to concatenate multiple tool-call arguments into malformed JSON.
+        if model_config and model_config.get("provider") == "google":
+            model_settings_kwargs["parallel_tool_calls"] = False
 
         agent = Agent(
             name="FinGPT Search Agent",

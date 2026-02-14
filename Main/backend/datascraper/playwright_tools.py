@@ -6,7 +6,6 @@ Provides granular tools for navigation, clicking, and content extraction.
 import json
 import logging
 import re
-from typing import Optional
 from contextlib import asynccontextmanager
 
 from agents import function_tool
@@ -231,7 +230,7 @@ async def click_element(url: str, selector: str) -> str:
 
 
 @function_tool
-async def extract_page_content(url: str, content_selector: Optional[str] = None) -> str:
+async def extract_page_content(url: str, content_selector: str = "") -> str:
     """
     Navigate to URL and extract the main text content.
 
