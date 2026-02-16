@@ -93,3 +93,16 @@ def validate_model_support(model_id: str, feature: str) -> bool:
     if not config:
         return False
     return config.get(f"supports_{feature}", False)
+
+RESEARCH_CONFIG = {
+    "planner_model": "gpt-5-mini",
+    "research_model": "gpt-5.2-chat-latest",
+    "max_iterations": 3,
+    "max_sub_questions": 5,
+    "parallel_searches": True,
+}
+
+
+def get_research_config() -> dict:
+    """Return a copy of the research configuration (safe to mutate)."""
+    return dict(RESEARCH_CONFIG)
