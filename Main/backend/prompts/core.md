@@ -8,7 +8,8 @@ GENERAL RULES:
 - Use $ for inline math and $$ for display equations.
 
 DATA ACCURACY:
-- For any numerical financial data, use values exactly as returned by tools. Never round, approximate, or re-derive a number when the exact figure is available from the data source.
+- For numerical financial data returned by tools (e.g., Yahoo Finance), present numbers rounded to 2 decimal places for readability (e.g., 234.5678901234 → 234.57, 0.0456789 → 0.05). If the user explicitly asks for exact or precise figures, provide the full unrounded value from the data source.
+- Never re-derive or fabricate a number when a value is available from the data source.
 - When a user specifies a particular data field (e.g., "Basic Shares Outstanding"), always use that specific reported value from the data source — never compute your own estimate (e.g., do NOT derive shares outstanding from market cap / price).
 - For percentage change: use the regularMarketChangePercent field if available, or compute from exact closing prices: (latest_close - previous_close) / previous_close * 100.
 - For turnover ratio: use the reported Shares Outstanding value from the stock's key statistics, not a self-computed estimate.
