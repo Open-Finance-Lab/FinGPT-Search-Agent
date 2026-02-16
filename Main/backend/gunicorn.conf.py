@@ -9,7 +9,7 @@ worker_connections = 1000
 max_requests = 1000
 max_requests_jitter = 50
 
-timeout = int(os.getenv('GUNICORN_TIMEOUT', '120'))
+timeout = int(os.getenv('GUNICORN_TIMEOUT', '1200'))
 graceful_timeout = 30
 keepalive = 5
 
