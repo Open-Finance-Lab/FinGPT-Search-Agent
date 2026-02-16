@@ -681,6 +681,39 @@ def create_advanced_response(
 
     actual_model, preferred_urls = _prepare_advanced_search_inputs(model, preferred_links)
 
+    # --- Iterative research for complex queries (non-streaming) ---
+    if not stream:
+        try:
+            from datascraper.research_engine import run_iterative_research
+            from datascraper.market_time import build_market_time_context
+
+            time_ctx = build_market_time_context(user_timezone, user_time) or ""
+
+            research_result = asyncio.run(run_iterative_research(
+                user_input=user_input,
+                message_list=message_list,
+                model=actual_model,
+                preferred_urls=preferred_urls,
+                user_timezone=user_timezone,
+                user_time=user_time,
+                time_context=time_ctx,
+            ))
+
+            if research_result is not None:
+                final_text, sources, meta = research_result
+                logging.info(
+                    f"[RESEARCH ENGINE] Completed: {meta['iterations_used']} iterations, "
+                    f"{meta['sub_questions_count']} sub-questions, "
+                    f"{meta['mcp_hits']} MCP / {meta['web_hits']} web"
+                )
+                qt.set_data_source("iterative_research")
+                qt.flag("iterative_research", **meta)
+                qt.complete(final_text)
+                return final_text, sources
+            # If None, query was simple — fall through to single web search
+        except Exception as exc:
+            logging.warning(f"[RESEARCH ENGINE] Failed, falling back to single search: {exc}")
+
     try:
         if stream:
             return _create_advanced_response_stream_async(
@@ -795,7 +828,8 @@ def create_advanced_response_streaming(
                 yield mcp_response, []
             return _mcp_stream(), state
 
-    actual_model, preferred_urls = _prepare_advanced_search_inputs(model, preferred_links)
+    # --- Iterative research for complex queries (streaming path) ---
+    actual_model_all, preferred_urls_all = _prepare_advanced_search_inputs(model, preferred_links)
 
     state: Dict[str, Any] = {
         "final_output": "",
@@ -803,14 +837,65 @@ def create_advanced_response_streaming(
         "used_sources": []
     }
 
-    async def _stream() -> AsyncIterator[tuple[str, list[str]]]:
+    async def _research_stream() -> AsyncIterator[tuple[str | None, list | dict]]:
+        """Consume the streaming research engine, falling back to single-search if needed."""
+        content_started = False
         aggregated_chunks: list[str] = []
-        latest_entries: list[dict[str, Any]] = []
+        latest_sources: list[dict] = []
+
+        try:
+            from datascraper.research_engine import run_iterative_research_streaming
+            from datascraper.market_time import build_market_time_context
+
+            time_ctx = build_market_time_context(user_timezone, user_time) or ""
+
+            async for item in run_iterative_research_streaming(
+                user_input=user_input,
+                message_list=message_list,
+                model=actual_model_all,
+                preferred_urls=preferred_urls_all,
+                user_timezone=user_timezone,
+                user_time=user_time,
+                time_context=time_ctx,
+            ):
+                text_chunk, entries = item
+
+                # Status event — pass through
+                if text_chunk is None and isinstance(entries, dict):
+                    yield text_chunk, entries
+                    continue
+
+                # Source delivery
+                if isinstance(entries, list) and entries:
+                    latest_sources = entries
+                    yield text_chunk, entries
+                    continue
+
+                # Synthesis content
+                if text_chunk:
+                    content_started = True
+                    aggregated_chunks.append(text_chunk)
+                yield text_chunk, entries
+
+            if content_started:
+                # Research engine produced synthesis content — we're done
+                state["final_output"] = "".join(aggregated_chunks)
+                state["used_sources"] = latest_sources
+                state["used_urls"] = [s.get("url") for s in latest_sources if s.get("url")]
+                return
+
+        except Exception as exc:
+            if content_started:
+                raise  # partial content already sent, can't switch paths
+            logging.warning(f"[RESEARCH ENGINE STREAM] Failed, falling back: {exc}")
+
+        # Fall through to single-search path (simple query or engine failure)
+        logging.info("[RESEARCH STREAM] Falling through to single-search path")
         base_stream = _create_advanced_response_stream_async(
             user_input=user_input,
             message_list=message_list,
-            actual_model=actual_model,
-            preferred_urls=preferred_urls,
+            actual_model=actual_model_all,
+            preferred_urls=preferred_urls_all,
             user_timezone=user_timezone,
             user_time=user_time
         )
@@ -820,19 +905,18 @@ def create_advanced_response_streaming(
                 if text_chunk:
                     aggregated_chunks.append(text_chunk)
                 if source_entries:
-                    latest_entries = [dict(entry) for entry in source_entries]
+                    latest_sources = [dict(entry) for entry in source_entries]
                 yield text_chunk, source_entries
         except Exception as stream_error:
             logging.error(f"[ADVANCED STREAM] Error during streaming: {stream_error}")
             raise
         finally:
-            final_text = "".join(aggregated_chunks)
-            state["final_output"] = final_text
-            state["used_sources"] = latest_entries
-            state["used_urls"] = [entry.get("url") for entry in latest_entries if entry.get("url")]
-            logging.info(f"[ADVANCED STREAM] Completed with {len(final_text)} characters and {len(latest_entries)} sources")
+            state["final_output"] = "".join(aggregated_chunks)
+            state["used_sources"] = latest_sources
+            state["used_urls"] = [entry.get("url") for entry in latest_sources if entry.get("url")]
+            logging.info(f"[ADVANCED STREAM] Completed with {len(state['final_output'])} chars and {len(latest_sources)} sources")
 
-    return _stream(), state
+    return _research_stream(), state
 
 
 def create_agent_response(user_input: str, message_list: list[dict], model: str = "o4-mini", current_url: str = None, user_timezone: str = None, user_time: str = None) -> str:
@@ -1161,7 +1245,7 @@ def get_sources(query: str, current_url: str | None = None, session_id: str | No
     if session_id:
         try:
             manager = get_context_manager()
-            session = manager._get_or_create_session(session_id)
+            session = manager._load_session(session_id)
             
             for msg in reversed(session["conversation_history"]):
                 if msg.role == "assistant" and msg.metadata and msg.metadata.sources_used:

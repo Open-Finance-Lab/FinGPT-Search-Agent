@@ -10,6 +10,12 @@ const STATUS_LABEL_REMAPPINGS = {
   'preparing context': 'Processing',
   'drafting answer': 'Drafting response',
   'finalizing response': 'Finalizing response',
+  'analyzing query': 'Analyzing your question',
+  'planning research': 'Planning research strategy',
+  'researching': 'Researching',
+  'evaluating results': 'Checking completeness',
+  'follow-up research': 'Digging deeper',
+  'synthesizing findings': 'Putting it all together',
 };
 const SEARCH_STATUS_LABEL = 'searching the web';
 const READING_STATUS_LABEL = 'reading source';
