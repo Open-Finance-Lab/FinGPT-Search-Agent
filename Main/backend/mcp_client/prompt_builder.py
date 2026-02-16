@@ -117,32 +117,6 @@ class PromptBuilder:
     def _build_time_context(
         user_timezone: Optional[str], user_time: Optional[str]
     ) -> Optional[str]:
-        """Build a time-context string, or return None."""
-        if not user_timezone and not user_time:
-            return None
-
-        info_parts: list[str] = []
-
-        if user_timezone and user_time:
-            try:
-                from datetime import datetime
-                import pytz
-
-                utc_time = datetime.fromisoformat(user_time.replace("Z", "+00:00"))
-                user_tz = pytz.timezone(user_timezone)
-                local_time = utc_time.astimezone(user_tz)
-
-                info_parts.append(f"User's timezone: {user_timezone}")
-                info_parts.append(
-                    f"Current local time for user: {local_time.strftime('%Y-%m-%d %H:%M:%S %Z')}"
-                )
-            except Exception as exc:
-                logger.warning("Error formatting time info: %s", exc)
-                if user_timezone:
-                    info_parts.append(f"User's timezone: {user_timezone}")
-        elif user_timezone:
-            info_parts.append(f"User's timezone: {user_timezone}")
-
-        if info_parts:
-            return f"[TIME CONTEXT]: {' | '.join(info_parts)}"
-        return None
+        """Build a market-aware time-context string, or return None."""
+        from datascraper.market_time import build_market_time_context
+        return build_market_time_context(user_timezone, user_time)

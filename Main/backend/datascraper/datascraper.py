@@ -94,6 +94,68 @@ SYSTEM_PREFIX = "[SYSTEM MESSAGE]: "
 USER_PREFIXES = ("[USER MESSAGE]: ", "[USER QUESTION]: ")
 ASSISTANT_PREFIXES = ("[ASSISTANT MESSAGE]: ", "[ASSISTANT RESPONSE]: ")
 
+# ---------------------------------------------------------------------------
+# Numerical financial query classifier for MCP-first routing in Research mode
+# ---------------------------------------------------------------------------
+import re as _re
+
+_NUMERICAL_FINANCIAL_PATTERNS = [
+    # Price-related
+    _re.compile(r'\b(price|prices|stock price|share price|closing price|opening price|open price|close price)\b', _re.I),
+    _re.compile(r'\b(current price|latest price|last price|market price|live price)\b', _re.I),
+    # Volume
+    _re.compile(r'\b(trading volume|volume|shares traded|daily volume)\b', _re.I),
+    # Market metrics
+    _re.compile(r'\b(market cap|market capitalization|p/e ratio|pe ratio|trailing pe|forward pe)\b', _re.I),
+    _re.compile(r'\b(dividend yield|earnings per share|eps|revenue)\b', _re.I),
+    # Change / movement
+    _re.compile(r'\b(percentage change|percent change|price change|% change|price increase|price decrease|price drop)\b', _re.I),
+    _re.compile(r'\b(gain|loss|change in price|up or down)\b', _re.I),
+    # Range / high-low
+    _re.compile(r'\b(high price|low price|day range|52.week high|52.week low|intraday range|range)\b', _re.I),
+    # Shares / turnover
+    _re.compile(r'\b(shares outstanding|float|turnover ratio|shares)\b', _re.I),
+    # Specific data requests
+    _re.compile(r'\b(what is the|give me the|what are the|tell me the|show me the|get the|fetch the|find the)\b.*\b(price|volume|cap|ratio|yield|change|open|close|high|low)\b', _re.I),
+    # Ticker patterns (e.g., AAPL, DJIA, ^GSPC, $TSLA)
+    _re.compile(r'\b[A-Z]{1,5}\b.*\b(price|volume|cap|ratio|change|open|close|high|low|range|turnover)\b', _re.I),
+]
+
+
+def _is_numerical_financial_query(query: str) -> bool:
+    """
+    Classify whether a query is asking for specific numerical financial data
+    that can be answered by structured APIs (Yahoo Finance via MCP tools).
+
+    Returns True for queries like:
+      - "What is the opening price of DJIA?"
+      - "Give me the trading volume of S&P 500 today"
+      - "What is Meta's stock turnover ratio?"
+
+    Returns False for qualitative queries like:
+      - "What are the latest news about Tesla?"
+      - "Explain the impact of tariffs on the market"
+      - "Summarize Apple's earnings call"
+    """
+    # Qualitative keywords that suggest web search is more appropriate
+    qualitative_patterns = [
+        _re.compile(r'\b(news|headline|article|report|analysis|sentiment|opinion|explain|summarize|summary|impact|outlook|forecast|predict)\b', _re.I),
+        _re.compile(r'\b(why did|why is|why are|what happened|what caused|how will|will .+ go up|will .+ go down)\b', _re.I),
+        _re.compile(r'\b(recommend|should i|is it a good|buy or sell|invest in)\b', _re.I),
+    ]
+
+    # If the query is primarily qualitative, prefer web search
+    qualitative_score = sum(1 for p in qualitative_patterns if p.search(query))
+    numerical_score = sum(1 for p in _NUMERICAL_FINANCIAL_PATTERNS if p.search(query))
+
+    # Numerical intent wins if it has more pattern matches, or tied with at least 1
+    if numerical_score > qualitative_score:
+        return True
+    if numerical_score >= 1 and qualitative_score == 0:
+        return True
+
+    return False
+
 
 def _strip_any_prefix(content: str, prefixes: tuple[str, ...]) -> tuple[bool, str]:
     """Return (matched, stripped_content) when removing the first matching prefix."""
@@ -118,7 +180,7 @@ def _prepare_advanced_search_inputs(model: str, preferred_links: list[str] | Non
         logging.warning(f"No config found for model {model}, using as-is")
 
     if not is_responses_api_available(actual_model):
-        fallback_model = "gpt-4o-mini"
+        fallback_model = "gpt-5.2-chat-latest"
         logging.warning(f"Model '{actual_model}' (resolved from '{model}') DOES NOT support Responses API")
         logging.info(f"FALLBACK: Using '{fallback_model}' for web search instead")
         actual_model = fallback_model
@@ -508,6 +570,54 @@ def _create_response_stream(client, provider: str, model_name: str, model_config
 
 
 
+def _try_mcp_for_numerical_query(
+        user_input: str,
+        message_list: list[dict],
+        model: str,
+        current_url: str = None,
+        user_timezone: str = None,
+        user_time: str = None
+) -> Optional[str]:
+    """
+    Attempt to answer a numerical financial query using MCP tools (Yahoo Finance).
+    Returns the response string if successful, None if the query cannot be answered
+    by MCP tools alone.
+    """
+    try:
+        from datascraper.models_config import validate_model_support
+        if not validate_model_support(model, "mcp"):
+            logging.info("[MCP-FIRST] Model does not support MCP, skipping")
+            return None
+
+        logging.info(f"[MCP-FIRST] Attempting MCP agent for numerical query: {user_input[:80]}...")
+        response = asyncio.run(_create_agent_response_async(
+            user_input=user_input,
+            message_list=message_list,
+            model=model,
+            current_url=current_url,
+            user_timezone=user_timezone,
+            user_time=user_time
+        ))
+
+        if not response or len(response.strip()) < 10:
+            logging.info("[MCP-FIRST] MCP response too short, falling through to web search")
+            return None
+
+        # Check for error indicators in the response
+        error_indicators = ["error", "could not", "unable to", "no information found", "no data"]
+        response_lower = response.lower()
+        if any(indicator in response_lower for indicator in error_indicators):
+            logging.info("[MCP-FIRST] MCP response contains error indicators, falling through to web search")
+            return None
+
+        logging.info(f"[MCP-FIRST] MCP agent succeeded ({len(response)} chars)")
+        return response
+
+    except Exception as e:
+        logging.warning(f"[MCP-FIRST] MCP agent failed: {e}, falling through to web search")
+        return None
+
+
 def create_advanced_response(
         user_input: str,
         message_list: list[dict],
@@ -519,6 +629,10 @@ def create_advanced_response(
 ):
     """
     Creates an advanced response using OpenAI Responses API with web search.
+
+    For numerical financial queries (prices, volumes, ratios, etc.), this function
+    first attempts to answer using MCP tools (Yahoo Finance) for higher accuracy,
+    falling back to web search only if MCP cannot answer the query.
 
     This function uses OpenAI's built-in web_search tool to:
     1. Automatically search for relevant information
@@ -540,6 +654,30 @@ def create_advanced_response(
         If stream=True: Async generator yielding (text_chunk, source_urls) tuples
     """
     logging.info(f"Starting advanced response with model ID: {model} (stream={stream})")
+
+    # Quality tracking for non-streaming responses
+    from datascraper.quality_logger import QualityTracker
+    qt = QualityTracker(mode="research", query=user_input, model=model)
+
+    # --- MCP-first routing for numerical financial queries ---
+    # For non-streaming requests, try MCP tools first if the query is numerical.
+    # This dramatically improves accuracy for price/volume/ratio queries by using
+    # structured Yahoo Finance data instead of unreliable web scraping.
+    if not stream and _is_numerical_financial_query(user_input):
+        logging.info(f"[MCP-FIRST] Query classified as numerical financial: {user_input[:80]}...")
+        mcp_response = _try_mcp_for_numerical_query(
+            user_input=user_input,
+            message_list=message_list,
+            model=model,
+            user_timezone=user_timezone,
+            user_time=user_time
+        )
+        if mcp_response is not None:
+            logging.info("[MCP-FIRST] Returning MCP-sourced response for numerical query")
+            qt.set_data_source("mcp_first")
+            qt.complete(mcp_response)
+            return mcp_response, []  # No web sources needed
+        qt.flag("mcp_first_fallback")
 
     actual_model, preferred_urls = _prepare_advanced_search_inputs(model, preferred_links)
 
@@ -568,10 +706,16 @@ def create_advanced_response(
             for idx, entry in enumerate(source_entries, 1):
                 logging.info(f"  Source {idx}: {entry.get('url')}")
 
+            qt.set_data_source("web_search")
+            if not source_entries:
+                qt.flag("no_sources")
+            qt.complete(response_text)
             return response_text, source_entries
 
     except Exception as e:
         logging.error(f"OpenAI Responses API failed: {e}")
+        qt.flag("error", message=str(e))
+        qt.complete()
         if stream:
             error_message = str(e)
             async def error_gen():
@@ -626,8 +770,30 @@ def create_advanced_response_streaming(
 ) -> Tuple[AsyncIterator[tuple[str, list[str]]], Dict[str, Any]]:
     """
     Wrapper that returns an async generator and streaming state for advanced responses.
+    For numerical financial queries, attempts MCP tools first before web search.
     """
     logging.info(f"Starting advanced streaming response with model ID: {model}")
+
+    # --- MCP-first routing for numerical financial queries (streaming path) ---
+    if _is_numerical_financial_query(user_input):
+        logging.info(f"[MCP-FIRST STREAM] Query classified as numerical financial: {user_input[:80]}...")
+        mcp_response = _try_mcp_for_numerical_query(
+            user_input=user_input,
+            message_list=message_list,
+            model=model,
+            user_timezone=user_timezone,
+            user_time=user_time
+        )
+        if mcp_response is not None:
+            logging.info("[MCP-FIRST STREAM] Returning MCP-sourced response")
+            state: Dict[str, Any] = {
+                "final_output": mcp_response,
+                "used_urls": [],
+                "used_sources": []
+            }
+            async def _mcp_stream() -> AsyncIterator[tuple[str, list[str]]]:
+                yield mcp_response, []
+            return _mcp_stream(), state
 
     actual_model, preferred_urls = _prepare_advanced_search_inputs(model, preferred_links)
 
@@ -687,29 +853,46 @@ def create_agent_response(user_input: str, message_list: list[dict], model: str 
     """
 
 
+    from datascraper.quality_logger import QualityTracker
+    qt = QualityTracker(mode="thinking", query=user_input, model=model)
+
     model_config = get_model_config(model)
     actual_model_name = model_config.get("model_name") if model_config else model
     provider = model_config.get("provider") if model_config else None
 
     if provider == "buffet":
         logging.info(f"[AGENT] Buffet agent does not support tool mode; using direct response for {model}")
-        return create_response(user_input, message_list, model)
+        qt.set_data_source("direct_llm")
+        qt.flag("buffet_fallback")
+        response = create_response(user_input, message_list, model)
+        qt.complete(response)
+        return response
 
     try:
         if not validate_model_support(model, "mcp"):
             logging.warning(f"Model {model} ({actual_model_name}) doesn't support agent features")
             logging.info(f"FALLBACK: Using regular response with {model} ({actual_model_name})")
-            return create_response(user_input, message_list, model)
+            qt.set_data_source("direct_llm")
+            qt.flag("model_unsupported_mcp")
+            response = create_response(user_input, message_list, model)
+            qt.complete(response)
+            return response
 
         logging.info(f"[AGENT] Attempting agent response with {model} ({actual_model_name})")
 
         response = asyncio.run(_create_agent_response_async(user_input, message_list, model, current_url, user_timezone, user_time))
+        qt.set_data_source("mcp_tools")
+        qt.complete(response)
         return response
 
     except Exception as e:
         logging.error(f"Agent response failed for {model} ({actual_model_name}): {e}")
         logging.info(f"FALLBACK: Using regular response with {model} ({actual_model_name})")
-        return create_response(user_input, message_list, model)
+        qt.set_data_source("direct_llm")
+        qt.flag("agent_error", message=str(e))
+        response = create_response(user_input, message_list, model)
+        qt.complete(response)
+        return response
 
 async def _create_agent_response_async(user_input: str, message_list: list[dict], model: str, current_url: str = None, user_timezone: str = None, user_time: str = None) -> str:
     """
@@ -789,6 +972,13 @@ async def _create_agent_response_async(user_input: str, message_list: list[dict]
         if final_output is None:
             final_output = ""
         logging.info(f"[AGENT] Result length: {len(final_output)}")
+
+        # Post-generation numerical validation
+        try:
+            from datascraper.numerical_validator import validate_numerical_accuracy
+            validate_numerical_accuracy(result, final_output)
+        except Exception as val_err:
+            logging.debug(f"[AGENT] Numerical validation error (non-critical): {val_err}")
 
         return final_output
 
