@@ -588,28 +588,37 @@ def adv_response_stream(request: HttpRequest) -> StreamingHttpResponse:
                 stream_iter = stream_generator.__aiter__()
                 drafting_sent = False
 
-                while True:
+                try:
+                    while True:
+                        try:
+                            text_chunk, entries = loop.run_until_complete(stream_iter.__anext__())
+                        except StopAsyncIteration:
+                            break
+
+                        # Status event from research engine streaming
+                        if text_chunk is None and isinstance(entries, dict) and "label" in entries:
+                            yield _build_status_frame(entries["label"], entries.get("detail"))
+                            continue
+
+                        if text_chunk:
+                            full_response += text_chunk
+                            if not drafting_sent:
+                                drafting_sent = True
+                                yield _build_status_frame("Drafting answer")
+                            yield f'data: {json.dumps({"content": text_chunk, "done": False})}\n\n'.encode('utf-8')
+
+                        if isinstance(entries, list) and entries:
+                            source_entries = [dict(entry) for entry in entries if entry]
+                finally:
                     try:
-                        text_chunk, entries = loop.run_until_complete(stream_iter.__anext__())
-                    except StopAsyncIteration:
-                        break
-
-                    # Status event from research engine streaming
-                    if text_chunk is None and isinstance(entries, dict) and "label" in entries:
-                        yield _build_status_frame(entries["label"], entries.get("detail"))
-                        continue
-
-                    if text_chunk:
-                        full_response += text_chunk
-                        if not drafting_sent:
-                            drafting_sent = True
-                            yield _build_status_frame("Drafting answer")
-                        yield f'data: {json.dumps({"content": text_chunk, "done": False})}\n\n'.encode('utf-8')
-
-                    if isinstance(entries, list) and entries:
-                        source_entries = [dict(entry) for entry in entries if entry]
-
-                loop.close()
+                        loop.run_until_complete(stream_iter.aclose())
+                    except Exception:
+                        pass
+                    try:
+                        loop.run_until_complete(loop.shutdown_asyncgens())
+                    except Exception:
+                        pass
+                    loop.close()
 
                 if source_entries:
                     integration.add_search_results(session_id, source_entries)

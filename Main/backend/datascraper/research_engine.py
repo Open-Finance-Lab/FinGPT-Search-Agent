@@ -353,23 +353,42 @@ async def _call_synthesis(messages: list[dict], model: str):
     """Call the synthesis model (Chat Completions, no tools)."""
     if _planner_client is None:
         raise RuntimeError("OPENAI_API_KEY not set; research engine unavailable.")
-    return await _planner_client.chat.completions.create(
-        model=model,
-        messages=messages,
-        temperature=0.2,
-    )
+    try:
+        return await _planner_client.chat.completions.create(
+            model=model,
+            messages=messages,
+            temperature=0.2,
+        )
+    except Exception as exc:
+        if "temperature" in str(exc).lower():
+            logger.info(f"[RESEARCH] Synthesis model '{model}' rejected temperature=0.2, retrying with default")
+            return await _planner_client.chat.completions.create(
+                model=model,
+                messages=messages,
+            )
+        raise
 
 
 async def _call_synthesis_streaming(messages: list[dict], model: str):
     """Call the synthesis model with streaming enabled. Returns an async iterator of chunks."""
     if _planner_client is None:
         raise RuntimeError("OPENAI_API_KEY not set; research engine unavailable.")
-    return await _planner_client.chat.completions.create(
-        model=model,
-        messages=messages,
-        temperature=0.2,
-        stream=True,
-    )
+    try:
+        return await _planner_client.chat.completions.create(
+            model=model,
+            messages=messages,
+            temperature=0.2,
+            stream=True,
+        )
+    except Exception as exc:
+        if "temperature" in str(exc).lower():
+            logger.info(f"[RESEARCH] Streaming synthesis model '{model}' rejected temperature=0.2, retrying with default")
+            return await _planner_client.chat.completions.create(
+                model=model,
+                messages=messages,
+                stream=True,
+            )
+        raise
 
 
 class Synthesizer:
@@ -428,10 +447,13 @@ class Synthesizer:
         messages = self._build_synthesis_messages(original_query, results, time_context)
         try:
             stream = await _call_synthesis_streaming(messages=messages, model=self.model)
-            async for chunk in stream:
-                delta = chunk.choices[0].delta
-                if delta.content:
-                    yield delta.content
+            try:
+                async for chunk in stream:
+                    delta = chunk.choices[0].delta
+                    if delta.content:
+                        yield delta.content
+            finally:
+                await stream.close()
         except Exception as exc:
             logger.warning(f"[RESEARCH] Streaming synthesis failed, falling back: {exc}")
             response = await _call_synthesis(messages=messages, model=self.model)

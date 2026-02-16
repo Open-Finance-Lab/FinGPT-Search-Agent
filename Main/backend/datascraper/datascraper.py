@@ -1245,7 +1245,7 @@ def get_sources(query: str, current_url: str | None = None, session_id: str | No
     if session_id:
         try:
             manager = get_context_manager()
-            session = manager._get_or_create_session(session_id)
+            session = manager._load_session(session_id)
             
             for msg in reversed(session["conversation_history"]):
                 if msg.role == "assistant" and msg.metadata and msg.metadata.sources_used:
