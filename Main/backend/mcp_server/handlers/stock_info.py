@@ -14,8 +14,8 @@ from mcp_server.cache import TimedCache
 
 logger = logging.getLogger(__name__)
 
-# Cache for Ticker objects (5 min TTL)
-_ticker_cache = TimedCache(ttl_seconds=300)
+# Cache for Ticker objects (30s TTL — short to ensure near-real-time data)
+_ticker_cache = TimedCache(ttl_seconds=30)
 
 
 async def get_ticker(symbol: str) -> yf.Ticker:
@@ -57,8 +57,19 @@ class GetStockInfoHandler(ToolHandler):
         'fiftyDayAverage', 'twoHundredDayAverage'
     ]
 
+    # ETF proxies for major indices when direct index data is unavailable
+    INDEX_ETF_PROXIES = {
+        '^GSPC': 'SPY',   # S&P 500
+        '^DJI': 'DIA',    # Dow Jones Industrial Average
+        '^IXIC': 'QQQ',   # NASDAQ Composite
+        '^RUT': 'IWM',    # Russell 2000
+    }
+
     async def execute(self, ctx: ToolContext) -> List[types.TextContent]:
         """Execute get_stock_info tool.
+
+        For indices, attempts direct data first, then falls back to ETF proxies
+        if the index data is incomplete (common due to Yahoo Finance licensing).
 
         Args:
             ctx: Tool execution context
@@ -73,6 +84,30 @@ class GetStockInfoHandler(ToolHandler):
         is_index = ctx.ticker.startswith('^') or ctx.ticker.startswith('.')
         keys = self.INDEX_KEYS if is_index else self.STOCK_KEYS
         filtered_info = {k: info.get(k) for k in keys if k in info}
+
+        # --- ETF proxy fallback for indices with incomplete data ---
+        if is_index and (not filtered_info or 'regularMarketPrice' not in filtered_info):
+            etf_proxy = self.INDEX_ETF_PROXIES.get(ctx.ticker.upper())
+            if etf_proxy:
+                logger.info(f"Index {ctx.ticker} returned incomplete data, trying ETF proxy {etf_proxy}")
+                try:
+                    etf_stock = await get_ticker(etf_proxy)
+                    etf_info = await run_in_executor(lambda: etf_stock.info)
+                    etf_filtered = {k: etf_info.get(k) for k in self.INDEX_KEYS if k in etf_info}
+                    if etf_filtered and 'regularMarketPrice' in etf_filtered:
+                        etf_filtered['_note'] = (
+                            f"Data sourced from ETF proxy {etf_proxy} because direct index data "
+                            f"for {ctx.ticker} was unavailable. ETF prices closely track but are "
+                            f"not identical to the underlying index."
+                        )
+                        etf_filtered['_proxy_etf'] = etf_proxy
+                        etf_filtered['symbol'] = ctx.ticker
+                        return [types.TextContent(
+                            type="text",
+                            text=json.dumps(etf_filtered, indent=2)
+                        )]
+                except Exception as e:
+                    logger.warning(f"ETF proxy {etf_proxy} also failed: {e}")
 
         if not filtered_info:
             return [types.TextContent(

@@ -143,6 +143,50 @@ def _normalize_citation_entry(entry: Dict[str, Any]) -> Dict[str, Any]:
 _TOOL_URL_PATTERN = re.compile(r'https?://[^\s<>"\'\]]+', re.IGNORECASE)
 _MAX_PROVISIONAL_SOURCES = 12
 
+# ---------------------------------------------------------------------------
+# Output validation: detect raw JSON / tool-call leaks
+# ---------------------------------------------------------------------------
+_RAW_JSON_PATTERNS = [
+    re.compile(r'^\s*\{.*"search_query"', re.DOTALL),
+    re.compile(r'^\s*\{.*"tool_call"', re.DOTALL),
+    re.compile(r'^\s*\{.*"function_call"', re.DOTALL),
+    re.compile(r'^\s*\{.*"response_length"', re.DOTALL),
+    re.compile(r'^\s*\{.*"q"\s*:', re.DOTALL),
+]
+
+
+def _is_raw_json_leak(text: str) -> bool:
+    """
+    Detect if a response looks like a leaked internal tool call / raw JSON
+    rather than a human-readable answer.
+
+    Returns True if the text appears to be raw JSON that should not be shown to users.
+    """
+    if not text or not text.strip():
+        return False
+
+    stripped = text.strip()
+
+    # Quick check: if it starts with { and ends with }, it's likely JSON
+    if stripped.startswith('{') and stripped.endswith('}'):
+        try:
+            parsed = json.loads(stripped)
+            # Known internal tool-call keys that should never reach users
+            internal_keys = {"search_query", "tool_call", "function_call", "response_length", "tool_name", "tool_input"}
+            if isinstance(parsed, dict) and internal_keys & set(parsed.keys()):
+                logger.warning(f"[OUTPUT VALIDATION] Detected raw JSON tool-call leak: {stripped[:200]}")
+                return True
+        except json.JSONDecodeError:
+            pass
+
+    # Pattern-based fallback
+    for pattern in _RAW_JSON_PATTERNS:
+        if pattern.search(stripped):
+            logger.warning(f"[OUTPUT VALIDATION] Detected raw JSON pattern in response: {stripped[:200]}")
+            return True
+
+    return False
+
 
 def _safe_json_loads(value: str) -> Optional[Any]:
     """
@@ -329,11 +373,18 @@ def prepare_search_prompt(user_query: str, preferred_domains: List[str] = None) 
 
     if preferred_domains:
         domains_str = ', '.join(preferred_domains)
-        prompt_parts.append(f"When searching, prioritize these sources: {domains_str}")
+        prompt_parts.append(
+            f"When searching for numerical financial data, ONLY use these authoritative sources: "
+            f"{domains_str}, finance.yahoo.com, bloomberg.com, marketwatch.com, nasdaq.com. "
+            f"Do NOT use data from unfamiliar or unverified websites."
+        )
 
     prompt_parts.append(user_query)
 
-    prompt_parts.append("\nProvide a comprehensive answer with citations from multiple reputable sources.")
+    prompt_parts.append(
+        "\nProvide a comprehensive answer with citations from reputable sources. "
+        "For every numerical claim, cite the exact source."
+    )
 
     return '\n'.join(prompt_parts)
 
@@ -382,6 +433,18 @@ async def create_responses_api_search_async(
             "if the user asks to recap/summarize/clarify something from this conversation, answer from the existing messages and do NOT search. "
             "Cite your sources inline and provide comprehensive, accurate answers based on calculations or fetched sources. "
             "Focus on factual information from reputable sources. "
+            "\n\nDATA SOURCE REQUIREMENTS:\n"
+            "For numerical financial data (prices, volumes, market cap, ratios, percentage changes, etc.):\n"
+            "1. ONLY use data from these authoritative sources: Yahoo Finance, Bloomberg, MarketWatch, "
+            "Nasdaq.com, SEC EDGAR, Reuters, CNBC, Investing.com, Google Finance. "
+            "Do NOT trust data from unfamiliar or unverified websites.\n"
+            "2. Every numerical claim MUST include its source. If you cannot cite a specific authoritative source "
+            "for a number, state that the data could not be verified rather than presenting it without attribution.\n"
+            "3. Always verify the DATE on any data you retrieve. If the user asks for 'today's price' and "
+            "you find data from a different date, clearly state the actual date of the data.\n"
+            "4. NEVER present data from a future date. If a source claims to have data for a date that hasn't "
+            "occurred yet, that source is unreliable — discard it.\n"
+            "5. When multiple sources disagree on a number, prefer Yahoo Finance data as the authoritative source.\n"
             "\n\nIMPORTANT - Mathematical Formatting:\n"
             "Use LaTeX with $ for inline math and $$ for display equations.\n\n"
             "Display equations - use $$...$$:\n"
@@ -397,27 +460,10 @@ async def create_responses_api_search_async(
         )
 
         if user_timezone or user_time:
-            from datetime import datetime
-            import pytz
-
-            time_info_parts = []
-            if user_timezone and user_time:
-                try:
-                    utc_time = datetime.fromisoformat(user_time.replace('Z', '+00:00'))
-                    user_tz = pytz.timezone(user_timezone)
-                    local_time = utc_time.astimezone(user_tz)
-
-                    time_info_parts.append(f"User's timezone: {user_timezone}")
-                    time_info_parts.append(f"Current local time for user: {local_time.strftime('%Y-%m-%d %H:%M:%S %Z')}")
-                except Exception as e:
-                    logger.warning(f"Error formatting time info in search: {e}")
-                    if user_timezone:
-                        time_info_parts.append(f"User's timezone: {user_timezone}")
-            elif user_timezone:
-                time_info_parts.append(f"User's timezone: {user_timezone}")
-
-            if time_info_parts:
-                system_instructions += f"\n\n[TIME CONTEXT]: {' | '.join(time_info_parts)}"
+            from datascraper.market_time import build_market_time_context
+            time_context = build_market_time_context(user_timezone, user_time)
+            if time_context:
+                system_instructions += f"\n\n{time_context}"
 
         conversation_context = ""
 
@@ -484,6 +530,38 @@ async def create_responses_api_search_async(
 
         if not response_text:
             logger.warning("Could not extract text from response. Response structure may have changed.")
+
+        # --- Output validation: intercept raw JSON / tool-call leaks ---
+        if _is_raw_json_leak(response_text):
+            logger.warning("[OUTPUT VALIDATION] Retrying due to raw JSON leak in response")
+            # Retry once with a more explicit prompt
+            retry_response = await async_client.responses.create(
+                model=model,
+                input=combined_input + "\n\nIMPORTANT: Provide a clear, human-readable answer. Do NOT return raw JSON or tool call specifications.",
+                tools=[{"type": "web_search"}],
+                tool_choice="auto",
+                parallel_tool_calls=True,
+                stream=False
+            )
+            retry_text = ""
+            if hasattr(retry_response, 'output_text') and retry_response.output_text:
+                retry_text = retry_response.output_text
+            elif hasattr(retry_response, 'output') and retry_response.output:
+                if isinstance(retry_response.output, str):
+                    retry_text = retry_response.output
+                elif isinstance(retry_response.output, list):
+                    for item in retry_response.output:
+                        if hasattr(item, 'content'):
+                            retry_text = str(item.content)
+                            break
+
+            if retry_text and not _is_raw_json_leak(retry_text):
+                logger.info("[OUTPUT VALIDATION] Retry succeeded with clean response")
+                response_text = retry_text
+                response = retry_response
+            else:
+                logger.error("[OUTPUT VALIDATION] Retry also produced invalid output, returning error message")
+                response_text = "I wasn't able to retrieve that information. Please try rephrasing your question, or switch to Thinking mode for more reliable results."
 
         citations = extract_citations_from_response(response)
         source_entries: List[Dict[str, Any]] = []
@@ -673,6 +751,13 @@ async def _stream_response_chunks(stream_response) -> AsyncGenerator[Tuple[str, 
             except Exception as citation_err:
                 logger.warning(f"Failed to extract citations from final response: {citation_err}")
 
+        # --- Output validation: detect raw JSON leak in streamed response ---
+        if _is_raw_json_leak(full_response):
+            logger.warning(f"[OUTPUT VALIDATION STREAM] Full streamed response is a raw JSON leak ({len(full_response)} chars)")
+            # Yield an error message to replace the leaked JSON
+            error_msg = "\n\nI wasn't able to retrieve that information properly. Please try rephrasing your question, or switch to Thinking mode for more reliable results."
+            yield (error_msg, [])
+
         snapshot = _current_snapshot(force=True)
         if snapshot is None:
             snapshot = []
@@ -814,8 +899,11 @@ def is_responses_api_available(model: str) -> bool:
         "gpt-4o",
         "gpt-5",
         "gpt-5.1",
+        "gpt-5.2",
         "o1-preview",
-        "o1-mini"
+        "o1-mini",
+        "o3",
+        "o4",
     }
 
     model_lower = model.lower()
@@ -834,5 +922,6 @@ __all__ = [
     'extract_citations_from_response',
     'format_sources_for_frontend',
     'is_responses_api_available',
-    'prepare_search_prompt'
+    'prepare_search_prompt',
+    '_is_raw_json_leak'
 ]
