@@ -681,6 +681,39 @@ def create_advanced_response(
 
     actual_model, preferred_urls = _prepare_advanced_search_inputs(model, preferred_links)
 
+    # --- Iterative research for complex queries (non-streaming) ---
+    if not stream:
+        try:
+            from datascraper.research_engine import run_iterative_research
+            from datascraper.market_time import build_market_time_context
+
+            time_ctx = build_market_time_context(user_timezone, user_time) or ""
+
+            research_result = asyncio.run(run_iterative_research(
+                user_input=user_input,
+                message_list=message_list,
+                model=actual_model,
+                preferred_urls=preferred_urls,
+                user_timezone=user_timezone,
+                user_time=user_time,
+                time_context=time_ctx,
+            ))
+
+            if research_result is not None:
+                final_text, sources, meta = research_result
+                logging.info(
+                    f"[RESEARCH ENGINE] Completed: {meta['iterations_used']} iterations, "
+                    f"{meta['sub_questions_count']} sub-questions, "
+                    f"{meta['mcp_hits']} MCP / {meta['web_hits']} web"
+                )
+                qt.set_data_source("iterative_research")
+                qt.flag("iterative_research", **meta)
+                qt.complete(final_text)
+                return final_text, sources
+            # If None, query was simple — fall through to single web search
+        except Exception as exc:
+            logging.warning(f"[RESEARCH ENGINE] Failed, falling back to single search: {exc}")
+
     try:
         if stream:
             return _create_advanced_response_stream_async(
@@ -794,6 +827,40 @@ def create_advanced_response_streaming(
             async def _mcp_stream() -> AsyncIterator[tuple[str, list[str]]]:
                 yield mcp_response, []
             return _mcp_stream(), state
+
+    # --- Iterative research for complex queries (streaming path) ---
+    try:
+        from datascraper.research_engine import run_iterative_research
+        from datascraper.market_time import build_market_time_context
+
+        time_ctx = build_market_time_context(user_timezone, user_time) or ""
+        actual_model_stream, preferred_urls_stream = _prepare_advanced_search_inputs(model, preferred_links)
+
+        research_result = asyncio.run(run_iterative_research(
+            user_input=user_input,
+            message_list=message_list,
+            model=actual_model_stream,
+            preferred_urls=preferred_urls_stream,
+            user_timezone=user_timezone,
+            user_time=user_time,
+            time_context=time_ctx,
+        ))
+
+        if research_result is not None:
+            final_text, sources, meta = research_result
+            logging.info(f"[RESEARCH ENGINE STREAM] Completed: {meta}")
+            state: Dict[str, Any] = {
+                "final_output": final_text,
+                "used_urls": [s.get("url") for s in sources if s.get("url")],
+                "used_sources": sources,
+            }
+
+            async def _research_stream() -> AsyncIterator[tuple[str, list[str]]]:
+                yield final_text, sources
+
+            return _research_stream(), state
+    except Exception as exc:
+        logging.warning(f"[RESEARCH ENGINE STREAM] Failed, falling back: {exc}")
 
     actual_model, preferred_urls = _prepare_advanced_search_inputs(model, preferred_links)
 
