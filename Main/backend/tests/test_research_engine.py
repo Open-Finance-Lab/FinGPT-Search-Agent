@@ -171,3 +171,82 @@ async def test_executor_skips_analytical():
     mcp_mock.assert_not_called()
     web_mock.assert_not_called()
     assert results[0]["source"] == "deferred"
+
+
+# ── GapDetector tests ─────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_gap_detector_complete():
+    """When all data is present, gap detector returns complete=True."""
+    from datascraper.research_engine import GapDetector
+
+    mock_response = MagicMock()
+    mock_response.choices = [MagicMock()]
+    mock_response.choices[0].message.content = json.dumps({
+        "complete": True,
+        "gaps": [],
+        "follow_up_queries": []
+    })
+
+    with patch("datascraper.research_engine._call_planner", new_callable=AsyncMock, return_value=mock_response):
+        detector = GapDetector()
+        result = await detector.detect(
+            original_query="What is AAPL price?",
+            plan={"sub_questions": [{"question": "AAPL price", "type": "numerical"}]},
+            results=[{"question": "AAPL price", "answer": "$152.34", "source": "mcp"}],
+        )
+
+    assert result["complete"] is True
+    assert result["follow_up_queries"] == []
+
+
+@pytest.mark.asyncio
+async def test_gap_detector_finds_gaps():
+    """When data is missing, gap detector returns follow-up queries."""
+    from datascraper.research_engine import GapDetector
+
+    mock_response = MagicMock()
+    mock_response.choices = [MagicMock()]
+    mock_response.choices[0].message.content = json.dumps({
+        "complete": False,
+        "gaps": ["Missing MSFT Q3 revenue"],
+        "follow_up_queries": [
+            {"question": "MSFT Q3 2025 revenue", "type": "qualitative"}
+        ]
+    })
+
+    with patch("datascraper.research_engine._call_planner", new_callable=AsyncMock, return_value=mock_response):
+        detector = GapDetector()
+        result = await detector.detect(
+            original_query="Compare AAPL and MSFT revenue",
+            plan={"sub_questions": []},
+            results=[{"question": "AAPL revenue", "answer": "$94.9B"}],
+        )
+
+    assert result["complete"] is False
+    assert len(result["follow_up_queries"]) == 1
+
+
+# ── Synthesizer tests ─────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_synthesizer_combines_results():
+    """Synthesizer should produce a final response from collected results."""
+    from datascraper.research_engine import Synthesizer
+
+    mock_response = MagicMock()
+    mock_response.choices = [MagicMock()]
+    mock_response.choices[0].message.content = "AAPL revenue was $94.9B, MSFT was $64.7B. AAPL grew 8% vs MSFT 12%."
+
+    with patch("datascraper.research_engine._call_synthesis", new_callable=AsyncMock, return_value=mock_response):
+        synth = Synthesizer(model="gpt-5.2-chat-latest")
+        text = await synth.synthesize(
+            original_query="Compare AAPL and MSFT revenue",
+            results=[
+                {"question": "AAPL revenue", "answer": "$94.9B", "sources": []},
+                {"question": "MSFT revenue", "answer": "$64.7B", "sources": []},
+            ],
+        )
+
+    assert "AAPL" in text
+    assert "MSFT" in text

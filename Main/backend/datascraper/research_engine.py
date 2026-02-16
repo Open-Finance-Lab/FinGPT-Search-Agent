@@ -243,3 +243,145 @@ class ResearchExecutor:
             return list(await asyncio.gather(*tasks, return_exceptions=False))
         else:
             return [await self._execute_one(sq) for sq in subs]
+
+
+# ── 3. Gap Detector ───────────────────────────────────────────────────
+
+_GAP_DETECTOR_SYSTEM = """\
+You are evaluating whether a set of research results fully answers the original financial query.
+
+Original query: {query}
+
+Research plan sub-questions:
+{plan_summary}
+
+Results collected so far:
+{results_summary}
+
+Evaluate:
+1. Does the collected data fully answer the original query?
+2. What specific data points are missing?
+3. Suggest targeted follow-up queries (max 3) to fill gaps.
+
+Respond ONLY with JSON:
+{{"complete": bool, "gaps": ["description of gap 1", ...], "follow_up_queries": [{{"question": "...", "type": "numerical|qualitative"}}]}}
+"""
+
+
+class GapDetector:
+    """Evaluate research completeness and suggest follow-up queries."""
+
+    async def detect(
+        self,
+        original_query: str,
+        plan: dict,
+        results: list[dict],
+    ) -> dict[str, Any]:
+        """Return gap analysis with optional follow-up queries."""
+        plan_summary = "\n".join(
+            f"- {sq['question']} ({sq.get('type', '?')})"
+            for sq in plan.get("sub_questions", [])
+        ) or "(none)"
+
+        results_summary = "\n".join(
+            f"- Q: {r['question']}\n  A: {r.get('answer', '(no answer)')[:300]}"
+            for r in results
+        ) or "(no results yet)"
+
+        prompt = _GAP_DETECTOR_SYSTEM.format(
+            query=original_query,
+            plan_summary=plan_summary,
+            results_summary=results_summary,
+        )
+
+        try:
+            response = await _call_planner([
+                {"role": "system", "content": prompt},
+                {"role": "user", "content": "Evaluate completeness."},
+            ])
+            raw = response.choices[0].message.content
+            result = json.loads(raw)
+
+            # Validate
+            if not isinstance(result.get("complete"), bool):
+                result["complete"] = True
+            result.setdefault("gaps", [])
+            follow_ups = result.get("follow_up_queries", [])
+            if not isinstance(follow_ups, list):
+                follow_ups = []
+            # Cap follow-ups at 3
+            result["follow_up_queries"] = follow_ups[:3]
+            return result
+
+        except (json.JSONDecodeError, KeyError, TypeError) as exc:
+            logger.warning(f"[RESEARCH] Gap detector returned invalid JSON: {exc}")
+            return {"complete": True, "gaps": [], "follow_up_queries": []}
+        except Exception as exc:
+            logger.error(f"[RESEARCH] Gap detector failed: {exc}")
+            return {"complete": True, "gaps": [], "follow_up_queries": []}
+
+
+# ── 4. Synthesizer ────────────────────────────────────────────────────
+
+_SYNTHESIS_SYSTEM = """\
+You are a financial research synthesizer. Combine the research findings below into a comprehensive, well-organized answer to the user's original question.
+
+Rules:
+- Integrate information from all research results.
+- Preserve all citations and source attributions.
+- For numerical data, use exact values from the research results. Never re-derive or approximate.
+- Use LaTeX: $ for inline math, $$ for display equations.
+- Remove redundancies but keep all distinct data points.
+- If some data points could not be found, acknowledge this rather than guessing.
+"""
+
+
+async def _call_synthesis(messages: list[dict], model: str):
+    """Call the synthesis model (Chat Completions, no tools)."""
+    if _planner_client is None:
+        raise RuntimeError("OPENAI_API_KEY not set; research engine unavailable.")
+    return await _planner_client.chat.completions.create(
+        model=model,
+        messages=messages,
+        temperature=0.2,
+    )
+
+
+class Synthesizer:
+    """Combine research findings into a final response."""
+
+    def __init__(self, model: str | None = None):
+        cfg = get_research_config()
+        self.model = model or cfg["research_model"]
+
+    async def synthesize(
+        self,
+        original_query: str,
+        results: list[dict],
+        time_context: str = "",
+    ) -> str:
+        """Return a synthesized response combining all research findings."""
+        findings = []
+        for r in results:
+            if r.get("source") == "deferred":
+                continue
+            entry = f"### Sub-question: {r['question']}\n{r.get('answer', '(no data)')}"
+            if r.get("sources"):
+                urls = ", ".join(s.get("url", "") for s in r["sources"] if s.get("url"))
+                if urls:
+                    entry += f"\nSources: {urls}"
+            findings.append(entry)
+
+        user_msg = f"Original question: {original_query}\n\n"
+        if time_context:
+            user_msg += f"{time_context}\n\n"
+        user_msg += "Research findings:\n\n" + "\n\n".join(findings)
+
+        response = await _call_synthesis(
+            messages=[
+                {"role": "system", "content": _SYNTHESIS_SYSTEM},
+                {"role": "user", "content": user_msg},
+            ],
+            model=self.model,
+        )
+        return response.choices[0].message.content
