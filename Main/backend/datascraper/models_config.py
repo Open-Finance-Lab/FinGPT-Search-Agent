@@ -88,8 +88,18 @@ def get_models_by_provider(provider: str) -> list[str]:
     ]
 
 def validate_model_support(model_id: str, feature: str) -> bool:
-    """Check if a model supports a specific feature (e.g., mcp, advanced)."""
+    """Check if a model supports a specific feature (e.g., mcp, advanced).
+
+    Accepts either a display name ('FinGPT') or a resolved model name
+    ('gpt-5.2-chat-latest', 'gemini-3-flash-preview').
+    """
     config = get_model_config(model_id)
+    if not config:
+        # Reverse lookup: model_id might be a resolved model_name
+        for _id, cfg in MODELS_CONFIG.items():
+            if cfg.get("model_name") == model_id:
+                config = cfg
+                break
     if not config:
         return False
     return config.get(f"supports_{feature}", False)

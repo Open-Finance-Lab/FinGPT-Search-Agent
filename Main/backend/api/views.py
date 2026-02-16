@@ -594,6 +594,11 @@ def adv_response_stream(request: HttpRequest) -> StreamingHttpResponse:
                     except StopAsyncIteration:
                         break
 
+                    # Status event from research engine streaming
+                    if text_chunk is None and isinstance(entries, dict) and "label" in entries:
+                        yield _build_status_frame(entries["label"], entries.get("detail"))
+                        continue
+
                     if text_chunk:
                         full_response += text_chunk
                         if not drafting_sent:
@@ -601,7 +606,7 @@ def adv_response_stream(request: HttpRequest) -> StreamingHttpResponse:
                             yield _build_status_frame("Drafting answer")
                         yield f'data: {json.dumps({"content": text_chunk, "done": False})}\n\n'.encode('utf-8')
 
-                    if entries:
+                    if isinstance(entries, list) and entries:
                         source_entries = [dict(entry) for entry in entries if entry]
 
                 loop.close()

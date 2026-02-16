@@ -10,6 +10,7 @@ Design doc: Docs/plans/2026-02-15-multi-step-research-design.md
 import json
 import logging
 import asyncio
+from collections.abc import AsyncIterator
 from typing import Any, Optional
 
 from openai import AsyncOpenAI
@@ -36,12 +37,24 @@ async def _call_planner(messages: list[dict], model: str | None = None):
     if _planner_client is None:
         raise RuntimeError("OPENAI_API_KEY not set; research engine unavailable.")
     cfg = get_research_config()
-    return await _planner_client.chat.completions.create(
-        model=model or cfg["planner_model"],
-        messages=messages,
-        temperature=0.0,
-        response_format={"type": "json_object"},
-    )
+    resolved_model = model or cfg["planner_model"]
+    try:
+        return await _planner_client.chat.completions.create(
+            model=resolved_model,
+            messages=messages,
+            temperature=0.0,
+            response_format={"type": "json_object"},
+        )
+    except Exception as exc:
+        # Some models (e.g. gpt-5-mini) reject temperature=0.0; retry without it
+        if "temperature" in str(exc).lower():
+            logger.info(f"[RESEARCH] Model '{resolved_model}' rejected temperature=0.0, retrying with default")
+            return await _planner_client.chat.completions.create(
+                model=resolved_model,
+                messages=messages,
+                response_format={"type": "json_object"},
+            )
+        raise
 
 
 # ── 1. Query Analyzer ────────────────────────────────────────────────
@@ -347,6 +360,18 @@ async def _call_synthesis(messages: list[dict], model: str):
     )
 
 
+async def _call_synthesis_streaming(messages: list[dict], model: str):
+    """Call the synthesis model with streaming enabled. Returns an async iterator of chunks."""
+    if _planner_client is None:
+        raise RuntimeError("OPENAI_API_KEY not set; research engine unavailable.")
+    return await _planner_client.chat.completions.create(
+        model=model,
+        messages=messages,
+        temperature=0.2,
+        stream=True,
+    )
+
+
 class Synthesizer:
     """Combine research findings into a final response."""
 
@@ -354,13 +379,13 @@ class Synthesizer:
         cfg = get_research_config()
         self.model = model or cfg["research_model"]
 
-    async def synthesize(
+    def _build_synthesis_messages(
         self,
         original_query: str,
         results: list[dict],
         time_context: str = "",
-    ) -> str:
-        """Return a synthesized response combining all research findings."""
+    ) -> list[dict]:
+        """Build the messages list for synthesis calls."""
         findings = []
         for r in results:
             if r.get("source") == "deferred":
@@ -377,14 +402,40 @@ class Synthesizer:
             user_msg += f"{time_context}\n\n"
         user_msg += "Research findings:\n\n" + "\n\n".join(findings)
 
-        response = await _call_synthesis(
-            messages=[
-                {"role": "system", "content": _SYNTHESIS_SYSTEM},
-                {"role": "user", "content": user_msg},
-            ],
-            model=self.model,
-        )
+        return [
+            {"role": "system", "content": _SYNTHESIS_SYSTEM},
+            {"role": "user", "content": user_msg},
+        ]
+
+    async def synthesize(
+        self,
+        original_query: str,
+        results: list[dict],
+        time_context: str = "",
+    ) -> str:
+        """Return a synthesized response combining all research findings."""
+        messages = self._build_synthesis_messages(original_query, results, time_context)
+        response = await _call_synthesis(messages=messages, model=self.model)
         return response.choices[0].message.content
+
+    async def synthesize_streaming(
+        self,
+        original_query: str,
+        results: list[dict],
+        time_context: str = "",
+    ) -> AsyncIterator[str]:
+        """Yield synthesis tokens one-by-one. Falls back to non-streaming on error."""
+        messages = self._build_synthesis_messages(original_query, results, time_context)
+        try:
+            stream = await _call_synthesis_streaming(messages=messages, model=self.model)
+            async for chunk in stream:
+                delta = chunk.choices[0].delta
+                if delta.content:
+                    yield delta.content
+        except Exception as exc:
+            logger.warning(f"[RESEARCH] Streaming synthesis failed, falling back: {exc}")
+            response = await _call_synthesis(messages=messages, model=self.model)
+            yield response.choices[0].message.content
 
 
 # ── 5. Orchestration loop ─────────────────────────────────────────────
@@ -494,3 +545,151 @@ async def run_iterative_research(
     }
 
     return final_text, deduped_sources, metadata
+
+
+# ── 6. Streaming orchestration ─────────────────────────────────────────
+
+
+def _status(label: str, detail: str = "") -> tuple[None, dict]:
+    """Build a status sentinel for the streaming protocol."""
+    evt: dict[str, str] = {"label": label}
+    if detail:
+        evt["detail"] = detail
+    return (None, evt)
+
+
+async def run_iterative_research_streaming(
+    user_input: str,
+    message_list: list[dict],
+    model: str,
+    preferred_urls: list[str] = None,
+    user_timezone: str = None,
+    user_time: str = None,
+    time_context: str = "",
+) -> AsyncIterator[tuple[str | None, dict | list]]:
+    """
+    Streaming variant of run_iterative_research.
+
+    Yields tuples using sentinel convention:
+        (None, {"label": ..., "detail": ...})  — status event
+        ("text",  [])                          — synthesis content chunk
+        ("",      [source_dicts...])           — source delivery
+
+    Yields nothing (returns immediately) if the query is simple,
+    signalling the caller to fall through to single-search.
+    """
+    cfg = get_research_config()
+
+    # ── Phase 1: Analyze query ──────────────────────────────────────
+    yield _status("Analyzing query")
+
+    analyzer = QueryAnalyzer()
+    plan = await analyzer.analyze(user_input, time_context=time_context)
+
+    if not plan["needs_decomposition"]:
+        logger.info("[RESEARCH STREAM] Simple query — bypassing research engine")
+        return  # no yields = caller falls through
+
+    num_subs = len(plan["sub_questions"])
+    yield _status("Planning research", f"Identified {num_subs} sub-questions")
+    logger.info(f"[RESEARCH STREAM] Decomposed into {num_subs} sub-questions")
+
+    # ── Phase 2-3: Execute + gap detection loop ─────────────────────
+    executor = ResearchExecutor(
+        model=model,
+        message_list=message_list,
+        preferred_urls=preferred_urls,
+        user_timezone=user_timezone,
+        user_time=user_time,
+    )
+
+    all_results: list[dict] = []
+    all_sources: list[dict] = []
+    current_plan = plan
+
+    for iteration in range(1, cfg["max_iterations"] + 1):
+        logger.info(f"[RESEARCH STREAM] Iteration {iteration}/{cfg['max_iterations']}")
+
+        subs = current_plan.get("sub_questions", [])
+        if subs:
+            # Launch all sub-questions in parallel
+            pending: dict[asyncio.Task, dict] = {}
+            for sq in subs:
+                task = asyncio.create_task(executor._execute_one(sq))
+                pending[task] = sq
+
+            label = "Researching" if iteration == 1 else "Follow-up research"
+            preview = "; ".join(sq["question"][:40] for sq in subs[:3])
+            if len(subs) > 3:
+                preview += f" (+{len(subs) - 3} more)"
+            yield _status(label, preview)
+
+            # Yield status as each completes
+            while pending:
+                done, _ = await asyncio.wait(
+                    pending.keys(), return_when=asyncio.FIRST_COMPLETED
+                )
+                for task in done:
+                    sq = pending.pop(task)
+                    question = sq["question"]
+                    truncated = question[:80] + "..." if len(question) > 80 else question
+                    try:
+                        result = task.result()
+                        all_results.append(result)
+                        all_sources.extend(result.get("sources", []))
+                        yield _status(label, f"Done: {truncated}")
+                    except Exception as exc:
+                        logger.warning(f"[RESEARCH STREAM] Sub-question failed: {exc}")
+                        all_results.append({
+                            "question": question,
+                            "type": sq.get("type", "qualitative"),
+                            "answer": f"(research failed: {exc})",
+                            "sources": [],
+                            "source": "error",
+                        })
+
+        # Gap detection (skip on last iteration)
+        if iteration < cfg["max_iterations"]:
+            yield _status("Evaluating results", "Checking completeness")
+
+            detector = GapDetector()
+            gap_result = await detector.detect(
+                original_query=user_input,
+                plan=plan,
+                results=all_results,
+            )
+
+            if gap_result["complete"]:
+                logger.info(f"[RESEARCH STREAM] Complete after {iteration} iteration(s)")
+                break
+
+            follow_ups = gap_result.get("follow_up_queries", [])
+            if not follow_ups:
+                logger.info("[RESEARCH STREAM] No follow-ups, completing")
+                break
+
+            logger.info(f"[RESEARCH STREAM] {len(follow_ups)} follow-up queries")
+            current_plan = {"sub_questions": follow_ups}
+
+    # ── Phase 4: Deliver sources ────────────────────────────────────
+    seen_urls: set[str] = set()
+    deduped_sources: list[dict] = []
+    for src in all_sources:
+        url = src.get("url")
+        if url and url not in seen_urls:
+            seen_urls.add(url)
+            deduped_sources.append(src)
+
+    if deduped_sources:
+        yield ("", deduped_sources)
+
+    # ── Phase 5: Stream synthesis ───────────────────────────────────
+    yield _status("Synthesizing findings", f"Combining {len(all_results)} results")
+
+    synthesizer = Synthesizer(model=model)
+    async for token in synthesizer.synthesize_streaming(
+        original_query=user_input,
+        results=all_results,
+        time_context=time_context,
+    ):
+        yield (token, [])

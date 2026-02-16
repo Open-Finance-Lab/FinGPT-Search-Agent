@@ -326,3 +326,208 @@ async def test_run_iterative_full_loop():
     assert "AAPL" in text
     assert metadata["iterations_used"] == 1
     assert metadata["sub_questions_count"] == 2
+
+
+# ── Streaming orchestration tests ────────────────────────────────────
+
+async def _collect_stream(async_gen):
+    """Helper to collect all items from an async generator."""
+    items = []
+    async for item in async_gen:
+        items.append(item)
+    return items
+
+
+def _make_stream_chunk(content: str | None):
+    """Build a mock OpenAI streaming chunk."""
+    chunk = MagicMock()
+    delta = MagicMock()
+    delta.content = content
+    chunk.choices = [MagicMock(delta=delta)]
+    return chunk
+
+
+@pytest.mark.asyncio
+async def test_streaming_simple_query_yields_nothing():
+    """Simple queries should yield nothing (bypass signal)."""
+    from datascraper.research_engine import run_iterative_research_streaming
+
+    analyzer_response = MagicMock()
+    analyzer_response.choices = [MagicMock()]
+    analyzer_response.choices[0].message.content = json.dumps({
+        "needs_decomposition": False, "sub_questions": []
+    })
+
+    with patch("datascraper.research_engine._call_planner", new_callable=AsyncMock, return_value=analyzer_response):
+        items = await _collect_stream(run_iterative_research_streaming(
+            user_input="What is AAPL price?",
+            message_list=[],
+            model="gpt-5.2-chat-latest",
+        ))
+
+    # Only the initial "Analyzing query" status should be yielded before bypass
+    status_items = [i for i in items if i[0] is None]
+    content_items = [i for i in items if i[0] is not None and i[0] != ""]
+    assert len(content_items) == 0  # no synthesis content
+
+
+@pytest.mark.asyncio
+async def test_streaming_status_event_format():
+    """Status events must have string label and optional string detail."""
+    from datascraper.research_engine import run_iterative_research_streaming
+
+    analyzer_response = MagicMock()
+    analyzer_response.choices = [MagicMock()]
+    analyzer_response.choices[0].message.content = json.dumps({
+        "needs_decomposition": True,
+        "sub_questions": [
+            {"question": "AAPL price", "type": "numerical"},
+        ]
+    })
+
+    gap_resp = MagicMock()
+    gap_resp.choices = [MagicMock()]
+    gap_resp.choices[0].message.content = json.dumps({
+        "complete": True, "gaps": [], "follow_up_queries": []
+    })
+
+    planner_calls = [analyzer_response, gap_resp]
+    call_idx = {"i": 0}
+
+    async def mock_planner(*a, **kw):
+        idx = call_idx["i"]
+        call_idx["i"] += 1
+        return planner_calls[idx]
+
+    async def mock_synth_stream(*a, **kw):
+        for chunk in [_make_stream_chunk("Hello"), _make_stream_chunk(" world")]:
+            yield chunk
+
+    mock_stream_obj = mock_synth_stream()
+
+    with patch("datascraper.research_engine._call_planner", side_effect=mock_planner), \
+         patch("datascraper.research_engine._try_mcp_search", new_callable=AsyncMock, return_value="$150"), \
+         patch("datascraper.research_engine._call_synthesis_streaming", new_callable=AsyncMock, return_value=mock_synth_stream()):
+        items = await _collect_stream(run_iterative_research_streaming(
+            user_input="Complex multi-ticker query",
+            message_list=[],
+            model="gpt-5.2-chat-latest",
+        ))
+
+    status_events = [(t, e) for t, e in items if t is None]
+    for text_chunk, evt in status_events:
+        assert isinstance(evt, dict)
+        assert "label" in evt
+        assert isinstance(evt["label"], str)
+        if "detail" in evt:
+            assert isinstance(evt["detail"], str)
+
+
+@pytest.mark.asyncio
+async def test_streaming_phases_in_order():
+    """Status phases should appear in the expected order for a complex query."""
+    from datascraper.research_engine import run_iterative_research_streaming
+
+    analyzer_response = MagicMock()
+    analyzer_response.choices = [MagicMock()]
+    analyzer_response.choices[0].message.content = json.dumps({
+        "needs_decomposition": True,
+        "sub_questions": [
+            {"question": "AAPL revenue", "type": "numerical"},
+            {"question": "MSFT revenue", "type": "numerical"},
+        ]
+    })
+
+    gap_resp = MagicMock()
+    gap_resp.choices = [MagicMock()]
+    gap_resp.choices[0].message.content = json.dumps({
+        "complete": True, "gaps": [], "follow_up_queries": []
+    })
+
+    planner_calls = [analyzer_response, gap_resp]
+    call_idx = {"i": 0}
+
+    async def mock_planner(*a, **kw):
+        idx = call_idx["i"]
+        call_idx["i"] += 1
+        return planner_calls[idx]
+
+    async def mock_synth_stream(*a, **kw):
+        for chunk in [_make_stream_chunk("Result")]:
+            yield chunk
+
+    with patch("datascraper.research_engine._call_planner", side_effect=mock_planner), \
+         patch("datascraper.research_engine._try_mcp_search", new_callable=AsyncMock, side_effect=["$94.9B", "$64.7B"]), \
+         patch("datascraper.research_engine._call_synthesis_streaming", new_callable=AsyncMock, return_value=mock_synth_stream()):
+        items = await _collect_stream(run_iterative_research_streaming(
+            user_input="Compare AAPL and MSFT revenue",
+            message_list=[],
+            model="gpt-5.2-chat-latest",
+        ))
+
+    labels = [e["label"] for t, e in items if t is None]
+    # Expected order: Analyzing -> Planning -> Researching (batch + completions) -> Evaluating -> Synthesizing
+    assert labels[0] == "Analyzing query"
+    assert labels[1] == "Planning research"
+    assert labels[2] == "Researching"  # batch launch
+    # Completion statuses (parallel, so order may vary)
+    researching_labels = [l for l in labels if l == "Researching"]
+    assert len(researching_labels) >= 3  # 1 batch + 2 completions
+    assert "Evaluating results" in labels
+    assert labels[-1] == "Synthesizing findings"
+
+
+@pytest.mark.asyncio
+async def test_streaming_sources_before_synthesis():
+    """Sources should be delivered before synthesis text begins."""
+    from datascraper.research_engine import run_iterative_research_streaming
+
+    analyzer_response = MagicMock()
+    analyzer_response.choices = [MagicMock()]
+    analyzer_response.choices[0].message.content = json.dumps({
+        "needs_decomposition": True,
+        "sub_questions": [
+            {"question": "AAPL news", "type": "qualitative"},
+        ]
+    })
+
+    gap_resp = MagicMock()
+    gap_resp.choices = [MagicMock()]
+    gap_resp.choices[0].message.content = json.dumps({
+        "complete": True, "gaps": [], "follow_up_queries": []
+    })
+
+    planner_calls = [analyzer_response, gap_resp]
+    call_idx = {"i": 0}
+
+    async def mock_planner(*a, **kw):
+        idx = call_idx["i"]
+        call_idx["i"] += 1
+        return planner_calls[idx]
+
+    async def mock_synth_stream(*a, **kw):
+        for chunk in [_make_stream_chunk("Analysis:")]:
+            yield chunk
+
+    with patch("datascraper.research_engine._call_planner", side_effect=mock_planner), \
+         patch("datascraper.research_engine._web_search", new_callable=AsyncMock, return_value=("Earnings beat...", [{"url": "https://cnbc.com", "title": "CNBC"}])), \
+         patch("datascraper.research_engine._call_synthesis_streaming", new_callable=AsyncMock, return_value=mock_synth_stream()):
+        items = await _collect_stream(run_iterative_research_streaming(
+            user_input="Latest AAPL earnings news",
+            message_list=[],
+            model="gpt-5.2-chat-latest",
+        ))
+
+    # Find indices of source delivery and first synthesis content
+    source_idx = None
+    synthesis_idx = None
+    for i, (text_chunk, entries) in enumerate(items):
+        if text_chunk is not None and text_chunk == "" and isinstance(entries, list) and entries:
+            source_idx = i
+        if text_chunk is not None and text_chunk != "" and isinstance(entries, list):
+            if synthesis_idx is None:
+                synthesis_idx = i
+
+    assert source_idx is not None, "Sources should be yielded"
+    assert synthesis_idx is not None, "Synthesis content should be yielded"
+    assert source_idx < synthesis_idx, "Sources must come before synthesis"
