@@ -250,3 +250,79 @@ async def test_synthesizer_combines_results():
 
     assert "AAPL" in text
     assert "MSFT" in text
+
+
+# ── Full orchestration tests ──────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_run_iterative_simple_query_bypasses():
+    """Simple queries should bypass the research engine entirely."""
+    from datascraper.research_engine import run_iterative_research
+
+    analyzer_response = MagicMock()
+    analyzer_response.choices = [MagicMock()]
+    analyzer_response.choices[0].message.content = json.dumps({
+        "needs_decomposition": False, "sub_questions": []
+    })
+
+    with patch("datascraper.research_engine._call_planner", new_callable=AsyncMock, return_value=analyzer_response):
+        result = await run_iterative_research(
+            user_input="What is AAPL price?",
+            message_list=[],
+            model="gpt-5.2-chat-latest",
+        )
+
+    # Should return None to signal "use existing single-search path"
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_run_iterative_full_loop():
+    """Complex query runs full loop: analyze -> execute -> gap detect -> synthesize."""
+    from datascraper.research_engine import run_iterative_research
+
+    # 1. Analyzer returns decomposition
+    analyzer_resp = MagicMock()
+    analyzer_resp.choices = [MagicMock()]
+    analyzer_resp.choices[0].message.content = json.dumps({
+        "needs_decomposition": True,
+        "sub_questions": [
+            {"question": "AAPL price", "type": "numerical"},
+            {"question": "MSFT price", "type": "numerical"},
+        ]
+    })
+
+    # 2. Gap detector says complete
+    gap_resp = MagicMock()
+    gap_resp.choices = [MagicMock()]
+    gap_resp.choices[0].message.content = json.dumps({
+        "complete": True, "gaps": [], "follow_up_queries": []
+    })
+
+    # 3. Synthesizer returns final answer
+    synth_resp = MagicMock()
+    synth_resp.choices = [MagicMock()]
+    synth_resp.choices[0].message.content = "AAPL is $150, MSFT is $420."
+
+    planner_calls = [analyzer_resp, gap_resp]
+    planner_call_idx = {"i": 0}
+
+    async def mock_planner(*args, **kwargs):
+        idx = planner_call_idx["i"]
+        planner_call_idx["i"] += 1
+        return planner_calls[idx]
+
+    with patch("datascraper.research_engine._call_planner", side_effect=mock_planner), \
+         patch("datascraper.research_engine._try_mcp_search", new_callable=AsyncMock, side_effect=["$150", "$420"]), \
+         patch("datascraper.research_engine._call_synthesis", new_callable=AsyncMock, return_value=synth_resp):
+        result = await run_iterative_research(
+            user_input="Compare AAPL and MSFT prices",
+            message_list=[],
+            model="gpt-5.2-chat-latest",
+        )
+
+    assert result is not None
+    text, sources, metadata = result
+    assert "AAPL" in text
+    assert metadata["iterations_used"] == 1
+    assert metadata["sub_questions_count"] == 2

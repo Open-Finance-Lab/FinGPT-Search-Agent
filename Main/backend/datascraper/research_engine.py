@@ -385,3 +385,112 @@ class Synthesizer:
             model=self.model,
         )
         return response.choices[0].message.content
+
+
+# ── 5. Orchestration loop ─────────────────────────────────────────────
+
+
+async def run_iterative_research(
+    user_input: str,
+    message_list: list[dict],
+    model: str,
+    preferred_urls: list[str] = None,
+    user_timezone: str = None,
+    user_time: str = None,
+    time_context: str = "",
+) -> Optional[tuple[str, list[dict], dict]]:
+    """
+    Run the full iterative research loop.
+
+    Returns:
+        None if the query is simple (caller should use existing single-search path).
+        Otherwise: (synthesized_text, all_sources, metadata_dict)
+    """
+    cfg = get_research_config()
+
+    # Step 1: Analyze query
+    logger.info(f"[RESEARCH] Analyzing query: {user_input[:80]}...")
+    analyzer = QueryAnalyzer()
+    plan = await analyzer.analyze(user_input, time_context=time_context)
+
+    if not plan["needs_decomposition"]:
+        logger.info("[RESEARCH] Simple query — bypassing research engine")
+        return None
+
+    logger.info(f"[RESEARCH] Decomposed into {len(plan['sub_questions'])} sub-questions")
+
+    # Step 2-3: Execute + gap detection loop
+    executor = ResearchExecutor(
+        model=model,
+        message_list=message_list,
+        preferred_urls=preferred_urls,
+        user_timezone=user_timezone,
+        user_time=user_time,
+        parallel=cfg["parallel_searches"],
+    )
+
+    all_results: list[dict] = []
+    all_sources: list[dict] = []
+    current_plan = plan
+    iterations_used = 0
+
+    for iteration in range(1, cfg["max_iterations"] + 1):
+        iterations_used = iteration
+        logger.info(f"[RESEARCH] Iteration {iteration}/{cfg['max_iterations']}")
+
+        # Execute sub-questions
+        results = await executor.execute(current_plan)
+        all_results.extend(results)
+
+        # Collect sources
+        for r in results:
+            all_sources.extend(r.get("sources", []))
+
+        # Gap detection (skip on last iteration — we synthesize regardless)
+        if iteration < cfg["max_iterations"]:
+            detector = GapDetector()
+            gap_result = await detector.detect(
+                original_query=user_input,
+                plan=plan,  # original plan for context
+                results=all_results,
+            )
+
+            if gap_result["complete"]:
+                logger.info(f"[RESEARCH] Research complete after {iteration} iteration(s)")
+                break
+
+            follow_ups = gap_result.get("follow_up_queries", [])
+            if not follow_ups:
+                logger.info("[RESEARCH] No follow-up queries suggested, completing")
+                break
+
+            logger.info(f"[RESEARCH] Gaps found, {len(follow_ups)} follow-up queries")
+            current_plan = {"sub_questions": follow_ups}
+
+    # Step 4: Synthesize
+    logger.info(f"[RESEARCH] Synthesizing from {len(all_results)} results")
+    synthesizer = Synthesizer(model=model)
+    final_text = await synthesizer.synthesize(
+        original_query=user_input,
+        results=all_results,
+        time_context=time_context,
+    )
+
+    # Deduplicate sources
+    seen_urls: set[str] = set()
+    deduped_sources = []
+    for src in all_sources:
+        url = src.get("url")
+        if url and url not in seen_urls:
+            seen_urls.add(url)
+            deduped_sources.append(src)
+
+    metadata = {
+        "iterations_used": iterations_used,
+        "sub_questions_count": len(plan["sub_questions"]),
+        "total_results": len(all_results),
+        "mcp_hits": sum(1 for r in all_results if r.get("source") == "mcp"),
+        "web_hits": sum(1 for r in all_results if r.get("source") == "web"),
+    }
+
+    return final_text, deduped_sources, metadata
