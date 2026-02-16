@@ -85,3 +85,89 @@ async def test_query_analyzer_handles_malformed_json():
         plan = await analyzer.analyze("Some query")
 
     assert plan["needs_decomposition"] is False
+
+
+# ── ResearchExecutor tests ────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_executor_routes_numerical_to_mcp():
+    """Numerical sub-questions should attempt MCP first."""
+    from datascraper.research_engine import ResearchExecutor
+
+    plan = {
+        "sub_questions": [
+            {"question": "AAPL current stock price", "type": "numerical"},
+        ]
+    }
+
+    with patch("datascraper.research_engine._try_mcp_search", new_callable=AsyncMock, return_value="$152.34") as mcp_mock, \
+         patch("datascraper.research_engine._web_search", new_callable=AsyncMock) as web_mock:
+        executor = ResearchExecutor(model="gpt-5.2-chat-latest", message_list=[], preferred_urls=[])
+        results = await executor.execute(plan)
+
+    assert len(results) == 1
+    assert results[0]["answer"] == "$152.34"
+    assert results[0]["source"] == "mcp"
+    mcp_mock.assert_called_once()
+    web_mock.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_executor_falls_back_to_web_on_mcp_failure():
+    """If MCP fails for numerical, fall back to web search."""
+    from datascraper.research_engine import ResearchExecutor
+
+    plan = {
+        "sub_questions": [
+            {"question": "AAPL quarterly revenue", "type": "numerical"},
+        ]
+    }
+
+    with patch("datascraper.research_engine._try_mcp_search", new_callable=AsyncMock, return_value=None), \
+         patch("datascraper.research_engine._web_search", new_callable=AsyncMock, return_value=("Revenue was $94.9B", [{"url": "https://yahoo.com"}])):
+        executor = ResearchExecutor(model="gpt-5.2-chat-latest", message_list=[], preferred_urls=[])
+        results = await executor.execute(plan)
+
+    assert results[0]["source"] == "web"
+    assert "94.9B" in results[0]["answer"]
+
+
+@pytest.mark.asyncio
+async def test_executor_routes_qualitative_to_web():
+    """Qualitative sub-questions go straight to web search."""
+    from datascraper.research_engine import ResearchExecutor
+
+    plan = {
+        "sub_questions": [
+            {"question": "Latest AAPL earnings analysis", "type": "qualitative"},
+        ]
+    }
+
+    with patch("datascraper.research_engine._try_mcp_search", new_callable=AsyncMock) as mcp_mock, \
+         patch("datascraper.research_engine._web_search", new_callable=AsyncMock, return_value=("Analysts say...", [{"url": "https://cnbc.com"}])):
+        executor = ResearchExecutor(model="gpt-5.2-chat-latest", message_list=[], preferred_urls=[])
+        results = await executor.execute(plan)
+
+    mcp_mock.assert_not_called()
+    assert results[0]["source"] == "web"
+
+
+@pytest.mark.asyncio
+async def test_executor_skips_analytical():
+    """Analytical sub-questions produce a placeholder (no search)."""
+    from datascraper.research_engine import ResearchExecutor
+
+    plan = {
+        "sub_questions": [
+            {"question": "Compare growth rates", "type": "analytical"},
+        ]
+    }
+
+    with patch("datascraper.research_engine._try_mcp_search", new_callable=AsyncMock) as mcp_mock, \
+         patch("datascraper.research_engine._web_search", new_callable=AsyncMock) as web_mock:
+        executor = ResearchExecutor(model="gpt-5.2-chat-latest", message_list=[], preferred_urls=[])
+        results = await executor.execute(plan)
+
+    mcp_mock.assert_not_called()
+    web_mock.assert_not_called()
+    assert results[0]["source"] == "deferred"

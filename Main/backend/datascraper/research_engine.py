@@ -106,3 +106,140 @@ class QueryAnalyzer:
         except Exception as exc:
             logger.error(f"[RESEARCH] Query analyzer failed: {exc}")
             return {"needs_decomposition": False, "sub_questions": []}
+
+
+# ── Helper wrappers for MCP and web search ────────────────────────────
+
+async def _try_mcp_search(
+    question: str,
+    message_list: list[dict],
+    model: str,
+    user_timezone: str = None,
+    user_time: str = None,
+) -> Optional[str]:
+    """Attempt to answer a sub-question via MCP tools. Returns text or None."""
+    try:
+        from datascraper.datascraper import _try_mcp_for_numerical_query
+        # _try_mcp_for_numerical_query is sync and calls asyncio.run internally
+        loop = asyncio.get_running_loop()
+        result = await loop.run_in_executor(
+            None,
+            lambda: _try_mcp_for_numerical_query(
+                user_input=question,
+                message_list=message_list,
+                model=model,
+                user_timezone=user_timezone,
+                user_time=user_time,
+            ),
+        )
+        return result
+    except Exception as exc:
+        logger.warning(f"[RESEARCH] MCP search failed for '{question[:60]}': {exc}")
+        return None
+
+
+async def _web_search(
+    question: str,
+    message_list: list[dict],
+    model: str,
+    preferred_urls: list[str] = None,
+    user_timezone: str = None,
+    user_time: str = None,
+) -> tuple[str, list[dict]]:
+    """Run a single web search via OpenAI Responses API. Returns (text, sources)."""
+    from datascraper.openai_search import create_responses_api_search_async
+
+    text, sources = await create_responses_api_search_async(
+        user_query=question,
+        message_history=message_list,
+        model=model,
+        preferred_links=preferred_urls,
+        stream=False,
+        user_timezone=user_timezone,
+        user_time=user_time,
+    )
+    return text, sources
+
+
+# ── 2. Research Executor ──────────────────────────────────────────────
+
+
+class ResearchExecutor:
+    """Execute sub-questions by routing to MCP or web search."""
+
+    def __init__(
+        self,
+        model: str,
+        message_list: list[dict],
+        preferred_urls: list[str] = None,
+        user_timezone: str = None,
+        user_time: str = None,
+        parallel: bool = True,
+    ):
+        self.model = model
+        self.message_list = message_list
+        self.preferred_urls = preferred_urls or []
+        self.user_timezone = user_timezone
+        self.user_time = user_time
+        self.parallel = parallel
+
+    async def _execute_one(self, sq: dict) -> dict[str, Any]:
+        """Execute a single sub-question and return a result dict."""
+        question = sq["question"]
+        sq_type = sq["type"]
+
+        if sq_type == "analytical":
+            return {
+                "question": question,
+                "type": sq_type,
+                "answer": "(to be synthesized from other results)",
+                "sources": [],
+                "source": "deferred",
+            }
+
+        # Numerical: try MCP first
+        if sq_type == "numerical":
+            mcp_result = await _try_mcp_search(
+                question=question,
+                message_list=self.message_list,
+                model=self.model,
+                user_timezone=self.user_timezone,
+                user_time=self.user_time,
+            )
+            if mcp_result is not None:
+                return {
+                    "question": question,
+                    "type": sq_type,
+                    "answer": mcp_result,
+                    "sources": [],
+                    "source": "mcp",
+                }
+
+        # Qualitative OR numerical-fallback: web search
+        text, sources = await _web_search(
+            question=question,
+            message_list=self.message_list,
+            model=self.model,
+            preferred_urls=self.preferred_urls,
+            user_timezone=self.user_timezone,
+            user_time=self.user_time,
+        )
+        return {
+            "question": question,
+            "type": sq_type,
+            "answer": text,
+            "sources": sources,
+            "source": "web",
+        }
+
+    async def execute(self, plan: dict) -> list[dict[str, Any]]:
+        """Execute all sub-questions. Returns list of result dicts."""
+        subs = plan.get("sub_questions", [])
+        if not subs:
+            return []
+
+        if self.parallel:
+            tasks = [self._execute_one(sq) for sq in subs]
+            return list(await asyncio.gather(*tasks, return_exceptions=False))
+        else:
+            return [await self._execute_one(sq) for sq in subs]
