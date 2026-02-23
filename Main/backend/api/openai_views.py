@@ -6,7 +6,6 @@ Provides /v1/models and /v1/chat/completions endpoints with:
 - Bearer token authentication
 - Research mode with domain scoping and source return
 - Thinking mode with MCP tool source tracking
-- Streaming with proper status events and source delivery
 """
 
 import json
@@ -14,10 +13,9 @@ import os
 import time
 import uuid
 import logging
-import asyncio
 from typing import List, Dict, Any, Optional
 
-from django.http import JsonResponse, StreamingHttpResponse, HttpRequest
+from django.http import JsonResponse, HttpRequest
 from django.views.decorators.csrf import csrf_exempt
 from django.conf import settings
 
@@ -190,7 +188,6 @@ def chat_completions(request: HttpRequest) -> JsonResponse:
 
     model = body.get('model', 'FinGPT')
     messages = body.get('messages', [])
-    stream = body.get('stream', False)
     user_id = body.get('user')
 
     # Required parameter
@@ -301,21 +298,14 @@ def chat_completions(request: HttpRequest) -> JsonResponse:
 
     formatted_messages = context_mgr.get_formatted_messages_for_api(session_id)
 
-    logger.info(f"API request: mode={mode_lower}, model={model}, session={session_id}, stream={stream}")
+    logger.info(f"API request: mode={mode_lower}, model={model}, session={session_id}")
 
     # --- Generate Response ---
-    if stream:
-        return _handle_streaming(
-            context_mgr, integration, session_id,
-            last_user_content, formatted_messages,
-            model, context_mode, preferred_links
-        )
-    else:
-        return _handle_sync(
-            context_mgr, integration, session_id,
-            last_user_content, formatted_messages,
-            model, context_mode, preferred_links
-        )
+    return _handle_sync(
+        context_mgr, integration, session_id,
+        last_user_content, formatted_messages,
+        model, context_mode, preferred_links
+    )
 
 
 def _handle_sync(context_mgr, integration, session_id, question, messages, model, mode, preferred_links=None):
@@ -395,180 +385,3 @@ def _handle_sync(context_mgr, integration, session_id, question, messages, model
             {'error': {'message': _safe_error_message(e, 'API Sync'), 'type': 'server_error'}},
             status=500
         )
-
-
-def _handle_streaming(context_mgr, integration, session_id, question, messages, model, mode, preferred_links=None):
-    """Handle streaming (SSE) API responses with proper source delivery."""
-
-    def event_stream():
-        completion_id = f"chatcmpl-{uuid.uuid4().hex}"
-        created = int(time.time())
-
-        # Initial chunk (role)
-        initial_chunk = {
-            "id": completion_id,
-            "object": "chat.completion.chunk",
-            "created": created,
-            "model": model,
-            "choices": [{"index": 0, "delta": {"role": "assistant"}, "finish_reason": None}]
-        }
-        yield f"data: {json.dumps(initial_chunk)}\n\n"
-
-        meta = context_mgr.get_session_metadata(session_id)
-        current_url = meta.current_url
-
-        # Save and create event loop (matching UI behavior)
-        previous_loop = None
-        try:
-            previous_loop = asyncio.get_event_loop()
-        except RuntimeError:
-            previous_loop = None
-
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-
-        try:
-            full_content = []
-            sources = []
-
-            if mode == ContextMode.RESEARCH:
-                yield from _stream_research_mode(
-                    loop, completion_id, created, model,
-                    question, messages, preferred_links, meta,
-                    full_content, sources
-                )
-            else:
-                yield from _stream_thinking_mode(
-                    loop, completion_id, created, model,
-                    question, messages, current_url, meta,
-                    full_content
-                )
-
-            # Final chunk with finish_reason and sources
-            final_chunk = {
-                "id": completion_id,
-                "object": "chat.completion.chunk",
-                "created": created,
-                "model": model,
-                "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}],
-                "sources": sources,
-            }
-            yield f"data: {json.dumps(final_chunk)}\n\n"
-            yield "data: [DONE]\n\n"
-
-            # Post-processing: save to context
-            final_text = "".join(full_content)
-            context_mgr.add_assistant_message(
-                session_id, final_text, model=model,
-                sources_used=sources if mode == ContextMode.RESEARCH else [],
-            )
-
-        except Exception as e:
-            err_chunk = {
-                "error": {"message": _safe_error_message(e, 'API Stream'), "type": "server_error"}
-            }
-            yield f"data: {json.dumps(err_chunk)}\n\n"
-
-        finally:
-            loop.close()
-            if previous_loop is not None:
-                asyncio.set_event_loop(previous_loop)
-            else:
-                asyncio.set_event_loop(None)
-
-    response = StreamingHttpResponse(event_stream(), content_type='text/event-stream')
-    response['Cache-Control'] = 'no-cache'
-    response['X-Accel-Buffering'] = 'no'
-    return response
-
-
-def _stream_research_mode(loop, completion_id, created, model, question, messages, preferred_links, meta, full_content, sources):
-    """
-    Generator for research mode streaming.
-    Handles status events, content chunks, and source delivery.
-    """
-    stream_generator, stream_state = ds.create_advanced_response_streaming(
-        user_input=question,
-        message_list=messages,
-        model=model,
-        preferred_links=preferred_links or [],
-        user_timezone=meta.user_timezone,
-        user_time=meta.user_time
-    )
-    stream_iter = stream_generator.__aiter__()
-
-    while True:
-        try:
-            chunk_tuple = loop.run_until_complete(stream_iter.__anext__())
-            text_chunk, entries = chunk_tuple
-
-            # Status event from research engine (e.g., "Analyzing query", "Searching the web")
-            if text_chunk is None and isinstance(entries, dict) and "label" in entries:
-                status_chunk = {
-                    "id": completion_id,
-                    "object": "chat.completion.chunk",
-                    "created": created,
-                    "model": model,
-                    "choices": [{"index": 0, "delta": {}, "finish_reason": None}],
-                    "status": {"label": entries["label"], "detail": entries.get("detail")}
-                }
-                yield f"data: {json.dumps(status_chunk)}\n\n"
-                continue
-
-            # Content chunk
-            if text_chunk:
-                full_content.append(text_chunk)
-                resp_chunk = {
-                    "id": completion_id,
-                    "object": "chat.completion.chunk",
-                    "created": created,
-                    "model": model,
-                    "choices": [{"index": 0, "delta": {"content": text_chunk}, "finish_reason": None}]
-                }
-                yield f"data: {json.dumps(resp_chunk)}\n\n"
-
-            # Source delivery
-            if isinstance(entries, list) and entries:
-                sources.clear()
-                sources.extend([dict(entry) for entry in entries if entry])
-
-        except StopAsyncIteration:
-            break
-
-    # Also check stream_state for sources if not captured from chunks
-    if not sources and stream_state:
-        state_sources = stream_state.get("used_sources", [])
-        if state_sources:
-            sources.extend(state_sources)
-
-
-def _stream_thinking_mode(loop, completion_id, created, model, question, messages, current_url, meta, full_content):
-    """
-    Generator for thinking mode streaming.
-    Streams content chunks from the agent.
-    """
-    stream_generator, stream_state = ds.create_agent_response_stream(
-        user_input=question,
-        message_list=messages,
-        model=model,
-        current_url=current_url,
-        user_timezone=meta.user_timezone,
-        user_time=meta.user_time
-    )
-    stream_iter = stream_generator.__aiter__()
-
-    while True:
-        try:
-            chunk = loop.run_until_complete(stream_iter.__anext__())
-            if chunk:
-                full_content.append(chunk)
-                resp_chunk = {
-                    "id": completion_id,
-                    "object": "chat.completion.chunk",
-                    "created": created,
-                    "model": model,
-                    "choices": [{"index": 0, "delta": {"content": chunk}, "finish_reason": None}]
-                }
-                yield f"data: {json.dumps(resp_chunk)}\n\n"
-        except StopAsyncIteration:
-            break
