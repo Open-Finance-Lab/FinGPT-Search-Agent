@@ -8,6 +8,7 @@ FinGPT Search Agent
    :caption: Contents:
 
    introduction
+   updates
    install_agent_with_installer
    manual_install
    start_agent_mac
@@ -15,6 +16,7 @@ FinGPT Search Agent
    usage/index
    mcp_tools
    project_structure
+   case_studies
    code_of_conduct
 
 .. note::
