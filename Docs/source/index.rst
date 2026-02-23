@@ -14,6 +14,7 @@ FinGPT Search Agent
    start_agent_mac
    start_agent_win
    usage/index
+   api_reference
    mcp_tools
    project_structure
    case_studies
