@@ -40,7 +40,7 @@ BUFFET_AGENT_ENDPOINT = os.getenv("BUFFET_AGENT_ENDPOINT", BUFFET_AGENT_DEFAULT_
 BUFFET_AGENT_TIMEOUT = float(os.getenv("BUFFET_AGENT_TIMEOUT", "60"))
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "")
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 clients = {}
 

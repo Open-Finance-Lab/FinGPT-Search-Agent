@@ -216,18 +216,18 @@ class MCPClientManager:
         """Executes a tool on the appropriate server with very detailed logging."""
         import json
 
-        self._log("=" * 80, force=True)
-        self._log(f"[MCP TOOL REQUEST] Tool: {tool_name}", force=True)
-        self._log(f"[MCP TOOL REQUEST] Server: {self.tools_map.get(tool_name, 'unknown')}", force=True)
-        self._log(f"[MCP TOOL REQUEST] Timestamp: {__import__('datetime').datetime.now().isoformat()}", force=True)
-        self._log(f"[MCP TOOL REQUEST] Arguments ({len(arguments)} params):", force=True)
+        self._log("=" * 80)
+        self._log(f"[MCP TOOL REQUEST] Tool: {tool_name}")
+        self._log(f"[MCP TOOL REQUEST] Server: {self.tools_map.get(tool_name, 'unknown')}")
+        self._log(f"[MCP TOOL REQUEST] Timestamp: {__import__('datetime').datetime.now().isoformat()}")
+        self._log(f"[MCP TOOL REQUEST] Arguments ({len(arguments)} params):")
         for key, value in arguments.items():
             str_value = str(value)
             if len(str_value) > 200:
-                self._log(f"[MCP TOOL REQUEST]   {key}: {str_value[:197]}... ({len(str_value)} chars)", force=True)
+                self._log(f"[MCP TOOL REQUEST]   {key}: {str_value[:197]}... ({len(str_value)} chars)")
             else:
-                self._log(f"[MCP TOOL REQUEST]   {key}: {str_value}", force=True)
-        self._log("-" * 80, force=True)
+                self._log(f"[MCP TOOL REQUEST]   {key}: {str_value}")
+        self._log("-" * 80)
 
         server_name = self.tools_map.get(tool_name)
         if not server_name:
@@ -244,22 +244,22 @@ class MCPClientManager:
             raise RuntimeError(f"Session for server {server_name} is not active.")
 
         try:
-            self._log(f"[MCP TOOL EXEC] Calling {server_name} server...", force=True)
+            self._log(f"[MCP TOOL EXEC] Calling {server_name} server...")
             result: CallToolResult = await session.call_tool(tool_name, arguments)
-            self._log(f"[MCP TOOL EXEC] Server responded", force=True)
+            self._log(f"[MCP TOOL EXEC] Server responded")
 
-            self._log("-" * 80, force=True)
-            self._log(f"[MCP TOOL RESPONSE] Processing result from {tool_name}", force=True)
+            self._log("-" * 80)
+            self._log(f"[MCP TOOL RESPONSE] Processing result from {tool_name}")
 
             total_size = 0
             item_count = 0
 
             if hasattr(result, 'content') and isinstance(result.content, list):
-                self._log(f"[MCP TOOL RESPONSE] Response contains {len(result.content)} content items", force=True)
+                self._log(f"[MCP TOOL RESPONSE] Response contains {len(result.content)} content items")
 
                 for idx, item in enumerate(result.content, 1):
                     item_count += 1
-                    self._log(f"[MCP TOOL RESPONSE] Item {idx}/{len(result.content)}:", force=True)
+                    self._log(f"[MCP TOOL RESPONSE] Item {idx}/{len(result.content)}:")
 
                     if item.type == 'text':
                         item_size = len(item.text)
@@ -270,34 +270,34 @@ class MCPClientManager:
                         else:
                             preview = item.text
 
-                        self._log(f"[MCP TOOL RESPONSE]   Type: text", force=True)
-                        self._log(f"[MCP TOOL RESPONSE]   Size: {item_size} bytes ({item_size/1024:.2f} KB)", force=True)
-                        self._log(f"[MCP TOOL RESPONSE]   Content: {preview}", force=True)
+                        self._log(f"[MCP TOOL RESPONSE]   Type: text")
+                        self._log(f"[MCP TOOL RESPONSE]   Size: {item_size} bytes ({item_size/1024:.2f} KB)")
+                        self._log(f"[MCP TOOL RESPONSE]   Content: {preview}")
 
                     elif item.type == 'image':
-                        self._log(f"[MCP TOOL RESPONSE]   Type: image", force=True)
-                        self._log(f"[MCP TOOL RESPONSE]   MIME: {item.mimeType}", force=True)
+                        self._log(f"[MCP TOOL RESPONSE]   Type: image")
+                        self._log(f"[MCP TOOL RESPONSE]   MIME: {item.mimeType}")
                         if hasattr(item, 'data'):
-                            self._log(f"[MCP TOOL RESPONSE]   Data size: {len(str(item.data))} bytes", force=True)
+                            self._log(f"[MCP TOOL RESPONSE]   Data size: {len(str(item.data))} bytes")
 
                     elif item.type == 'resource':
-                        self._log(f"[MCP TOOL RESPONSE]   Type: resource", force=True)
-                        self._log(f"[MCP TOOL RESPONSE]   URI: {item.uri}", force=True)
+                        self._log(f"[MCP TOOL RESPONSE]   Type: resource")
+                        self._log(f"[MCP TOOL RESPONSE]   URI: {item.uri}")
                     else:
-                        self._log(f"[MCP TOOL RESPONSE]   Type: {item.type}", force=True)
-                        self._log(f"[MCP TOOL RESPONSE]   Data: {str(item)[:200]}", force=True)
+                        self._log(f"[MCP TOOL RESPONSE]   Type: {item.type}")
+                        self._log(f"[MCP TOOL RESPONSE]   Data: {str(item)[:200]}")
 
-            self._log("-" * 80, force=True)
-            self._log(f"[MCP TOOL SUMMARY] Total items: {item_count}", force=True)
-            self._log(f"[MCP TOOL SUMMARY] Total text size: {total_size} bytes ({total_size/1024:.2f} KB)", force=True)
+            self._log("-" * 80)
+            self._log(f"[MCP TOOL SUMMARY] Total items: {item_count}")
+            self._log(f"[MCP TOOL SUMMARY] Total text size: {total_size} bytes ({total_size/1024:.2f} KB)")
 
             if total_size > 10240:
                 self._log(f"[MCP TOOL WARNING] ⚠ Large payload: {total_size/1024:.1f} KB", force=True)
                 self._log(f"[MCP TOOL WARNING] ⚠ Exceeds OpenAI tracing limit (10KB)", force=True)
                 self._log(f"[MCP TOOL WARNING] ⚠ Tracing errors expected but tool execution will succeed", force=True)
 
-            self._log(f"[MCP TOOL SUCCESS] ✓ {tool_name} completed successfully", force=True)
-            self._log("=" * 80, force=True)
+            self._log(f"[MCP TOOL SUCCESS] ✓ {tool_name} completed successfully")
+            self._log("=" * 80)
 
             return result
 

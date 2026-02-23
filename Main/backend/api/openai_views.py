@@ -8,6 +8,7 @@ Provides /v1/models and /v1/chat/completions endpoints with:
 - Thinking mode with MCP tool source tracking
 """
 
+import hmac
 import json
 import os
 import time
@@ -18,6 +19,7 @@ from typing import List, Dict, Any, Optional
 from django.http import JsonResponse, HttpRequest
 from django.views.decorators.csrf import csrf_exempt
 from django.conf import settings
+from django_ratelimit.decorators import ratelimit
 
 from datascraper import datascraper as ds
 from datascraper.url_tools import _scrape_url_impl as scrape_url
@@ -86,7 +88,7 @@ def _authenticate_request(request: HttpRequest) -> Optional[JsonResponse]:
         )
 
     provided_key = auth_header[7:]  # Strip 'Bearer '
-    if provided_key != api_key:
+    if not hmac.compare_digest(provided_key, api_key):
         return JsonResponse(
             {'error': {'message': 'Invalid API key', 'type': 'authentication_error'}},
             status=401
@@ -120,6 +122,7 @@ def _merge_domains_into_preferred_links(
 
 
 @csrf_exempt
+@ratelimit(key='ip', rate=settings.API_RATE_LIMIT, method='ALL', block=True)
 def models_list(request: HttpRequest) -> JsonResponse:
     """
     List available models in OpenAI format.
@@ -151,6 +154,7 @@ def models_list(request: HttpRequest) -> JsonResponse:
 
 
 @csrf_exempt
+@ratelimit(key='ip', rate=settings.API_RATE_LIMIT, method='ALL', block=True)
 def chat_completions(request: HttpRequest) -> JsonResponse:
     """
     Create chat completion.
