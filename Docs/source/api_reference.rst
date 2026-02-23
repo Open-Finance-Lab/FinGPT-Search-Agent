@@ -15,13 +15,15 @@ Connection
 Base URL
 ~~~~~~~~
 
-The API is served by a Django backend on port **8000**. When deployed via Docker on the Fedora droplet:
+The API is served by a Django backend on port **8000**.
+
+**Production** (Fedora droplet at ``134.122.1.153``, IPv4 only):
 
 .. code-block:: text
 
-   https://<DROPLET_IP_OR_DOMAIN>:8000
+   https://agenticfinsearch.org:8000
 
-For local development:
+**Local development:**
 
 .. code-block:: text
 
@@ -110,7 +112,7 @@ Check if the backend is running. Does **not** require authentication.
 
 .. code-block:: bash
 
-   curl https://<HOST>:8000/health/
+   curl https://agenticfinsearch.org:8000/health/
 
 ---
 
@@ -193,7 +195,7 @@ Returns all available models in OpenAI-compatible format.
 .. code-block:: bash
 
    curl -H "Authorization: Bearer $API_KEY" \
-        https://<HOST>:8000/v1/models
+        https://agenticfinsearch.org:8000/v1/models
 
 **Error responses:**
 
@@ -485,14 +487,14 @@ All models support both ``thinking`` (MCP) and ``research`` (deep search) modes.
 Usage Examples
 --------------
 
-All examples use ``curl``. Replace ``<HOST>`` with the droplet IP/domain and ``$API_KEY`` with the actual key.
+All examples use ``curl``. Replace ``agenticfinsearch.org`` with the droplet IP/domain and ``$API_KEY`` with the actual key.
 
 Health Check
 ~~~~~~~~~~~~
 
 .. code-block:: bash
 
-   curl https://<HOST>:8000/health/
+   curl https://agenticfinsearch.org:8000/health/
 
 List Models
 ~~~~~~~~~~~
@@ -500,7 +502,7 @@ List Models
 .. code-block:: bash
 
    curl -H "Authorization: Bearer $API_KEY" \
-        https://<HOST>:8000/v1/models
+        https://agenticfinsearch.org:8000/v1/models
 
 Thinking Mode (MCP Tools)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -509,7 +511,7 @@ Ask a specific financial question. The agent uses SEC-EDGAR and Yahoo Finance MC
 
 .. code-block:: bash
 
-   curl -X POST https://<HOST>:8000/v1/chat/completions \
+   curl -X POST https://agenticfinsearch.org:8000/v1/chat/completions \
      -H "Content-Type: application/json" \
      -H "Authorization: Bearer $API_KEY" \
      -d '{
@@ -527,7 +529,7 @@ Ask a broad research question. The agent searches the web and synthesizes an ans
 
 .. code-block:: bash
 
-   curl -X POST https://<HOST>:8000/v1/chat/completions \
+   curl -X POST https://agenticfinsearch.org:8000/v1/chat/completions \
      -H "Content-Type: application/json" \
      -H "Authorization: Bearer $API_KEY" \
      -d '{
@@ -545,7 +547,7 @@ Research Mode with Domain Scoping
 
 .. code-block:: bash
 
-   curl -X POST https://<HOST>:8000/v1/chat/completions \
+   curl -X POST https://agenticfinsearch.org:8000/v1/chat/completions \
      -H "Content-Type: application/json" \
      -H "Authorization: Bearer $API_KEY" \
      -d '{
@@ -566,7 +568,7 @@ Inject a page's content before asking a question about it.
 
 .. code-block:: bash
 
-   curl -X POST https://<HOST>:8000/v1/chat/completions \
+   curl -X POST https://agenticfinsearch.org:8000/v1/chat/completions \
      -H "Content-Type: application/json" \
      -H "Authorization: Bearer $API_KEY" \
      -d '{
@@ -585,7 +587,7 @@ Pass full conversation history. The API is stateless — include all prior turns
 
 .. code-block:: bash
 
-   curl -X POST https://<HOST>:8000/v1/chat/completions \
+   curl -X POST https://agenticfinsearch.org:8000/v1/chat/completions \
      -H "Content-Type: application/json" \
      -H "Authorization: Bearer $API_KEY" \
      -d '{
@@ -603,7 +605,7 @@ Normal Mode (No Tools / No Search)
 
 .. code-block:: bash
 
-   curl -X POST https://<HOST>:8000/v1/chat/completions \
+   curl -X POST https://agenticfinsearch.org:8000/v1/chat/completions \
      -H "Content-Type: application/json" \
      -H "Authorization: Bearer $API_KEY" \
      -d '{
@@ -628,7 +630,7 @@ Below is a complete, copy-paste-ready Python script for benchmarking the API. It
    import time
    import json
 
-   BASE_URL = "https://<HOST>:8000"
+   BASE_URL = "https://agenticfinsearch.org:8000"
    API_KEY = "<YOUR_API_KEY>"  # omit Authorization header if auth is disabled
 
    HEADERS = {
