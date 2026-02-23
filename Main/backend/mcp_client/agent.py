@@ -125,6 +125,11 @@ async def create_fin_agent(model: str = "gpt-4o-mini",
     playwright_tools = get_playwright_tools()
     tools.extend(playwright_tools)
 
+    # Calculator tool for safe arithmetic (prevents LLM from doing math in text)
+    from datascraper.calculator_tool import get_calculator_tools
+    calculator_tools = get_calculator_tools()
+    tools.extend(calculator_tools)
+
     from .mcp_manager import MCPClientManager
     from .tool_wrapper import convert_mcp_tool_to_python_callable
     import asyncio
