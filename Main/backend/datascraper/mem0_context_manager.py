@@ -88,6 +88,9 @@ class Mem0ContextManager:
                 logging.warning("OPENAI_API_KEY not found. Smart compression will use basic fallback.")
 
         self.sessions = defaultdict(self._session_factory)
+        self._request_count = 0
+        self._cleanup_interval = 10
+        self._session_ttl_seconds = 3600  # 1 hour
 
         self.base_system_prompt = (
             "You are a helpful financial assistant. Always answer questions to the best of your ability. "
@@ -115,6 +118,19 @@ class Mem0ContextManager:
             "has_compressed_chunks": False,
         }
 
+    def cleanup_expired_sessions(self) -> int:
+        """Remove sessions that haven't been used within the TTL. Returns count removed."""
+        now = datetime.now(UTC)
+        expired = [
+            sid for sid, data in self.sessions.items()
+            if (now - data.get("last_used", now)).total_seconds() > self._session_ttl_seconds
+        ]
+        for sid in expired:
+            del self.sessions[sid]
+        if expired:
+            logging.info(f"[Mem0] Cleaned up {len(expired)} expired sessions, {len(self.sessions)} remaining")
+        return len(expired)
+
     def add_message(self, session_id: str, role: str, content: str) -> None:
         """
         Add a message to session history and Mem0 memory.
@@ -124,6 +140,10 @@ class Mem0ContextManager:
             role: Message role (user/assistant/system)
             content: Message content
         """
+        self._request_count += 1
+        if self._request_count % self._cleanup_interval == 0:
+            self.cleanup_expired_sessions()
+
         session = self.sessions[session_id]
         session["last_used"] = datetime.now(UTC)
 

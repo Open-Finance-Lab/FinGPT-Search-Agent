@@ -94,6 +94,7 @@ async def create_fin_agent(model: str = "gpt-4o-mini",
         logging.info(f"Model resolution: {model} -> {actual_model}")
 
     # Build model object — string for OpenAI, OpenAIChatCompletionsModel for other providers
+    gemini_http = None
     model_obj = actual_model
     if model_config and model_config.get("provider") == "google":
         google_api_key = os.getenv("GOOGLE_API_KEY", "")
@@ -123,6 +124,11 @@ async def create_fin_agent(model: str = "gpt-4o-mini",
 
     playwright_tools = get_playwright_tools()
     tools.extend(playwright_tools)
+
+    # Calculator tool for safe arithmetic (prevents LLM from doing math in text)
+    from datascraper.calculator_tool import get_calculator_tools
+    calculator_tools = get_calculator_tools()
+    tools.extend(calculator_tools)
 
     from .mcp_manager import MCPClientManager
     from .tool_wrapper import convert_mcp_tool_to_python_callable
@@ -231,3 +237,10 @@ async def create_fin_agent(model: str = "gpt-4o-mini",
             logging.debug("Agent cleanup completed")
         except Exception as e:
             logging.warning(f"Error during agent cleanup: {e}")
+        # Close any httpx client we created for Gemini
+        try:
+            if gemini_http is not None:
+                await gemini_http.aclose()
+                logging.debug("Gemini httpx client closed")
+        except Exception as e:
+            logging.warning(f"Error closing Gemini httpx client: {e}")

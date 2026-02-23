@@ -474,6 +474,14 @@ def chat_response_stream(request: HttpRequest) -> StreamingHttpResponse:
                 except StopAsyncIteration:
                     pass
                 finally:
+                    try:
+                        loop.run_until_complete(stream_iter.aclose())
+                    except Exception:
+                        pass
+                    try:
+                        loop.run_until_complete(loop.shutdown_asyncgens())
+                    except Exception:
+                        pass
                     loop.close()
                     if previous_loop is not None:
                         asyncio.set_event_loop(previous_loop)
