@@ -6,8 +6,9 @@ FinGPT Search Agent is a web-based agent in finance, business, accounting domain
 Key Features
 ------------
 
-- It is a powerful **information search-and-retrieval engine**: A search agent for websites (Math Cup, Yahoo Finance, Bloomberg, XBRL International) and local files (SEC 10K, XBRL files (eXtensible Business Reporting Language)).
-- **Integrated MCP Tools**: Built-in support for Model Context Protocol (MCP) servers, including **SEC-EDGAR** for company filings and **Yahoo Finance** for real-time market data.
+- It is a powerful **information search-and-retrieval engine**: A search agent for websites (Yahoo Finance, Bloomberg, TradingView, CNBC, and more) and local files (SEC 10K, XBRL files (eXtensible Business Reporting Language)).
+- **Integrated MCP Tools**: Built-in support for Model Context Protocol (MCP) servers, including **SEC-EDGAR** for company filings, **Yahoo Finance** for real-time market data, and **TradingView** for technical analysis.
+- **Deep Research Mode**: Multi-step research engine that decomposes complex queries into sub-questions, executes them in parallel, detects coverage gaps, and synthesizes comprehensive answers.
 - Also a powerful **answer engine**: an answer agent that performs open search (open-domain search plus local file search) to quickly locate relevant financial information from various sources.
 - For generated responses, users may perform quick **source verification**, ensuring reliability and accuracy.
 
@@ -35,5 +36,5 @@ Road Map
    :align: left
    :width: 800px
 
-Current roadmap as of late 2025.
+Current roadmap as of early 2026.
 

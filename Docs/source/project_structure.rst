@@ -6,10 +6,12 @@ Top-Level Layout
 
 .. code-block:: text
 
-   fingpt_rcos/
+   FinGPT-Search-Agent/
    ├── .github/                      # CI/CD workflows
+   ├── Benchmarks/                   # Benchmark documents and test results
    ├── Deploy/                       # Deployment configurations (Podman, Caddy)
-   ├── Docs/                         # Sphinx documentation
+   ├── DevSummaries/                 # Development progress summaries
+   ├── Docs/                         # Sphinx documentation (this site)
    ├── Main/
    │   ├── backend/                  # Django backend (uv-managed)
    │   └── frontend/                 # Browser extension (bun-managed)
@@ -33,30 +35,50 @@ Backend Structure
    │   └── asgi.py                   # ASGI entry point
    ├── api/                          # REST API layer
    │   ├── views.py                  # Main API endpoints
-   │   ├── openai_views.py           # OpenAI-specific endpoints
+   │   ├── openai_views.py           # OpenAI-compatible API endpoints
+   │   ├── middleware/               # CORS and custom middleware
+   │   ├── utils/                    # API utility functions
    │   ├── apps.py                   # Django app configuration
    │   └── models.py                 # Database models
-   ├── datascraper/                  # Data pipeline & RAG
+   ├── datascraper/                  # Data pipeline, RAG & research
    │   ├── datascraper.py            # Web scraping orchestration
+   │   ├── research_engine.py        # Multi-step research engine
    │   ├── openai_search.py          # OpenAI search integration
    │   ├── models_config.py          # Model provider settings
+   │   ├── playwright_tools.py       # Browser automation via Playwright
    │   ├── unified_context_manager.py # Session-based context tracking
-   │   ├── mem0_context_manager.py   # Memory-based context
+   │   ├── mem0_context_manager.py   # Memory-based context (Mem0)
    │   ├── context_integration.py    # Context system integration
    │   ├── preferred_links_manager.py # User link preferences
-   │   └── url_tools.py              # URL utilities
+   │   ├── url_tools.py              # URL utilities
+   │   ├── market_time.py            # Market timing utilities
+   │   ├── numerical_validator.py    # Number validation
+   │   └── quality_logger.py         # Quality logging
    ├── mcp_client/                   # MCP client integration
    │   ├── agent.py                  # Agent orchestration
    │   ├── mcp_manager.py            # MCP connection management
    │   ├── tool_wrapper.py           # Tool abstraction layer
+   │   ├── prompt_builder.py         # Prompt generation
    │   └── apps.py                   # Django app configuration
    ├── mcp_server/                   # MCP server implementations
-   │   └── yahoo_finance_server.py   # Yahoo Finance MCP server
+   │   ├── yahoo_finance_server.py   # Yahoo Finance MCP server
+   │   ├── handlers/                 # MCP request handler modules
+   │   ├── tradingview/              # TradingView MCP server
+   │   ├── cache.py                  # Caching utilities
+   │   ├── errors.py                 # Error definitions
+   │   ├── executor.py               # Tool execution logic
+   │   └── validation.py             # Input validation
+   ├── prompts/                      # LLM prompt templates
+   │   ├── core.md                   # Core system prompt
+   │   ├── default_site.md           # Default site instructions
+   │   └── sites/                    # Site-specific prompts
+   │       ├── finance.yahoo.com.md  # Yahoo Finance context
+   │       ├── sec.gov.md            # SEC EDGAR context
+   │       └── tradingview.com.md    # TradingView context
    ├── data/                         # Static data files
    │   ├── preferred_links.json      # User-configured sources
    │   └── site_map.json             # Site structure mapping
    ├── tests/                        # Test suite
-   ├── scripts/                      # Utility scripts
    ├── pyproject.toml                # Python project & dependencies
    ├── uv.lock                       # Locked dependency versions
    ├── Dockerfile                    # Production container image
@@ -76,10 +98,12 @@ Backend Highlights
 * ``Dockerfile`` + ``entrypoint.sh`` build a production-ready container.
 * ``gunicorn.conf.py`` configures the production WSGI server.
 * ``django_config/settings.py`` vs ``settings_prod.py`` for environment separation.
-* ``datascraper/`` contains the RAG pipeline and context management logic.
+* ``datascraper/`` contains the RAG pipeline, research engine, and context management logic.
+* ``datascraper/research_engine.py`` implements the multi-step research pipeline (query decomposition, parallel execution, gap detection, synthesis).
 * ``datascraper/unified_context_manager.py`` provides session-based context tracking with JSON structure.
-* ``mcp_client/`` handles Model Context Protocol client connections.
-* ``mcp_server/`` contains standalone MCP server implementations.
+* ``mcp_client/`` handles Model Context Protocol client connections and agent orchestration.
+* ``mcp_server/`` contains standalone MCP server implementations (Yahoo Finance, TradingView).
+* ``prompts/`` contains Markdown prompt templates, including site-specific context prompts.
 
 
 Frontend Structure
@@ -90,7 +114,7 @@ Frontend Structure
    Main/frontend/
    ├── src/
    │   ├── main.js                   # Extension entry point
-   │   ├── manifest.json             # Chrome extension manifest
+   │   ├── manifest.json             # Chrome extension manifest (MV3)
    │   ├── modules/
    │   │   ├── api.js                # Backend API client
    │   │   ├── handlers.js           # Event handlers
@@ -117,7 +141,7 @@ Frontend Structure
    │   └── vendor/
    │       └── marked.min.js         # Markdown library
    ├── dist/                         # Build output (load as extension)
-   ├── node_modules/                 # npm/bun dependencies
+   ├── node_modules/                 # bun dependencies
    ├── webpack.config.js             # Webpack bundler configuration
    ├── build-css.js                  # CSS build script
    ├── check-dist.js                 # Build verification script
@@ -146,6 +170,8 @@ Docker Workflow
 
    cp Main/backend/.env.example Main/backend/.env
    docker compose up
+
+The ``docker-compose.yml`` defines a single ``api`` service that builds and runs the backend on port 8000. Development volume mounts are included for hot-reload of backend code. An optional ``frontend`` service (activated with ``--profile dev``) runs ``bun run watch`` for frontend development.
 
 Manual Backend Workflow
 -----------------------
