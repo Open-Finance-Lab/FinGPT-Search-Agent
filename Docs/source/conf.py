@@ -7,9 +7,9 @@
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
 project = 'FinGPT Search Agent'
-copyright = '2025, FlyM1ss, Yanglet Liu'
+copyright = '2025-2026, FlyM1ss, Yanglet Liu'
 author = 'FlyM1ss, Yanglet Liu'
-release = '0.10.1'
+release = '0.13.1'
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration

@@ -30,7 +30,7 @@ If you change frontend code rebuild the bundle:
 .. code-block:: bash
 
    cd Main/frontend
-   npm install
-   npm run build:full
+   bun install
+   bun run build:full
 
 Load the extension from ``Main/frontend/dist`` via **chrome://extensions** (or the equivalent in your Chromium-based browser).
