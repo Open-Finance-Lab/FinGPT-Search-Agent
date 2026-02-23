@@ -18,9 +18,9 @@ FinGPT Search Agent
    code_of_conduct
 
 .. note::
-   This documentation covers version 0.10.1 of FinGPT Search Agent.
+   This documentation covers version 0.13.1 of FinGPT Search Agent.
    
-   **New in 0.10.1:**
+   **New in 0.13.1:**
    
    - **MCP Tool Integration**: Built-in support for SEC-EDGAR and Yahoo Finance tools.
    - **Performance Improvements**: Unified context manager for faster response times.
