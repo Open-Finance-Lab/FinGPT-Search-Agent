@@ -920,9 +920,16 @@ def create_advanced_response_streaming(
     return _research_stream(), state
 
 
-def create_agent_response(user_input: str, message_list: list[dict], model: str = "o4-mini", current_url: str = None, user_timezone: str = None, user_time: str = None) -> str:
+def create_agent_response(
+        user_input: str,
+        message_list: list[dict],
+        model: str = "o4-mini",
+        current_url: str = None,
+        user_timezone: str = None,
+        user_time: str = None
+) -> Tuple[str, List[Dict[str, str]]]:
     """
-    Creates a response using the Agent with tools (URL scraping, SEC-EDGAR, filesystem).
+    Creates a response using the Agent with MCP tools and returns tool source info.
     Falls back to create_response() (direct LLM) only if agent fails.
 
     Args:
@@ -932,197 +939,6 @@ def create_agent_response(user_input: str, message_list: list[dict], model: str 
         current_url: Current webpage URL for context
         user_timezone: User's IANA timezone
         user_time: User's current time in ISO format
-
-    Returns:
-        Generated response from the agent
-    """
-
-
-    from datascraper.quality_logger import QualityTracker
-    qt = QualityTracker(mode="thinking", query=user_input, model=model)
-
-    model_config = get_model_config(model)
-    actual_model_name = model_config.get("model_name") if model_config else model
-    provider = model_config.get("provider") if model_config else None
-
-    if provider == "buffet":
-        logging.info(f"[AGENT] Buffet agent does not support tool mode; using direct response for {model}")
-        qt.set_data_source("direct_llm")
-        qt.flag("buffet_fallback")
-        response = create_response(user_input, message_list, model)
-        qt.complete(response)
-        return response
-
-    try:
-        if not validate_model_support(model, "mcp"):
-            logging.warning(f"Model {model} ({actual_model_name}) doesn't support agent features")
-            logging.info(f"FALLBACK: Using regular response with {model} ({actual_model_name})")
-            qt.set_data_source("direct_llm")
-            qt.flag("model_unsupported_mcp")
-            response = create_response(user_input, message_list, model)
-            qt.complete(response)
-            return response
-
-        logging.info(f"[AGENT] Attempting agent response with {model} ({actual_model_name})")
-
-        response = asyncio.run(_create_agent_response_async(user_input, message_list, model, current_url, user_timezone, user_time))
-        qt.set_data_source("mcp_tools")
-        qt.complete(response)
-        return response
-
-    except Exception as e:
-        logging.error(f"Agent response failed for {model} ({actual_model_name}): {e}")
-        logging.info(f"FALLBACK: Using regular response with {model} ({actual_model_name})")
-        qt.set_data_source("direct_llm")
-        qt.flag("agent_error", message=str(e))
-        response = create_response(user_input, message_list, model)
-        qt.complete(response)
-        return response
-
-async def _create_agent_response_async(user_input: str, message_list: list[dict], model: str, current_url: str = None, user_timezone: str = None, user_time: str = None) -> str:
-    """
-    Async helper for creating agent response with MCP tools.
-
-    Args:
-        user_input: The user's question
-        message_list: Previous conversation history
-        model: Model ID to use
-        current_url: Current webpage URL for context (informational only)
-        user_timezone: User's IANA timezone
-        user_time: User's current time in ISO format
-
-    Returns:
-        Generated response string
-    """
-    from mcp_client.agent import create_fin_agent
-    from agents import Runner
-
-    context = ""
-    extracted_system_prompt = None
-
-    for msg in message_list:
-        content = msg.get("content", "")
-
-        if content.startswith(SYSTEM_PREFIX):
-            actual_content = content.replace(SYSTEM_PREFIX, "", 1)
-            if extracted_system_prompt:
-                extracted_system_prompt += "\n\n" + actual_content
-            else:
-                extracted_system_prompt = actual_content
-            continue
-
-        matched, actual_content = _strip_any_prefix(content, USER_PREFIXES)
-        if matched:
-            context += f"User: {actual_content}\n"
-            continue
-
-        matched, actual_content = _strip_any_prefix(content, ASSISTANT_PREFIXES)
-        if matched:
-            context += f"Assistant: {actual_content}\n"
-            continue
-
-        context += f"User: {content}\n"
-
-    # Use context directly - current user message is already in message_list
-    # (views.py calls add_user_message before calling this function)
-    full_prompt = context.rstrip()
-
-    async with create_fin_agent(
-        model=model,
-        system_prompt=extracted_system_prompt,
-        user_input=user_input,
-        current_url=current_url,
-        user_timezone=user_timezone,
-        user_time=user_time
-    ) as agent:
-        logging.info(f"[AGENT] Running agent with MCP tools")
-        logging.info(f"[AGENT] Current URL: {current_url}")
-        
-        # If this a foundation model, prepend instructions to the first prompt
-        if hasattr(agent, "_foundation_instructions") and agent._foundation_instructions:
-            logging.info("[AGENT] Prepending foundation instructions to prompt")
-            full_prompt = f"[SYSTEM MESSAGE]: {agent._foundation_instructions}\n\n{full_prompt}"
-
-        logging.info(f"[AGENT] Prompt preview: {full_prompt[:150]}...")
-        log_llm_payload(
-            call_site="_create_agent_response_async",
-            model=model, provider="agent",
-            messages=full_prompt, stream=False,
-            extra={"current_url": current_url, "has_system_prompt": bool(extracted_system_prompt)},
-        )
-
-        result = await Runner.run(agent, full_prompt)
-
-        final_output = result.final_output if hasattr(result, "final_output") else None
-        if final_output is None:
-            final_output = ""
-        logging.info(f"[AGENT] Result length: {len(final_output)}")
-
-        # Post-generation numerical validation
-        try:
-            from datascraper.numerical_validator import validate_numerical_accuracy
-            validate_numerical_accuracy(result, final_output)
-        except Exception as val_err:
-            logging.debug(f"[AGENT] Numerical validation error (non-critical): {val_err}")
-
-        return final_output
-
-
-def _extract_tool_sources_from_result(run_result) -> List[Dict[str, str]]:
-    """
-    Extract tool usage information from an agent Runner result.
-    Inspects raw_responses for function_call items across all model turns.
-    Returns a list of source dicts describing each MCP tool call,
-    deduplicated by call_id.
-    """
-    sources = []
-    seen_call_ids = set()
-    try:
-        # raw_responses contains ModelResponse objects from each model turn
-        raw_responses = getattr(run_result, 'raw_responses', None) or []
-        for resp in raw_responses:
-            resp_output = getattr(resp, 'output', None) or []
-            for item in resp_output:
-                item_type = getattr(item, 'type', '')
-                if item_type == 'function_call':
-                    tool_name = getattr(item, 'name', '') or ''
-                    call_id = getattr(item, 'call_id', '') or ''
-                    arguments = getattr(item, 'arguments', '') or ''
-                    if call_id in seen_call_ids:
-                        continue
-                    seen_call_ids.add(call_id)
-                    source_entry = {
-                        "type": "tool",
-                        "tool_name": tool_name,
-                        "call_id": call_id,
-                    }
-                    try:
-                        args = json.loads(arguments) if isinstance(arguments, str) else arguments
-                        if isinstance(args, dict):
-                            for key in ("symbol", "ticker", "query", "url", "filing_type", "company"):
-                                if key in args:
-                                    source_entry[key] = args[key]
-                    except (json.JSONDecodeError, TypeError):
-                        pass
-                    sources.append(source_entry)
-        logging.info(f"[TOOL SOURCES] Extracted {len(sources)} tool calls from {len(raw_responses)} model responses")
-    except Exception as e:
-        logging.debug(f"[TOOL SOURCES] Error extracting tool sources: {e}")
-    return sources
-
-
-def create_agent_response_with_sources(
-        user_input: str,
-        message_list: list[dict],
-        model: str = "o4-mini",
-        current_url: str = None,
-        user_timezone: str = None,
-        user_time: str = None
-) -> Tuple[str, List[Dict[str, str]]]:
-    """
-    Creates an agent response and returns both the response text and a list of
-    tool sources used during the agent run. Used by the API layer to report
-    which MCP tools were invoked.
 
     Returns:
         (response_text, tool_sources) tuple
@@ -1145,14 +961,15 @@ def create_agent_response_with_sources(
     try:
         if not validate_model_support(model, "mcp"):
             logging.warning(f"Model {model} ({actual_model_name}) doesn't support agent features")
+            logging.info(f"FALLBACK: Using regular response with {model} ({actual_model_name})")
             qt.set_data_source("direct_llm")
             qt.flag("model_unsupported_mcp")
             response = create_response(user_input, message_list, model)
             qt.complete(response)
             return response, []
 
-        logging.info(f"[AGENT] Attempting agent response with sources for {model} ({actual_model_name})")
-        response, sources = asyncio.run(_create_agent_response_with_sources_async(
+        logging.info(f"[AGENT] Attempting agent response for {model} ({actual_model_name})")
+        response, sources = asyncio.run(_create_agent_response_async(
             user_input, message_list, model, current_url, user_timezone, user_time
         ))
         qt.set_data_source("mcp_tools")
@@ -1161,6 +978,7 @@ def create_agent_response_with_sources(
 
     except Exception as e:
         logging.error(f"Agent response failed for {model} ({actual_model_name}): {e}")
+        logging.info(f"FALLBACK: Using regular response with {model} ({actual_model_name})")
         qt.set_data_source("direct_llm")
         qt.flag("agent_error", message=str(e))
         response = create_response(user_input, message_list, model)
@@ -1168,7 +986,7 @@ def create_agent_response_with_sources(
         return response, []
 
 
-async def _create_agent_response_with_sources_async(
+async def _create_agent_response_async(
         user_input: str,
         message_list: list[dict],
         model: str,
@@ -1177,7 +995,8 @@ async def _create_agent_response_with_sources_async(
         user_time: str = None
 ) -> Tuple[str, List[Dict[str, str]]]:
     """
-    Async helper that returns both the agent response and tool source information.
+    Async helper that returns agent response text and tool source information.
+    Single path used by both API and frontend for thinking-mode sync requests.
     """
     from mcp_client.agent import create_fin_agent
     from agents import Runner, set_tracing_disabled
@@ -1223,7 +1042,7 @@ async def _create_agent_response_with_sources_async(
         user_timezone=user_timezone,
         user_time=user_time
     ) as agent:
-        logging.info(f"[AGENT] Running agent with MCP tools (with source tracking)")
+        logging.info(f"[AGENT] Running agent with MCP tools")
         logging.info(f"[AGENT] Current URL: {current_url}")
 
         if hasattr(agent, "_foundation_instructions") and agent._foundation_instructions:
@@ -1232,7 +1051,7 @@ async def _create_agent_response_with_sources_async(
 
         logging.info(f"[AGENT] Prompt preview: {full_prompt[:150]}...")
         log_llm_payload(
-            call_site="_create_agent_response_with_sources_async",
+            call_site="_create_agent_response_async",
             model=model, provider="agent",
             messages=full_prompt, stream=False,
             extra={"current_url": current_url, "has_system_prompt": bool(extracted_system_prompt)},
@@ -1257,6 +1076,49 @@ async def _create_agent_response_with_sources_async(
             logging.debug(f"[AGENT] Numerical validation error (non-critical): {val_err}")
 
         return final_output, tool_sources
+
+
+def _extract_tool_sources_from_result(run_result) -> List[Dict[str, str]]:
+    """
+    Extract tool usage information from an agent Runner result.
+    Inspects raw_responses for function_call items across all model turns.
+    Returns a list of source dicts describing each MCP tool call,
+    deduplicated by call_id.
+    """
+    sources = []
+    seen_call_ids = set()
+    try:
+        # raw_responses contains ModelResponse objects from each model turn
+        raw_responses = getattr(run_result, 'raw_responses', None) or []
+        for resp in raw_responses:
+            resp_output = getattr(resp, 'output', None) or []
+            for item in resp_output:
+                item_type = getattr(item, 'type', '')
+                if item_type == 'function_call':
+                    tool_name = getattr(item, 'name', '') or ''
+                    call_id = getattr(item, 'call_id', '') or ''
+                    arguments = getattr(item, 'arguments', '') or ''
+                    if call_id in seen_call_ids:
+                        continue
+                    seen_call_ids.add(call_id)
+                    source_entry = {
+                        "type": "tool",
+                        "tool_name": tool_name,
+                        "call_id": call_id,
+                    }
+                    try:
+                        args = json.loads(arguments) if isinstance(arguments, str) else arguments
+                        if isinstance(args, dict):
+                            for key in ("symbol", "ticker", "query", "url", "filing_type", "company"):
+                                if key in args:
+                                    source_entry[key] = args[key]
+                    except (json.JSONDecodeError, TypeError):
+                        pass
+                    sources.append(source_entry)
+        logging.info(f"[TOOL SOURCES] Extracted {len(sources)} tool calls from {len(raw_responses)} model responses")
+    except Exception as e:
+        logging.debug(f"[TOOL SOURCES] Error extracting tool sources: {e}")
+    return sources
 
 
 def create_agent_response_stream(

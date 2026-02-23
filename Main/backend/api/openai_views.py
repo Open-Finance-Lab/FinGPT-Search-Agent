@@ -340,8 +340,8 @@ def _handle_sync(context_mgr, integration, session_id, question, messages, model
             if sources:
                 integration.add_search_results(session_id, sources)
         else:
-            # Thinking mode — use the source-tracking variant
-            response_content, sources = ds.create_agent_response_with_sources(
+            # Thinking mode
+            response_content, sources = ds.create_agent_response(
                 user_input=question,
                 message_list=messages,
                 model=model,

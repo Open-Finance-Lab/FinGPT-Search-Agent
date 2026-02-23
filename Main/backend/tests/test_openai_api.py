@@ -235,7 +235,7 @@ class TestSyncResponseFormat:
     """Test that sync responses include correct fields and sources."""
 
     @patch("datascraper.datascraper.create_advanced_response")
-    @patch("datascraper.datascraper.create_agent_response_with_sources")
+    @patch("datascraper.datascraper.create_agent_response")
     def test_research_mode_returns_sources(self, mock_agent, mock_research):
         """Research mode sync response must include sources."""
         mock_sources = [
@@ -269,7 +269,7 @@ class TestSyncResponseFormat:
         assert data["sources"][0]["url"] == "https://reuters.com/article"
         assert data["choices"][0]["message"]["content"] == "AAPL is up 5% today."
 
-    @patch("datascraper.datascraper.create_agent_response_with_sources")
+    @patch("datascraper.datascraper.create_agent_response")
     def test_thinking_mode_returns_tool_sources(self, mock_agent):
         """Thinking mode sync response must include tool sources."""
         mock_tool_sources = [
@@ -301,7 +301,7 @@ class TestSyncResponseFormat:
         assert data["sources"][0]["tool_name"] == "get_stock_info"
         assert data["sources"][0]["symbol"] == "AAPL"
 
-    @patch("datascraper.datascraper.create_agent_response_with_sources")
+    @patch("datascraper.datascraper.create_agent_response")
     def test_response_has_openai_standard_fields(self, mock_agent):
         """Response must include standard OpenAI fields."""
         mock_agent.return_value = ("Response text.", [])

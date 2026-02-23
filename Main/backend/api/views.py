@@ -155,11 +155,13 @@ def chat_response(request: HttpRequest) -> JsonResponse:
                 import time
                 start_time = time.time()
 
-                response = ds.create_agent_response(
+                response, _sources = ds.create_agent_response(
                     user_input=question,
                     message_list=messages,
                     model=model,
-                    current_url=current_url
+                    current_url=current_url,
+                    user_timezone=request.GET.get('user_timezone'),
+                    user_time=request.GET.get('user_time')
                 )
 
                 responses[model] = response
@@ -343,11 +345,13 @@ def agent_chat_response(request: HttpRequest) -> JsonResponse:
                 import time
                 start_time = time.time()
 
-                response = ds.create_agent_response(
+                response, _sources = ds.create_agent_response(
                     user_input=question,
                     message_list=messages,
                     model=model,
-                    current_url=current_url
+                    current_url=current_url,
+                    user_timezone=request.GET.get('user_timezone'),
+                    user_time=request.GET.get('user_time')
                 )
 
                 responses[model] = response
