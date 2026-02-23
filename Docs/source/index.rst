@@ -21,7 +21,11 @@ FinGPT Search Agent
    code_of_conduct
 
 .. note::
-   This documentation covers version 0.13.0 of FinGPT Search Agent.
+   This documentation covers version 0.13.1 of FinGPT Search Agent.
+   
+   **New in 0.13.1:**
+   
+   - **API Now Supported**: FinGPT API may now be used. For details, please check the API Doc
 
    **New in 0.13.0:**
 
