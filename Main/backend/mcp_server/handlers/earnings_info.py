@@ -17,12 +17,14 @@ logger = logging.getLogger(__name__)
 
 
 def _safe_df_to_dict(df) -> dict:
-    """Convert a DataFrame to dict, handling None and empty cases."""
+    """Convert a DataFrame to dict, handling None, empty, and Timestamp key cases."""
     if df is None or (isinstance(df, pd.DataFrame) and df.empty):
         return {}
     if isinstance(df, pd.DataFrame):
+        df = df.copy()
+        df.index = df.index.astype(str)
+        df.columns = df.columns.astype(str)
         return df.to_dict()
-    # Some yfinance properties return dicts directly
     if isinstance(df, dict):
         return df
     return {}

@@ -476,17 +476,14 @@ def chat_response_stream(request: HttpRequest) -> StreamingHttpResponse:
                 finally:
                     try:
                         loop.run_until_complete(stream_iter.aclose())
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.debug(f"stream_iter.aclose() error: {e}")
                     try:
                         loop.run_until_complete(loop.shutdown_asyncgens())
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.debug(f"shutdown_asyncgens() error: {e}")
                     loop.close()
-                    if previous_loop is not None:
-                        asyncio.set_event_loop(previous_loop)
-                    else:
-                        asyncio.set_event_loop(None)
+                    asyncio.set_event_loop(previous_loop)
 
                 final_response = ""
                 if stream_state:
@@ -597,6 +594,12 @@ def adv_response_stream(request: HttpRequest) -> StreamingHttpResponse:
                     user_time=request.GET.get('user_time')
                 )
 
+                previous_loop = None
+                try:
+                    previous_loop = asyncio.get_event_loop()
+                except RuntimeError:
+                    previous_loop = None
+
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
                 stream_iter = stream_generator.__aiter__()
@@ -626,13 +629,14 @@ def adv_response_stream(request: HttpRequest) -> StreamingHttpResponse:
                 finally:
                     try:
                         loop.run_until_complete(stream_iter.aclose())
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.debug(f"stream_iter.aclose() error: {e}")
                     try:
                         loop.run_until_complete(loop.shutdown_asyncgens())
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.debug(f"shutdown_asyncgens() error: {e}")
                     loop.close()
+                    asyncio.set_event_loop(previous_loop)
 
                 if source_entries:
                     integration.add_search_results(session_id, source_entries)

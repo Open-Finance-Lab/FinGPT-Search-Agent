@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/playwright/python:v1.48.0-jammy
+FROM mcr.microsoft.com/playwright/python:v1.58.0-jammy
 
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
     software-properties-common \
@@ -43,12 +43,12 @@ RUN sed -i 's/\r$//' /app/entrypoint.sh && chmod +x /app/entrypoint.sh
 
 RUN mkdir -p /app/staticfiles /app/media /app/logs /tmp/fingpt_cache
 
-RUN ln -sf /ms-playwright/chromium-*/chrome-linux/chrome /usr/bin/chromium-bundled
+RUN ln -sf /ms-playwright/chromium_headless_shell-*/chrome-headless-shell-linux64/chrome-headless-shell /usr/bin/chromium-bundled
 
 # Verify Playwright browsers are accessible
 RUN echo "Verifying Playwright browsers..." && \
     ls -la /ms-playwright/ && \
-    test -d /ms-playwright/chromium-* && \
+    test -d /ms-playwright/chromium_headless_shell-* && \
     echo "✓ Chromium browser found at /ms-playwright"
 
 

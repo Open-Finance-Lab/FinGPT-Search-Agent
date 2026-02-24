@@ -149,27 +149,27 @@ def scrape_with_playwright(url: str) -> str:
     try:
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True, args=['--no-sandbox', '--disable-setuid-sandbox'])
-            
-            context = browser.new_context(
-                user_agent=HEADERS['User-Agent'],
-                viewport={'width': 1280, 'height': 800}
-            )
-            
-            page = context.new_page()
-            
-            logger.info(f"Playwright scraping: {url}")
-            page.goto(url, timeout=30000, wait_until="domcontentloaded")
-            
             try:
-                page.wait_for_load_state("networkidle", timeout=5000)
-            except Exception:
-                pass
-                
-            text = page.evaluate("document.body.innerText")
-            
-            browser.close()
-            return _clean_text(text)
-            
+                context = browser.new_context(
+                    user_agent=HEADERS['User-Agent'],
+                    viewport={'width': 1280, 'height': 800}
+                )
+
+                page = context.new_page()
+
+                logger.info(f"Playwright scraping: {url}")
+                page.goto(url, timeout=30000, wait_until="domcontentloaded")
+
+                try:
+                    page.wait_for_load_state("networkidle", timeout=5000)
+                except Exception:
+                    pass
+
+                text = page.evaluate("document.body.innerText")
+                return _clean_text(text)
+            finally:
+                browser.close()
+
     except Exception as e:
         logger.error(f"Playwright scraping failed for {url}: {e}")
         return ""
