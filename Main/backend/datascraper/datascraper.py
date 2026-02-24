@@ -1153,6 +1153,7 @@ def create_agent_response_stream(
 
     async def _stream() -> AsyncIterator[str]:
         from agents import Runner
+        from agents.exceptions import MaxTurnsExceeded
         context = ""
         extracted_system_prompt = None
 
@@ -1180,6 +1181,7 @@ def create_agent_response_stream(
         full_prompt = context.rstrip()
         
         MAX_RETRIES = 2
+        MAX_AGENT_TURNS = int(os.getenv("AGENT_MAX_TURNS", "10"))
         retry_count = 0
         
         while True:
@@ -1233,14 +1235,14 @@ def create_agent_response_stream(
 
                     if not use_streaming:
                         logging.info(f"[AGENT STREAM] Non-streaming mode for {model}")
-                        result = await Runner.run(agent, current_full_prompt)
+                        result = await Runner.run(agent, current_full_prompt, max_turns=MAX_AGENT_TURNS)
                         final_text = result.final_output if isinstance(result.final_output, str) else str(result.final_output)
                         if final_text:
                             yield final_text
                             has_yielded = True
                             aggregated_chunks.append(final_text)
                     else:
-                        result = Runner.run_streamed(agent, current_full_prompt)
+                        result = Runner.run_streamed(agent, current_full_prompt, max_turns=MAX_AGENT_TURNS)
 
                         async for event in result.stream_events():
                             event_type = getattr(event, "type", "")
@@ -1262,16 +1264,22 @@ def create_agent_response_stream(
                 
                 break
 
+            except MaxTurnsExceeded as mte:
+                logging.error(f"[AGENT STREAM] Turn limit ({MAX_AGENT_TURNS}) reached: {mte}")
+                if not has_yielded:
+                    yield "I wasn't able to fully answer this question within the allowed steps. Please try rephrasing your question or breaking it into smaller parts."
+                break
+
             except Exception as stream_error:
                 if has_yielded:
                     logging.error(f"[AGENT STREAM] Error during streaming after content sent. Cannot retry. Error: {stream_error}")
                     raise stream_error
-                
+
                 retry_count += 1
                 if retry_count > MAX_RETRIES:
                     logging.error(f"[AGENT STREAM] Max retries ({MAX_RETRIES}) reached. Error: {stream_error}")
                     raise stream_error
-                
+
                 logging.warning(f"[AGENT STREAM] Error encountered: {stream_error}. Retrying ({retry_count}/{MAX_RETRIES})...")
                 await asyncio.sleep(1)
 
