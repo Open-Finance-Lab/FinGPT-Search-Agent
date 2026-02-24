@@ -18,6 +18,26 @@ logger = logging.getLogger(__name__)
 class GetStockAnalysisHandler(ToolHandler):
     """Handler for get_stock_analysis tool."""
 
+    @staticmethod
+    def _safe_dict(df):
+        """Convert DataFrame/dict to a JSON-safe dict.
+
+        Stringifies index and column labels so pd.Timestamp keys
+        don't crash json.dumps (which only applies default= to values, not keys).
+        """
+        if df is None:
+            return {}
+        if hasattr(df, 'empty') and df.empty:
+            return {}
+        if hasattr(df, 'to_dict'):
+            df = df.copy()
+            df.index = df.index.astype(str)
+            df.columns = df.columns.astype(str)
+            return df.to_dict()
+        if isinstance(df, dict):
+            return df
+        return {}
+
     async def execute(self, ctx: ToolContext) -> List[types.TextContent]:
         """Execute get_stock_analysis tool.
 
@@ -37,22 +57,11 @@ class GetStockAnalysisHandler(ToolHandler):
             run_in_executor(lambda: stock.analyst_price_targets),
         )
 
-        def _safe_dict(df):
-            if df is None:
-                return {}
-            if hasattr(df, 'empty') and df.empty:
-                return {}
-            if hasattr(df, 'to_dict'):
-                return df.to_dict()
-            if isinstance(df, dict):
-                return df
-            return {}
-
         analysis = {
-            "recommendations": _safe_dict(recommendations),
-            "recommendations_summary": _safe_dict(recommendations_summary),
-            "upgrades_downgrades": _safe_dict(upgrades_downgrades),
-            "analyst_price_targets": _safe_dict(price_targets),
+            "recommendations": self._safe_dict(recommendations),
+            "recommendations_summary": self._safe_dict(recommendations_summary),
+            "upgrades_downgrades": self._safe_dict(upgrades_downgrades),
+            "analyst_price_targets": self._safe_dict(price_targets),
         }
 
         return [types.TextContent(
