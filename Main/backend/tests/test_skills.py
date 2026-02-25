@@ -42,3 +42,46 @@ class TestBaseSkill:
 
         with pytest.raises(TypeError):
             IncompleteSkill()
+
+
+from planner.skills.summarize_page import SummarizePageSkill
+
+
+class TestSummarizePageSkill:
+    def setup_method(self):
+        self.skill = SummarizePageSkill()
+
+    def test_name(self):
+        assert self.skill.name == "summarize_page"
+
+    def test_no_tools(self):
+        assert self.skill.tools_allowed == []
+
+    def test_single_turn(self):
+        assert self.skill.max_turns == 1
+
+    def test_matches_summarize_with_prescraped(self):
+        score = self.skill.matches("summarize this page", has_prescraped=True, domain=None)
+        assert score >= 0.8
+
+    def test_matches_explain_with_prescraped(self):
+        score = self.skill.matches("what does this article say?", has_prescraped=True, domain=None)
+        assert score >= 0.7
+
+    def test_no_match_without_prescraped(self):
+        score = self.skill.matches("summarize this page", has_prescraped=False, domain=None)
+        assert score == 0.0
+
+    def test_no_match_stock_query(self):
+        score = self.skill.matches("what is AAPL stock price?", has_prescraped=True, domain=None)
+        assert score < 0.5
+
+    def test_build_instructions_includes_content(self):
+        content = "Page about earnings report..."
+        instructions = self.skill.build_instructions(pre_scraped_content=content)
+        assert content in instructions
+        assert "summarize" in instructions.lower() or "content" in instructions.lower()
+
+    def test_build_instructions_none_without_content(self):
+        instructions = self.skill.build_instructions(pre_scraped_content=None)
+        assert instructions is None
