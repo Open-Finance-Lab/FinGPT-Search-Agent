@@ -89,3 +89,47 @@ class TestPlanner:
             domain=None,
         )
         assert plan.skill_name == "technical_analysis"
+
+
+class TestPlannerEdgeCases:
+    def setup_method(self):
+        self.planner = Planner()
+
+    def test_empty_query(self):
+        plan = self.planner.plan(user_query="", system_prompt=None, domain=None)
+        assert plan.skill_name == "web_research"  # Fallback
+
+    def test_prescraped_but_data_query(self):
+        """Pre-scraped content exists but user asks for stock data → use data skill, not summarize."""
+        plan = self.planner.plan(
+            user_query="what is the PE ratio?",
+            system_prompt="[CURRENT PAGE CONTENT - Already scraped, do NOT re-scrape]:\n- From url:\nSome article",
+            domain="finance.yahoo.com",
+        )
+        assert plan.skill_name == "stock_fundamentals"
+        assert plan.instructions is None  # No override — use PromptBuilder
+
+    def test_multiple_intents_highest_wins(self):
+        """When query matches multiple skills, the highest-confidence one wins."""
+        plan = self.planner.plan(
+            user_query="what is AAPL RSI and earnings date?",
+            system_prompt=None,
+            domain=None,
+        )
+        # Both technical_analysis and financial_statements match.
+        # Either is acceptable, but it should not be web_research.
+        assert plan.skill_name in {"technical_analysis", "financial_statements"}
+
+    def test_none_system_prompt(self):
+        plan = self.planner.plan(user_query="hello", system_prompt=None, domain=None)
+        assert isinstance(plan, ExecutionPlan)
+
+    def test_summarize_with_web_search_only(self):
+        """Web search results (not page content) should NOT trigger SummarizePageSkill."""
+        plan = self.planner.plan(
+            user_query="summarize the search results",
+            system_prompt="[WEB SEARCH RESULTS]:\n- From google.com: some results",
+            domain=None,
+        )
+        # No [CURRENT PAGE CONTENT] marker → has_prescraped=False
+        assert plan.skill_name == "web_research"
