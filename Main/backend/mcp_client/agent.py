@@ -63,7 +63,9 @@ async def create_fin_agent(model: str = "gpt-4o-mini",
                           current_url: Optional[str] = None,
                           user_input: Optional[str] = None,
                           user_timezone: Optional[str] = None,
-                          user_time: Optional[str] = None):
+                          user_time: Optional[str] = None,
+                          allowed_tools: Optional[List[str]] = None,
+                          instructions_override: Optional[str] = None):
     """
     Create a financial agent with tools (URL scraping, SEC-EDGAR, filesystem).
 
@@ -74,16 +76,23 @@ async def create_fin_agent(model: str = "gpt-4o-mini",
         user_input: User's query
         user_timezone: User's IANA timezone (e.g., "America/New_York")
         user_time: User's current time in ISO format
+        allowed_tools: If provided, only these tool names are included.
+                       None means all tools; [] means no tools.
+        instructions_override: If provided, skip PromptBuilder and use this
+                               string as the agent's system instructions.
 
     Yields:
         Agent instance configured with tools
     """
-    instructions = _prompt_builder.build(
-        current_url=current_url,
-        system_prompt=system_prompt,
-        user_timezone=user_timezone,
-        user_time=user_time,
-    )
+    if instructions_override is not None:
+        instructions = instructions_override
+    else:
+        instructions = _prompt_builder.build(
+            current_url=current_url,
+            system_prompt=system_prompt,
+            user_timezone=user_timezone,
+            user_time=user_time,
+        )
 
     model_config = get_model_config(model)
     if not model_config:
@@ -119,82 +128,95 @@ async def create_fin_agent(model: str = "gpt-4o-mini",
 
     tools: List = []
 
-    url_tools = get_url_tools()
-    tools.extend(url_tools)
+    # Skip tool collection entirely when plan specifies zero tools
+    if allowed_tools is not None and len(allowed_tools) == 0:
+        logging.info("[AGENT] Skill specifies zero tools — skipping tool collection")
+    else:
+        url_tools = get_url_tools()
+        tools.extend(url_tools)
 
-    playwright_tools = get_playwright_tools()
-    tools.extend(playwright_tools)
+        playwright_tools = get_playwright_tools()
+        tools.extend(playwright_tools)
 
-    # Calculator tool for safe arithmetic (prevents LLM from doing math in text)
-    from datascraper.calculator_tool import get_calculator_tools
-    calculator_tools = get_calculator_tools()
-    tools.extend(calculator_tools)
+        # Calculator tool for safe arithmetic (prevents LLM from doing math in text)
+        from datascraper.calculator_tool import get_calculator_tools
+        calculator_tools = get_calculator_tools()
+        tools.extend(calculator_tools)
 
-    from .mcp_manager import MCPClientManager
-    from .tool_wrapper import convert_mcp_tool_to_python_callable
-    import asyncio
+        from .mcp_manager import MCPClientManager
+        from .tool_wrapper import convert_mcp_tool_to_python_callable
+        import asyncio
 
-    global _mcp_init_lock
+        global _mcp_init_lock
 
-    _mcp_manager = get_global_mcp_manager()
+        _mcp_manager = get_global_mcp_manager()
 
-    if _mcp_manager is None:
-        logging.warning("Global MCP manager not found, creating fallback instance")
+        if _mcp_manager is None:
+            logging.warning("Global MCP manager not found, creating fallback instance")
 
-        if _mcp_init_lock is None:
-            _mcp_init_lock = asyncio.Lock()
+            if _mcp_init_lock is None:
+                _mcp_init_lock = asyncio.Lock()
 
-        async with _mcp_init_lock:
-            _mcp_manager = get_global_mcp_manager()
-            if _mcp_manager is None:
-                manager = MCPClientManager()
-                try:
-                    await manager.connect_to_servers()
-                    _mcp_manager = manager
-                    logging.info("Fallback MCP manager connected")
-                except Exception as e:
-                    logging.error(f"Failed to initialize MCP tools: {e}")
-                    _mcp_manager = None
+            async with _mcp_init_lock:
+                _mcp_manager = get_global_mcp_manager()
+                if _mcp_manager is None:
+                    manager = MCPClientManager()
+                    try:
+                        await manager.connect_to_servers()
+                        _mcp_manager = manager
+                        logging.info("Fallback MCP manager connected")
+                    except Exception as e:
+                        logging.error(f"Failed to initialize MCP tools: {e}")
+                        _mcp_manager = None
 
-    if _mcp_manager:
-        try:
-            if _mcp_manager._loop:
-                import concurrent.futures
-                future = asyncio.run_coroutine_threadsafe(
-                    _mcp_manager.get_all_tools(),
-                    _mcp_manager._loop
-                )
-                try:
-                    mcp_tools = future.result(timeout=10)
-                except concurrent.futures.TimeoutError:
-                    logging.warning("Timeout fetching MCP tools")
-                    mcp_tools = []
-            else:
-                mcp_tools = await _mcp_manager.get_all_tools()
+        if _mcp_manager:
+            try:
+                if _mcp_manager._loop:
+                    import concurrent.futures
+                    future = asyncio.run_coroutine_threadsafe(
+                        _mcp_manager.get_all_tools(),
+                        _mcp_manager._loop
+                    )
+                    try:
+                        mcp_tools = future.result(timeout=10)
+                    except concurrent.futures.TimeoutError:
+                        logging.warning("Timeout fetching MCP tools")
+                        mcp_tools = []
+                else:
+                    mcp_tools = await _mcp_manager.get_all_tools()
 
-            if mcp_tools:
-                logging.info(f"Agent configured with {len(mcp_tools)} MCP tools")
+                if mcp_tools:
+                    logging.info(f"Agent configured with {len(mcp_tools)} MCP tools")
 
-                for tool in mcp_tools:
+                    for tool in mcp_tools:
 
-                    async def execute_mcp_tool(name, args, mgr=_mcp_manager):
-                        if mgr._loop:
-                            future = asyncio.run_coroutine_threadsafe(
-                                mgr.execute_tool(name, args),
-                                mgr._loop
-                            )
-                            return future.result(timeout=60)
-                        else:
-                            return await mgr.execute_tool(name, args)
+                        async def execute_mcp_tool(name, args, mgr=_mcp_manager):
+                            if mgr._loop:
+                                future = asyncio.run_coroutine_threadsafe(
+                                    mgr.execute_tool(name, args),
+                                    mgr._loop
+                                )
+                                return future.result(timeout=60)
+                            else:
+                                return await mgr.execute_tool(name, args)
 
-                    agent_tool = convert_mcp_tool_to_python_callable(tool, execute_mcp_tool)
-                    tools.append(agent_tool)
+                        agent_tool = convert_mcp_tool_to_python_callable(tool, execute_mcp_tool)
+                        tools.append(agent_tool)
 
-            else:
-                logging.warning("No MCP tools found")
+                else:
+                    logging.warning("No MCP tools found")
 
-        except Exception as e:
-            logging.error(f"Error fetching/adding MCP tools: {e}", exc_info=True)
+            except Exception as e:
+                logging.error(f"Error fetching/adding MCP tools: {e}", exc_info=True)
+
+        # Apply tool filter if specified
+        if allowed_tools is not None:
+            pre_filter_count = len(tools)
+            tools = [t for t in tools if t.name in allowed_tools]
+            logging.info(
+                f"[AGENT] Tool filter applied: {pre_filter_count} -> {len(tools)} "
+                f"(allowed: {allowed_tools})"
+            )
 
     try:
         # Handle foundation models that don't support "system" roles
