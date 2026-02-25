@@ -1179,9 +1179,29 @@ def create_agent_response_stream(
         # Use context directly - current user message is already in message_list
         # (views.py calls add_user_message before calling this function)
         full_prompt = context.rstrip()
-        
+
+        # --- Planner: select skill and constrain agent ---
+        from planner.planner import Planner
+        _planner = Planner()
+        _domain = None
+        if current_url:
+            from urllib.parse import urlparse
+            _domain = urlparse(current_url).netloc.lower() or None
+
+        execution_plan = _planner.plan(
+            user_query=user_input,
+            system_prompt=extracted_system_prompt,
+            domain=_domain,
+        )
+        logging.info(
+            f"[AGENT STREAM] Plan: skill={execution_plan.skill_name} "
+            f"tools={'ALL' if execution_plan.tools_allowed is None else len(execution_plan.tools_allowed)} "
+            f"max_turns={execution_plan.max_turns}"
+        )
+        # --- End planner ---
+
         MAX_RETRIES = 2
-        MAX_AGENT_TURNS = int(os.getenv("AGENT_MAX_TURNS", "10"))
+        MAX_AGENT_TURNS = execution_plan.max_turns
         retry_count = 0
         
         while True:
@@ -1196,7 +1216,9 @@ def create_agent_response_stream(
                     user_input=user_input,
                     current_url=current_url,
                     user_timezone=user_timezone,
-                    user_time=user_time
+                    user_time=user_time,
+                    allowed_tools=execution_plan.tools_allowed,
+                    instructions_override=execution_plan.instructions,
                 ) as agent:
                     if retry_count > 0:
                         logging.info(f"[AGENT STREAM] Retry attempt {retry_count}/{MAX_RETRIES}")
