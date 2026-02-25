@@ -18,7 +18,6 @@ from pathlib import Path
 backend_dir = Path(__file__).resolve().parent.parent
 load_dotenv(backend_dir / '.env')
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 from api.utils.llm_debug_logger import log_llm_payload

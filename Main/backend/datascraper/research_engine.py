@@ -66,6 +66,7 @@ Rules:
 - If the query asks about a SINGLE data point for ONE ticker (e.g., "What is AAPL price?"), set needs_decomposition=false.
 - If the query compares multiple tickers, asks for data across time periods, or requires combining multiple data types, set needs_decomposition=true and list sub-questions.
 - Each sub-question must have a "type": one of "numerical" (prices, ratios, revenue, volumes — answerable by Yahoo Finance API), "qualitative" (news, sentiment, analysis, forecasts — needs web search), or "analytical" (comparison, calculation — no search needed, derived from other answers).
+- If the query asks for a SINGLE aggregate metric from a SINGLE source (e.g., "total options volume today", "total revenue last quarter"), treat it as ONE numerical sub-question, NOT as a decomposition target. Only decompose when the user explicitly asks to compare multiple items or break down by category.
 - Maximum {max_sub} sub-questions. Prioritize the most important ones.
 
 Respond ONLY with JSON:
@@ -346,6 +347,13 @@ Rules:
 - Use LaTeX: $ for inline math, $$ for display equations.
 - Remove redundancies but keep all distinct data points.
 - If some data points could not be found, acknowledge this rather than guessing.
+
+SOURCE INTEGRITY:
+- Every numerical value you present must come directly from a single research result.
+- NEVER sum, average, or combine numbers across different sub-question results unless the original query explicitly asks for an aggregation across categories.
+- If data covers only a subset (e.g., 2 of 10 expiration dates), state "Based on [N] of [M] available items" and never present partial data as a complete total.
+- If the exact data point requested is not in the research results, say "This specific data point was not found in the research results" rather than constructing an approximation from related data.
+- For any calculations, show the formula and the exact source values used.
 """
 
 

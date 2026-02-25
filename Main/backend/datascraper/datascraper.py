@@ -40,7 +40,7 @@ BUFFET_AGENT_ENDPOINT = os.getenv("BUFFET_AGENT_ENDPOINT", BUFFET_AGENT_DEFAULT_
 BUFFET_AGENT_TIMEOUT = float(os.getenv("BUFFET_AGENT_TIMEOUT", "60"))
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "")
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 clients = {}
 
@@ -1153,6 +1153,7 @@ def create_agent_response_stream(
 
     async def _stream() -> AsyncIterator[str]:
         from agents import Runner
+        from agents.exceptions import MaxTurnsExceeded
         context = ""
         extracted_system_prompt = None
 
@@ -1160,7 +1161,10 @@ def create_agent_response_stream(
             content = msg.get("content", "")
             if content.startswith(SYSTEM_PREFIX):
                 actual_content = content.replace(SYSTEM_PREFIX, "", 1)
-                extracted_system_prompt = actual_content
+                if extracted_system_prompt:
+                    extracted_system_prompt += "\n\n" + actual_content
+                else:
+                    extracted_system_prompt = actual_content
                 continue
 
             matched, actual_content = _strip_any_prefix(content, USER_PREFIXES)
@@ -1178,8 +1182,36 @@ def create_agent_response_stream(
         # Use context directly - current user message is already in message_list
         # (views.py calls add_user_message before calling this function)
         full_prompt = context.rstrip()
-        
-        MAX_RETRIES = 2
+
+        # --- Planner: select skill and constrain agent ---
+        from planner.planner import Planner
+        from planner.plan import ExecutionPlan
+
+        try:
+            _planner = Planner()
+            _domain = None
+            if current_url:
+                from urllib.parse import urlparse
+                _domain = urlparse(current_url).netloc.lower() or None
+
+            execution_plan = _planner.plan(
+                user_query=user_input,
+                system_prompt=extracted_system_prompt,
+                domain=_domain,
+            )
+        except Exception as planner_err:
+            logging.warning(f"[Planner] Failed ({planner_err}), falling back to default plan")
+            execution_plan = ExecutionPlan(skill_name="fallback", tools_allowed=None, max_turns=10)
+
+        logging.info(
+            f"[AGENT STREAM] Plan: skill={execution_plan.skill_name} "
+            f"tools={'ALL' if execution_plan.tools_allowed is None else len(execution_plan.tools_allowed)} "
+            f"max_turns={execution_plan.max_turns}"
+        )
+        # --- End planner ---
+
+        MAX_RETRIES = 2 if execution_plan.skill_name != "fallback" else 1
+        MAX_AGENT_TURNS = execution_plan.max_turns
         retry_count = 0
         
         while True:
@@ -1194,7 +1226,9 @@ def create_agent_response_stream(
                     user_input=user_input,
                     current_url=current_url,
                     user_timezone=user_timezone,
-                    user_time=user_time
+                    user_time=user_time,
+                    allowed_tools=execution_plan.tools_allowed,
+                    instructions_override=execution_plan.instructions,
                 ) as agent:
                     if retry_count > 0:
                         logging.info(f"[AGENT STREAM] Retry attempt {retry_count}/{MAX_RETRIES}")
@@ -1233,14 +1267,14 @@ def create_agent_response_stream(
 
                     if not use_streaming:
                         logging.info(f"[AGENT STREAM] Non-streaming mode for {model}")
-                        result = await Runner.run(agent, current_full_prompt)
+                        result = await Runner.run(agent, current_full_prompt, max_turns=MAX_AGENT_TURNS)
                         final_text = result.final_output if isinstance(result.final_output, str) else str(result.final_output)
                         if final_text:
                             yield final_text
                             has_yielded = True
                             aggregated_chunks.append(final_text)
                     else:
-                        result = Runner.run_streamed(agent, current_full_prompt)
+                        result = Runner.run_streamed(agent, current_full_prompt, max_turns=MAX_AGENT_TURNS)
 
                         async for event in result.stream_events():
                             event_type = getattr(event, "type", "")
@@ -1262,16 +1296,22 @@ def create_agent_response_stream(
                 
                 break
 
+            except MaxTurnsExceeded as mte:
+                logging.error(f"[AGENT STREAM] Turn limit ({MAX_AGENT_TURNS}) reached: {mte}")
+                if not has_yielded:
+                    yield "I wasn't able to fully answer this question within the allowed steps. Please try rephrasing your question or breaking it into smaller parts."
+                break
+
             except Exception as stream_error:
                 if has_yielded:
                     logging.error(f"[AGENT STREAM] Error during streaming after content sent. Cannot retry. Error: {stream_error}")
                     raise stream_error
-                
+
                 retry_count += 1
                 if retry_count > MAX_RETRIES:
                     logging.error(f"[AGENT STREAM] Max retries ({MAX_RETRIES}) reached. Error: {stream_error}")
                     raise stream_error
-                
+
                 logging.warning(f"[AGENT STREAM] Error encountered: {stream_error}. Retrying ({retry_count}/{MAX_RETRIES})...")
                 await asyncio.sleep(1)
 

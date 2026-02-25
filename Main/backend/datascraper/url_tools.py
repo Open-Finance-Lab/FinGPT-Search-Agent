@@ -138,6 +138,52 @@ def _smart_compress(text: str, url: str) -> str:
 
 
 
+def _dismiss_cookie_consent(page) -> None:
+    """Try to dismiss cookie consent overlays by clicking common accept buttons."""
+    _CONSENT_SELECTORS = [
+        'button:has-text("Accept all")',
+        'button:has-text("Accept All")',
+        'button:has-text("Reject all")',
+        'button:has-text("Reject All")',
+        'button:has-text("I agree")',
+        'button:has-text("Agree")',
+        '[name="agree"]',
+        '.consent-overlay button.accept',
+        '#consent-page .accept-all',
+    ]
+    for selector in _CONSENT_SELECTORS:
+        try:
+            btn = page.locator(selector).first
+            if btn.is_visible(timeout=500):
+                btn.click(timeout=2000)
+                logger.info(f"[CONSENT] Dismissed cookie overlay via: {selector}")
+                # Consent click often triggers navigation/reload — wait for page to stabilize
+                try:
+                    page.wait_for_load_state("domcontentloaded", timeout=5000)
+                except Exception:
+                    pass
+                page.wait_for_timeout(2000)
+                return
+        except Exception:
+            continue
+
+
+def _extract_article_text(page) -> str:
+    """Try smart content selectors before falling back to full body."""
+    _CONTENT_SELECTORS = ['article', 'main', '[role="main"]', '.article-body', '#main-content', '.caas-body']
+    for selector in _CONTENT_SELECTORS:
+        try:
+            loc = page.locator(selector).first
+            if loc.is_visible(timeout=500):
+                text = loc.inner_text(timeout=3000)
+                if len(text) > 200:
+                    logger.info(f"[SCRAPE] Used selector '{selector}' ({len(text)} chars)")
+                    return text
+        except Exception:
+            continue
+    return page.evaluate("document.body ? document.body.innerText : ''")
+
+
 def scrape_with_playwright(url: str) -> str:
     """Fallback scraping using Playwright for SPAs."""
     try:
@@ -149,27 +195,28 @@ def scrape_with_playwright(url: str) -> str:
     try:
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True, args=['--no-sandbox', '--disable-setuid-sandbox'])
-            
-            context = browser.new_context(
-                user_agent=HEADERS['User-Agent'],
-                viewport={'width': 1280, 'height': 800}
-            )
-            
-            page = context.new_page()
-            
-            logger.info(f"Playwright scraping: {url}")
-            page.goto(url, timeout=30000, wait_until="domcontentloaded")
-            
             try:
-                page.wait_for_load_state("networkidle", timeout=5000)
-            except Exception:
-                pass
-                
-            text = page.evaluate("document.body.innerText")
-            
-            browser.close()
-            return _clean_text(text)
-            
+                context = browser.new_context(
+                    user_agent=HEADERS['User-Agent'],
+                    viewport={'width': 1280, 'height': 800}
+                )
+
+                page = context.new_page()
+
+                logger.info(f"Playwright scraping: {url}")
+                page.goto(url, timeout=30000, wait_until="domcontentloaded")
+
+                try:
+                    page.wait_for_load_state("networkidle", timeout=5000)
+                except Exception:
+                    pass
+
+                _dismiss_cookie_consent(page)
+                text = _extract_article_text(page)
+                return _clean_text(text)
+            finally:
+                browser.close()
+
     except Exception as e:
         logger.error(f"Playwright scraping failed for {url}: {e}")
         return ""
@@ -195,8 +242,25 @@ def _scrape_url_impl(url: str) -> str:
         for tag in soup(['script', 'style', 'noscript', 'iframe', 'svg', 'header', 'footer', 'nav', 'aside']):
             tag.decompose()
 
-        text = soup.get_text(separator='\n', strip=True)
-        text = _clean_text(text)
+        # Remove cookie/consent overlays (common class/id patterns)
+        _consent_re = re.compile(r'consent|cookie-banner|gdpr|privacy-policy|ccpa|cmp-container', re.IGNORECASE)
+        for el in soup.find_all(id=_consent_re):
+            el.decompose()
+        for el in soup.find_all(class_=_consent_re):
+            el.decompose()
+
+        # Prefer article/main content over full body
+        article_text = ""
+        for sel in ['article', 'main', '[role="main"]', '.caas-body', '.article-body']:
+            tag = soup.select_one(sel)
+            if tag:
+                candidate = tag.get_text(separator='\n', strip=True)
+                if len(candidate) > 200:
+                    article_text = candidate
+                    logger.info(f"[BS4] Used selector '{sel}' ({len(candidate)} chars)")
+                    break
+
+        text = _clean_text(article_text if article_text else soup.get_text(separator='\n', strip=True))
 
         is_suspicious = len(text) < 500 or "javascript" in text.lower() or "enable js" in text.lower()
 

@@ -12,11 +12,6 @@ from agents import function_tool
 
 logger = logging.getLogger(__name__)
 
-# Browser state (ephemeral per-request, managed via context manager)
-_current_browser = None
-_current_page = None
-
-
 @asynccontextmanager
 async def PlaywrightBrowser(timeout: int = 30000):
     """
@@ -26,8 +21,6 @@ async def PlaywrightBrowser(timeout: int = 30000):
     Args:
         timeout: Default timeout in milliseconds (default 30s)
     """
-    global _current_browser, _current_page
-
     try:
         from playwright.async_api import async_playwright
     except ImportError:
@@ -51,14 +44,10 @@ async def PlaywrightBrowser(timeout: int = 30000):
         context.set_default_timeout(timeout)
 
         page = await context.new_page()
-        _current_browser = browser
-        _current_page = page
 
         yield page
 
     finally:
-        _current_page = None
-        _current_browser = None
         if browser:
             await browser.close()
         if playwright:

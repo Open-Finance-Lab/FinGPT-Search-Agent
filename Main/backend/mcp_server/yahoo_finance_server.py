@@ -17,6 +17,7 @@ from mcp_server.handlers.stock_history import GetStockHistoryHandler
 from mcp_server.handlers.stock_analysis import GetStockAnalysisHandler
 from mcp_server.handlers.earnings_info import GetEarningsInfoHandler
 from mcp_server.handlers.options_chain import GetOptionsChainHandler
+from mcp_server.handlers.options_summary import GetOptionsSummaryHandler
 from mcp_server.handlers.holders import GetHoldersHandler
 from mcp_server.validation import validate_ticker, ValidationError
 from mcp_server.errors import ErrorType, ToolError
@@ -44,6 +45,7 @@ TOOL_HANDLERS: dict[str, ToolHandler] = {
     "get_stock_analysis": GetStockAnalysisHandler(),
     "get_earnings_info": GetEarningsInfoHandler(),
     "get_options_chain": GetOptionsChainHandler(),
+    "get_options_summary": GetOptionsSummaryHandler(),
     "get_holders": GetHoldersHandler(),
 }
 
@@ -159,6 +161,20 @@ async def handle_list_tools() -> List[types.Tool]:
                     "expiration": {
                         "type": "string",
                         "description": "Optional expiration date (e.g., '2026-03-21'). If omitted, returns the list of available expiration dates instead."
+                    }
+                },
+                "required": ["ticker"],
+            },
+        ),
+        types.Tool(
+            name="get_options_summary",
+            description="Get aggregated options activity summary for a stock: total call/put volume, open interest, and put/call ratio across the nearest expiration dates. Use this for questions about overall options activity, flow, or volume. For detailed strike-by-strike data, use get_options_chain instead.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "ticker": {
+                        "type": "string",
+                        "description": "The ticker symbol (e.g., 'AVGO', 'AAPL', 'TSLA')."
                     }
                 },
                 "required": ["ticker"],
