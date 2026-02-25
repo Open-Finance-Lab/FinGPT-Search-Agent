@@ -41,8 +41,10 @@ Refer to FinGPT Search Agent's [documentation](https://fingpt-search-agent-docs.
 ### Branching Strategy
 
 - `main` - Production-ready code
-- `fingpt_backend_prod` - Backend production branch
+- `fingpt_backend_prod` - Backend production staging branch (PRs into main for releases)
+- `fingpt_backend_dev` - Backend development branch (PRs into fingpt_backend_prod)
 - `fingpt_mcp_demo` - Project lead's branch. Receives the most updates in the highest frequency.
+- `doc` - Documentation updates branch
 - `[yourUserName]_[yourFocus]` - Individual branch
 
 ### Making Changes
@@ -55,8 +57,8 @@ Refer to FinGPT Search Agent's [documentation](https://fingpt-search-agent-docs.
    - Add comments for complex logic
 
 3. **Test Your Changes**
-   - Backend: `python test_models.py` (from `Main/backend/`)
-   - Frontend: `npm run build:full` (from `Main/frontend/`)
+   - Backend: `uv run python -m pytest tests/ -v` (from `Main/backend/`)
+   - Frontend: `bun run build:full` (from `Main/frontend/`)
    - Always make sure the search agent still runs and answer questions normally before testing features you've changed / added.
 
 4. **Commit Your Changes**
@@ -90,8 +92,8 @@ A contribution is considered complete when ALL of the following criteria are met
 ### Testing
 - [ ] Manual testing completed successfully
 - [ ] Existing functionality not broken
-- [ ] Backend tested with `python test_models.py` (if applicable)
-- [ ] Frontend built successfully with `npm run build:full` (if applicable)
+- [ ] Backend tested with `uv run python -m pytest tests/ -v` (if applicable)
+- [ ] Frontend built successfully with `bun run build:full` (if applicable)
 
 ### Documentation
 - [ ] Code comments added for complex logic
