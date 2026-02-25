@@ -85,3 +85,85 @@ class TestSummarizePageSkill:
     def test_build_instructions_none_without_content(self):
         instructions = self.skill.build_instructions(pre_scraped_content=None)
         assert instructions is None
+
+
+from planner.skills.stock_fundamentals import StockFundamentalsSkill
+from planner.skills.options_analysis import OptionsAnalysisSkill
+from planner.skills.financial_statements import FinancialStatementsSkill
+from planner.skills.technical_analysis import TechnicalAnalysisSkill
+
+
+class TestStockFundamentalsSkill:
+    def setup_method(self):
+        self.skill = StockFundamentalsSkill()
+
+    def test_tools(self):
+        assert set(self.skill.tools_allowed) == {"get_stock_info", "get_stock_history", "calculate"}
+
+    def test_max_turns(self):
+        assert self.skill.max_turns == 3
+
+    def test_matches_price_query(self):
+        assert self.skill.matches("what is AAPL stock price?", has_prescraped=False, domain=None) >= 0.7
+
+    def test_matches_market_cap(self):
+        assert self.skill.matches("market cap of MSFT", has_prescraped=False, domain=None) >= 0.7
+
+    def test_no_match_options(self):
+        assert self.skill.matches("show me AAPL options chain", has_prescraped=False, domain=None) < 0.5
+
+    def test_no_instructions_override(self):
+        assert self.skill.build_instructions() is None
+
+
+class TestOptionsAnalysisSkill:
+    def setup_method(self):
+        self.skill = OptionsAnalysisSkill()
+
+    def test_tools(self):
+        assert set(self.skill.tools_allowed) == {"get_options_summary", "get_options_chain", "calculate"}
+
+    def test_max_turns(self):
+        assert self.skill.max_turns == 3
+
+    def test_matches_options_volume(self):
+        assert self.skill.matches("total options volume for AVGO", has_prescraped=False, domain=None) >= 0.7
+
+    def test_matches_put_call_ratio(self):
+        assert self.skill.matches("put call ratio for TSLA", has_prescraped=False, domain=None) >= 0.7
+
+
+class TestFinancialStatementsSkill:
+    def setup_method(self):
+        self.skill = FinancialStatementsSkill()
+
+    def test_tools(self):
+        assert set(self.skill.tools_allowed) == {"get_stock_financials", "get_earnings_info", "calculate"}
+
+    def test_max_turns(self):
+        assert self.skill.max_turns == 3
+
+    def test_matches_revenue(self):
+        assert self.skill.matches("what was AAPL revenue last quarter?", has_prescraped=False, domain=None) >= 0.7
+
+    def test_matches_earnings(self):
+        assert self.skill.matches("when are MSFT earnings?", has_prescraped=False, domain=None) >= 0.7
+
+
+class TestTechnicalAnalysisSkill:
+    def setup_method(self):
+        self.skill = TechnicalAnalysisSkill()
+
+    def test_tools_include_tradingview(self):
+        tools = self.skill.tools_allowed
+        assert "get_coin_analysis" in tools
+        assert "calculate" in tools
+
+    def test_max_turns(self):
+        assert self.skill.max_turns == 3
+
+    def test_matches_rsi(self):
+        assert self.skill.matches("what is the RSI for AAPL?", has_prescraped=False, domain=None) >= 0.7
+
+    def test_matches_macd(self):
+        assert self.skill.matches("show MACD for BTC", has_prescraped=False, domain=None) >= 0.7
