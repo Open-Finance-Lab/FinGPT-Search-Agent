@@ -34,7 +34,7 @@ class StockFundamentalsSkill(BaseSkill):
 
     @property
     def max_turns(self) -> int:
-        return 3
+        return 5
 
     def matches(self, query: str, *, has_prescraped: bool, domain: str | None) -> float:
         for p in _COMPILED:

@@ -1161,7 +1161,10 @@ def create_agent_response_stream(
             content = msg.get("content", "")
             if content.startswith(SYSTEM_PREFIX):
                 actual_content = content.replace(SYSTEM_PREFIX, "", 1)
-                extracted_system_prompt = actual_content
+                if extracted_system_prompt:
+                    extracted_system_prompt += "\n\n" + actual_content
+                else:
+                    extracted_system_prompt = actual_content
                 continue
 
             matched, actual_content = _strip_any_prefix(content, USER_PREFIXES)

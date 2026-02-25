@@ -35,7 +35,7 @@ class TestPlanner:
         )
         assert plan.skill_name == "stock_fundamentals"
         assert "get_stock_info" in plan.tools_allowed
-        assert plan.max_turns == 3
+        assert plan.max_turns == 5
         assert plan.instructions is None
 
     def test_fallback_plan(self):

@@ -101,7 +101,7 @@ class TestStockFundamentalsSkill:
         assert set(self.skill.tools_allowed) == {"get_stock_info", "get_stock_history", "calculate"}
 
     def test_max_turns(self):
-        assert self.skill.max_turns == 3
+        assert self.skill.max_turns == 5
 
     def test_matches_price_query(self):
         assert self.skill.matches("what is AAPL stock price?", has_prescraped=False, domain=None) >= 0.7
@@ -124,7 +124,7 @@ class TestOptionsAnalysisSkill:
         assert set(self.skill.tools_allowed) == {"get_options_summary", "get_options_chain", "calculate"}
 
     def test_max_turns(self):
-        assert self.skill.max_turns == 3
+        assert self.skill.max_turns == 5
 
     def test_matches_options_volume(self):
         assert self.skill.matches("total options volume for AVGO", has_prescraped=False, domain=None) >= 0.7
@@ -141,7 +141,7 @@ class TestFinancialStatementsSkill:
         assert set(self.skill.tools_allowed) == {"get_stock_financials", "get_earnings_info", "calculate"}
 
     def test_max_turns(self):
-        assert self.skill.max_turns == 3
+        assert self.skill.max_turns == 5
 
     def test_matches_revenue(self):
         assert self.skill.matches("what was AAPL revenue last quarter?", has_prescraped=False, domain=None) >= 0.7
@@ -160,7 +160,7 @@ class TestTechnicalAnalysisSkill:
         assert "calculate" in tools
 
     def test_max_turns(self):
-        assert self.skill.max_turns == 3
+        assert self.skill.max_turns == 5
 
     def test_matches_rsi(self):
         assert self.skill.matches("what is the RSI for AAPL?", has_prescraped=False, domain=None) >= 0.7
