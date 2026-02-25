@@ -17,9 +17,27 @@ Available Models
 ~~~~~~~~~~~~~~~~
 
 **Supported Models:**
-- **FinGPT-Light**: Fast and efficient light-weight model.
-- **FinGPT**: State-of-the-art financial model.
-- **Buffet-Agent**: The minds of Warren Buffet, in the palm of your hands.
+
+.. list-table::
+   :widths: 20 15 30 35
+   :header-rows: 1
+
+   * - Model ID
+     - Provider
+     - Underlying Model
+     - Description
+   * - ``FinGPT``
+     - Google
+     - ``gemini-3-flash-preview``
+     - Default model. 1M token context window. Best for comprehensive analysis.
+   * - ``FinGPT-Light``
+     - OpenAI
+     - ``gpt-5.1-chat-latest``
+     - Fast and efficient. 128K token context window.
+   * - ``Buffet-Agent``
+     - Custom
+     - Hugging Face endpoint
+     - Fine-tuned financial model with specialized knowledge.
 
 Switching Models
 ~~~~~~~~~~~~~~~~
@@ -36,8 +54,28 @@ MCP enables advanced agent capabilities through tool integration.
 MCP Features
 ~~~~~~~~~~~~
 
-- **Yahoo Finance MCP**: Directly fetches real-time information via the ``yfinance API``.
-- **SEC-EDGAR MCP**: Enables the agent to directly access SEC filings like 10-K, 10-Q, 8-K, etc and even extract data from them.
+- **Yahoo Finance MCP**: Directly fetches real-time market data, stock prices, and company profiles via the ``yfinance`` API.
+- **SEC-EDGAR MCP**: Enables the agent to directly access SEC filings like 10-K, 10-Q, 8-K and extract financial data from them.
+- **TradingView MCP**: Fetches technical analysis indicators, oscillators, moving averages, and market screener data.
+- **Filesystem MCP**: Provides read access to local data files within the application directory.
+
+Deep Research Mode
+------------------
+
+For complex financial questions that require synthesizing information from multiple sources, the agent offers a **Deep Research Mode**.
+
+How It Works
+~~~~~~~~~~~~
+
+1. **Query Decomposition**: The agent's ``QueryAnalyzer`` breaks your question into typed sub-questions (numerical, qualitative, analytical).
+2. **Parallel Execution**: The ``ResearchExecutor`` routes each sub-question to the best source — MCP tools for numerical data, web search for qualitative context.
+3. **Gap Detection**: The ``GapDetector`` identifies any missing information and triggers follow-up searches.
+4. **Synthesis**: The ``Synthesizer`` combines all findings into a coherent, well-sourced response.
+
+To use deep research mode, click the **Advanced Ask** button or select "research" mode via the API.
+
+.. note::
+   Research mode typically takes 15-90 seconds depending on query complexity. The agent performs multiple parallel searches and synthesizes the results.
 
 Custom URL Preferences
 ----------------------
@@ -72,7 +110,8 @@ Query Modes
 - Best for page-specific questions
 
 **Advanced Ask:**
-- Mainly searches the open domain
+- Searches the open domain and uses MCP tools
+- Activates the deep research pipeline for complex queries
 - More comprehensive responses
 - Best for research and analysis
 
@@ -121,7 +160,12 @@ Performance Optimization
 Smart Context Management
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
-FinGPT includes production-grade memory powered by **Mem0**:
+FinGPT includes a two-tier context management system:
+
+- **Unified Context Manager** (default): Session-based context tracking with JSON structure for fast, in-memory conversation management.
+- **Mem0 Context Manager** (optional): Production-grade long-term memory powered by **Mem0** for sessions exceeding 100,000 tokens.
+
+The active mode is configured via the ``CONTEXT_MANAGER_MODE`` environment variable (``unified`` or ``mem0``).
 
 **How it works:**
 
@@ -149,4 +193,4 @@ Common Issues
 
 - Reduce number of preferred URLs
 - Check internet connection
-- Well it is simply just slow because it's usually searches at least 10 different sources, so it takes a while to scrape and process all of them.
+- Research mode searches multiple sources in parallel and synthesizes results, which typically takes 15-90 seconds

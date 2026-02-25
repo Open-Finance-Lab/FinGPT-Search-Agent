@@ -34,7 +34,7 @@ Rebuild the extension when frontend sources change:
 .. code-block:: powershell
 
    cd Main\frontend
-   npm install
-   npm run build:full
+   bun install
+   bun run build:full
 
 Then load the unpacked extension from ``Main\frontend\dist`` via ``edge://extensions`` or ``chrome://extensions``.

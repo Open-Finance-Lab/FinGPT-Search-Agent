@@ -19,6 +19,8 @@ def convert_mcp_tool_to_python_callable(tool: MCPTool, execute_fn: Callable) -> 
     """
     
     tool_name = tool.name
+    if not tool_name.isidentifier():
+        raise ValueError(f"Unsafe MCP tool name rejected: {tool_name!r}")
     description = tool.description or ""
     input_schema = tool.inputSchema or {}
     properties = input_schema.get("properties", {})
@@ -72,7 +74,7 @@ async def {tool_name}({param_str}) -> str:
                 try:
                     if val.strip().startswith(('{{', '[')):
                         return json.loads(val)
-                except:
+                except (json.JSONDecodeError, ValueError):
                     pass
         return val
 

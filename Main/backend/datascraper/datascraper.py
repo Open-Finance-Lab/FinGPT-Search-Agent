@@ -1,3 +1,4 @@
+import json
 import os
 import logging
 import asyncio
@@ -39,7 +40,7 @@ BUFFET_AGENT_ENDPOINT = os.getenv("BUFFET_AGENT_ENDPOINT", BUFFET_AGENT_DEFAULT_
 BUFFET_AGENT_TIMEOUT = float(os.getenv("BUFFET_AGENT_TIMEOUT", "60"))
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "")
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 clients = {}
 
@@ -919,9 +920,16 @@ def create_advanced_response_streaming(
     return _research_stream(), state
 
 
-def create_agent_response(user_input: str, message_list: list[dict], model: str = "o4-mini", current_url: str = None, user_timezone: str = None, user_time: str = None) -> str:
+def create_agent_response(
+        user_input: str,
+        message_list: list[dict],
+        model: str = "o4-mini",
+        current_url: str = None,
+        user_timezone: str = None,
+        user_time: str = None
+) -> Tuple[str, List[Dict[str, str]]]:
     """
-    Creates a response using the Agent with tools (URL scraping, SEC-EDGAR, filesystem).
+    Creates a response using the Agent with MCP tools and returns tool source info.
     Falls back to create_response() (direct LLM) only if agent fails.
 
     Args:
@@ -933,10 +941,8 @@ def create_agent_response(user_input: str, message_list: list[dict], model: str 
         user_time: User's current time in ISO format
 
     Returns:
-        Generated response from the agent
+        (response_text, tool_sources) tuple
     """
-
-
     from datascraper.quality_logger import QualityTracker
     qt = QualityTracker(mode="thinking", query=user_input, model=model)
 
@@ -950,7 +956,7 @@ def create_agent_response(user_input: str, message_list: list[dict], model: str 
         qt.flag("buffet_fallback")
         response = create_response(user_input, message_list, model)
         qt.complete(response)
-        return response
+        return response, []
 
     try:
         if not validate_model_support(model, "mcp"):
@@ -960,14 +966,15 @@ def create_agent_response(user_input: str, message_list: list[dict], model: str 
             qt.flag("model_unsupported_mcp")
             response = create_response(user_input, message_list, model)
             qt.complete(response)
-            return response
+            return response, []
 
-        logging.info(f"[AGENT] Attempting agent response with {model} ({actual_model_name})")
-
-        response = asyncio.run(_create_agent_response_async(user_input, message_list, model, current_url, user_timezone, user_time))
+        logging.info(f"[AGENT] Attempting agent response for {model} ({actual_model_name})")
+        response, sources = asyncio.run(_create_agent_response_async(
+            user_input, message_list, model, current_url, user_timezone, user_time
+        ))
         qt.set_data_source("mcp_tools")
         qt.complete(response)
-        return response
+        return response, sources
 
     except Exception as e:
         logging.error(f"Agent response failed for {model} ({actual_model_name}): {e}")
@@ -976,32 +983,38 @@ def create_agent_response(user_input: str, message_list: list[dict], model: str 
         qt.flag("agent_error", message=str(e))
         response = create_response(user_input, message_list, model)
         qt.complete(response)
-        return response
+        return response, []
 
-async def _create_agent_response_async(user_input: str, message_list: list[dict], model: str, current_url: str = None, user_timezone: str = None, user_time: str = None) -> str:
+
+async def _create_agent_response_async(
+        user_input: str,
+        message_list: list[dict],
+        model: str,
+        current_url: str = None,
+        user_timezone: str = None,
+        user_time: str = None
+) -> Tuple[str, List[Dict[str, str]]]:
     """
-    Async helper for creating agent response with MCP tools.
-
-    Args:
-        user_input: The user's question
-        message_list: Previous conversation history
-        model: Model ID to use
-        current_url: Current webpage URL for context (informational only)
-        user_timezone: User's IANA timezone
-        user_time: User's current time in ISO format
-
-    Returns:
-        Generated response string
+    Async helper that returns agent response text and tool source information.
+    Single path used by both API and frontend for thinking-mode sync requests.
     """
     from mcp_client.agent import create_fin_agent
-    from agents import Runner
+    from agents import Runner, set_tracing_disabled
+
+    # Respect per-model tracing config (env override > model config > default True)
+    _model_config = get_model_config(model)
+    env_tracing = os.getenv("AGENT_TRACING")
+    if env_tracing is not None:
+        tracing_enabled = env_tracing.lower() in ("true", "1")
+    else:
+        tracing_enabled = _model_config.get("tracing", True) if _model_config else True
+    set_tracing_disabled(not tracing_enabled)
 
     context = ""
     extracted_system_prompt = None
 
     for msg in message_list:
         content = msg.get("content", "")
-
         if content.startswith(SYSTEM_PREFIX):
             actual_content = content.replace(SYSTEM_PREFIX, "", 1)
             if extracted_system_prompt:
@@ -1009,21 +1022,16 @@ async def _create_agent_response_async(user_input: str, message_list: list[dict]
             else:
                 extracted_system_prompt = actual_content
             continue
-
         matched, actual_content = _strip_any_prefix(content, USER_PREFIXES)
         if matched:
             context += f"User: {actual_content}\n"
             continue
-
         matched, actual_content = _strip_any_prefix(content, ASSISTANT_PREFIXES)
         if matched:
             context += f"Assistant: {actual_content}\n"
             continue
-
         context += f"User: {content}\n"
 
-    # Use context directly - current user message is already in message_list
-    # (views.py calls add_user_message before calling this function)
     full_prompt = context.rstrip()
 
     async with create_fin_agent(
@@ -1036,8 +1044,7 @@ async def _create_agent_response_async(user_input: str, message_list: list[dict]
     ) as agent:
         logging.info(f"[AGENT] Running agent with MCP tools")
         logging.info(f"[AGENT] Current URL: {current_url}")
-        
-        # If this a foundation model, prepend instructions to the first prompt
+
         if hasattr(agent, "_foundation_instructions") and agent._foundation_instructions:
             logging.info("[AGENT] Prepending foundation instructions to prompt")
             full_prompt = f"[SYSTEM MESSAGE]: {agent._foundation_instructions}\n\n{full_prompt}"
@@ -1057,6 +1064,10 @@ async def _create_agent_response_async(user_input: str, message_list: list[dict]
             final_output = ""
         logging.info(f"[AGENT] Result length: {len(final_output)}")
 
+        # Extract tool sources from the result
+        tool_sources = _extract_tool_sources_from_result(result)
+        logging.info(f"[AGENT] Extracted {len(tool_sources)} tool sources")
+
         # Post-generation numerical validation
         try:
             from datascraper.numerical_validator import validate_numerical_accuracy
@@ -1064,7 +1075,50 @@ async def _create_agent_response_async(user_input: str, message_list: list[dict]
         except Exception as val_err:
             logging.debug(f"[AGENT] Numerical validation error (non-critical): {val_err}")
 
-        return final_output
+        return final_output, tool_sources
+
+
+def _extract_tool_sources_from_result(run_result) -> List[Dict[str, str]]:
+    """
+    Extract tool usage information from an agent Runner result.
+    Inspects raw_responses for function_call items across all model turns.
+    Returns a list of source dicts describing each MCP tool call,
+    deduplicated by call_id.
+    """
+    sources = []
+    seen_call_ids = set()
+    try:
+        # raw_responses contains ModelResponse objects from each model turn
+        raw_responses = getattr(run_result, 'raw_responses', None) or []
+        for resp in raw_responses:
+            resp_output = getattr(resp, 'output', None) or []
+            for item in resp_output:
+                item_type = getattr(item, 'type', '')
+                if item_type == 'function_call':
+                    tool_name = getattr(item, 'name', '') or ''
+                    call_id = getattr(item, 'call_id', '') or ''
+                    arguments = getattr(item, 'arguments', '') or ''
+                    if call_id in seen_call_ids:
+                        continue
+                    seen_call_ids.add(call_id)
+                    source_entry = {
+                        "type": "tool",
+                        "tool_name": tool_name,
+                        "call_id": call_id,
+                    }
+                    try:
+                        args = json.loads(arguments) if isinstance(arguments, str) else arguments
+                        if isinstance(args, dict):
+                            for key in ("symbol", "ticker", "query", "url", "filing_type", "company"):
+                                if key in args:
+                                    source_entry[key] = args[key]
+                    except (json.JSONDecodeError, TypeError):
+                        pass
+                    sources.append(source_entry)
+        logging.info(f"[TOOL SOURCES] Extracted {len(sources)} tool calls from {len(raw_responses)} model responses")
+    except Exception as e:
+        logging.debug(f"[TOOL SOURCES] Error extracting tool sources: {e}")
+    return sources
 
 
 def create_agent_response_stream(
@@ -1099,6 +1153,7 @@ def create_agent_response_stream(
 
     async def _stream() -> AsyncIterator[str]:
         from agents import Runner
+        from agents.exceptions import MaxTurnsExceeded
         context = ""
         extracted_system_prompt = None
 
@@ -1106,7 +1161,10 @@ def create_agent_response_stream(
             content = msg.get("content", "")
             if content.startswith(SYSTEM_PREFIX):
                 actual_content = content.replace(SYSTEM_PREFIX, "", 1)
-                extracted_system_prompt = actual_content
+                if extracted_system_prompt:
+                    extracted_system_prompt += "\n\n" + actual_content
+                else:
+                    extracted_system_prompt = actual_content
                 continue
 
             matched, actual_content = _strip_any_prefix(content, USER_PREFIXES)
@@ -1124,8 +1182,36 @@ def create_agent_response_stream(
         # Use context directly - current user message is already in message_list
         # (views.py calls add_user_message before calling this function)
         full_prompt = context.rstrip()
-        
-        MAX_RETRIES = 2
+
+        # --- Planner: select skill and constrain agent ---
+        from planner.planner import Planner
+        from planner.plan import ExecutionPlan
+
+        try:
+            _planner = Planner()
+            _domain = None
+            if current_url:
+                from urllib.parse import urlparse
+                _domain = urlparse(current_url).netloc.lower() or None
+
+            execution_plan = _planner.plan(
+                user_query=user_input,
+                system_prompt=extracted_system_prompt,
+                domain=_domain,
+            )
+        except Exception as planner_err:
+            logging.warning(f"[Planner] Failed ({planner_err}), falling back to default plan")
+            execution_plan = ExecutionPlan(skill_name="fallback", tools_allowed=None, max_turns=10)
+
+        logging.info(
+            f"[AGENT STREAM] Plan: skill={execution_plan.skill_name} "
+            f"tools={'ALL' if execution_plan.tools_allowed is None else len(execution_plan.tools_allowed)} "
+            f"max_turns={execution_plan.max_turns}"
+        )
+        # --- End planner ---
+
+        MAX_RETRIES = 2 if execution_plan.skill_name != "fallback" else 1
+        MAX_AGENT_TURNS = execution_plan.max_turns
         retry_count = 0
         
         while True:
@@ -1140,7 +1226,9 @@ def create_agent_response_stream(
                     user_input=user_input,
                     current_url=current_url,
                     user_timezone=user_timezone,
-                    user_time=user_time
+                    user_time=user_time,
+                    allowed_tools=execution_plan.tools_allowed,
+                    instructions_override=execution_plan.instructions,
                 ) as agent:
                     if retry_count > 0:
                         logging.info(f"[AGENT STREAM] Retry attempt {retry_count}/{MAX_RETRIES}")
@@ -1179,14 +1267,14 @@ def create_agent_response_stream(
 
                     if not use_streaming:
                         logging.info(f"[AGENT STREAM] Non-streaming mode for {model}")
-                        result = await Runner.run(agent, current_full_prompt)
+                        result = await Runner.run(agent, current_full_prompt, max_turns=MAX_AGENT_TURNS)
                         final_text = result.final_output if isinstance(result.final_output, str) else str(result.final_output)
                         if final_text:
                             yield final_text
                             has_yielded = True
                             aggregated_chunks.append(final_text)
                     else:
-                        result = Runner.run_streamed(agent, current_full_prompt)
+                        result = Runner.run_streamed(agent, current_full_prompt, max_turns=MAX_AGENT_TURNS)
 
                         async for event in result.stream_events():
                             event_type = getattr(event, "type", "")
@@ -1208,16 +1296,22 @@ def create_agent_response_stream(
                 
                 break
 
+            except MaxTurnsExceeded as mte:
+                logging.error(f"[AGENT STREAM] Turn limit ({MAX_AGENT_TURNS}) reached: {mte}")
+                if not has_yielded:
+                    yield "I wasn't able to fully answer this question within the allowed steps. Please try rephrasing your question or breaking it into smaller parts."
+                break
+
             except Exception as stream_error:
                 if has_yielded:
                     logging.error(f"[AGENT STREAM] Error during streaming after content sent. Cannot retry. Error: {stream_error}")
                     raise stream_error
-                
+
                 retry_count += 1
                 if retry_count > MAX_RETRIES:
                     logging.error(f"[AGENT STREAM] Max retries ({MAX_RETRIES}) reached. Error: {stream_error}")
                     raise stream_error
-                
+
                 logging.warning(f"[AGENT STREAM] Error encountered: {stream_error}. Retrying ({retry_count}/{MAX_RETRIES})...")
                 await asyncio.sleep(1)
 

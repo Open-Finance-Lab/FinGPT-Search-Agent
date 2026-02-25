@@ -8,28 +8,36 @@ FinGPT Search Agent
    :caption: Contents:
 
    introduction
+   updates
    install_agent_with_installer
    manual_install
    start_agent_mac
    start_agent_win
    usage/index
+   api_reference
    mcp_tools
    project_structure
+   case_studies
    code_of_conduct
 
 .. note::
-   This documentation covers version 0.10.1 of FinGPT Search Agent.
+   This documentation covers version 0.13.1 of FinGPT Search Agent.
    
-   **New in 0.10.1:**
+   **New in 0.13.1:**
    
-   - **MCP Tool Integration**: Built-in support for SEC-EDGAR and Yahoo Finance tools.
-   - **Performance Improvements**: Unified context manager for faster response times.
-   - **Modern Workflow**: Fully migrated to ``uv`` and ``bun`` for optimized development.
+   - **API Now Supported**: FinGPT API may now be used. For details, please check the API Doc
+
+   **New in 0.13.0:**
+
+   - **Deep Research Mode**: Multi-step research engine with query decomposition, parallel execution, gap detection, and synthesis.
+   - **OpenAI-Compatible API**: RESTful ``/v1/chat/completions`` endpoint for programmatic access.
+   - **TradingView MCP**: Real-time technical analysis and screener data via Model Context Protocol.
+   - **Gemini Integration**: Google Gemini models supported as foundation model providers.
 
 Features
 --------
 
-- **Multi-Model Support**: Choose between OpenAI (GPT-4, GPT-3.5), DeepSeek, and Anthropic (Claude) models
+- **Multi-Model Support**: Choose between OpenAI, Google Gemini, DeepSeek, Anthropic (Claude), and custom fine-tuned models
 - **MCP Support**: Model Context Protocol integration for enhanced agent capabilities
 - **Browser Extension**: Seamless integration with major financial websites
 - **Real-time Web Scraping**: Extract and analyze content from financial websites

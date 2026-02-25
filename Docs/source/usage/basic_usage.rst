@@ -64,6 +64,10 @@ The FinGPT Search Agent automatically activates on the following financial websi
 * **CDM/FINOS**: ``https://cdm.finos.org/*`` and ``https://www.finos.org/*``
 * **MathCup**: ``https://mathcup.com/*``
 * **CNBC**: ``https://www.cnbc.com/*``
+* **TradingView**: ``https://www.tradingview.com/*``
+* **XYZ Terminal**: ``https://xyzterminal.com/*`` and ``https://app.xyzterminal.com/*``
+* **Kalshi**: ``https://kalshi.com/*``
+* **Polymarket**: ``https://polymarket.com/*``
 
 When you navigate to any of these websites, the FinGPT popup will automatically appear, ready for your financial queries.
 

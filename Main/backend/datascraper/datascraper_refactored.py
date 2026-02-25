@@ -266,6 +266,10 @@ class UnifiedDataScraper:
                 coro = self.create_response_async(session_id, model, stream)
                 return loop.run_until_complete(coro)
         finally:
+            try:
+                loop.run_until_complete(loop.shutdown_asyncgens())
+            except Exception:
+                pass
             loop.close()
 
     async def create_agent_response_async(
@@ -332,6 +336,10 @@ class UnifiedDataScraper:
                 )
             )
         finally:
+            try:
+                loop.run_until_complete(loop.shutdown_asyncgens())
+            except Exception:
+                pass
             loop.close()
 
     async def create_web_search_response_async(
@@ -405,6 +413,10 @@ class UnifiedDataScraper:
                 )
             )
         finally:
+            try:
+                loop.run_until_complete(loop.shutdown_asyncgens())
+            except Exception:
+                pass
             loop.close()
 
 

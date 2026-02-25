@@ -9,6 +9,7 @@ import csv
 import asyncio
 import logging
 import re
+import time
 from typing import Any, Dict, List, Optional, Tuple
 from datetime import datetime
 from pathlib import Path
@@ -18,6 +19,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.cache import cache_page
 from django.http import JsonResponse, StreamingHttpResponse, HttpRequest
 from django.conf import settings
+from django_ratelimit.decorators import ratelimit
 
 from datascraper import datascraper as ds
 from datascraper.preferred_links_manager import get_manager
@@ -88,7 +90,7 @@ def _get_session_id(request: HttpRequest) -> str:
         try:
             body_data = json.loads(request.body)
             custom_session_id = body_data.get('session_id')
-        except:
+        except (json.JSONDecodeError, ValueError):
             pass
 
     if custom_session_id:
@@ -113,6 +115,7 @@ def _build_status_frame(label: str, detail: Optional[str] = None, url: Optional[
  
 
 @csrf_exempt
+@ratelimit(key='ip', rate=settings.API_RATE_LIMIT, method='ALL', block=True)
 def chat_response(request: HttpRequest) -> JsonResponse:
     """
     Thinking Mode: Process user questions using LLM with available MCP tools.
@@ -152,14 +155,15 @@ def chat_response(request: HttpRequest) -> JsonResponse:
 
         for model in models:
             try:
-                import time
                 start_time = time.time()
 
-                response = ds.create_agent_response(
+                response, _sources = ds.create_agent_response(
                     user_input=question,
                     message_list=messages,
                     model=model,
-                    current_url=current_url
+                    current_url=current_url,
+                    user_timezone=request.GET.get('user_timezone'),
+                    user_time=request.GET.get('user_time')
                 )
 
                 responses[model] = response
@@ -200,6 +204,7 @@ def chat_response(request: HttpRequest) -> JsonResponse:
 
 
 @csrf_exempt
+@ratelimit(key='ip', rate=settings.API_RATE_LIMIT, method='ALL', block=True)
 def adv_response(request: HttpRequest) -> JsonResponse:
     """
     Extensive Mode: Search for information ANYWHERE on the web using web_search.
@@ -246,7 +251,6 @@ def adv_response(request: HttpRequest) -> JsonResponse:
 
         for model in models:
             try:
-                import time
                 start_time = time.time()
 
                 response, sources = ds.create_advanced_response(
@@ -304,6 +308,7 @@ def adv_response(request: HttpRequest) -> JsonResponse:
 
 
 @csrf_exempt
+@ratelimit(key='ip', rate=settings.API_RATE_LIMIT, method='ALL', block=True)
 def agent_chat_response(request: HttpRequest) -> JsonResponse:
     """
     Process chat response via Agent with MCP tools (SEC-EDGAR, filesystem).
@@ -340,14 +345,15 @@ def agent_chat_response(request: HttpRequest) -> JsonResponse:
 
         for model in models:
             try:
-                import time
                 start_time = time.time()
 
-                response = ds.create_agent_response(
+                response, _sources = ds.create_agent_response(
                     user_input=question,
                     message_list=messages,
                     model=model,
-                    current_url=current_url
+                    current_url=current_url,
+                    user_timezone=request.GET.get('user_timezone'),
+                    user_time=request.GET.get('user_time')
                 )
 
                 responses[model] = response
@@ -389,6 +395,7 @@ def agent_chat_response(request: HttpRequest) -> JsonResponse:
 
 
 @csrf_exempt
+@ratelimit(key='ip', rate=settings.API_RATE_LIMIT, method='ALL', block=True)
 def chat_response_stream(request: HttpRequest) -> StreamingHttpResponse:
     """
     Thinking Mode Streaming: Process user questions using LLM with available MCP tools.
@@ -429,7 +436,6 @@ def chat_response_stream(request: HttpRequest) -> StreamingHttpResponse:
                 yield b'event: connected\ndata: {"status": "connected"}\n\n'
                 yield _build_status_frame("Preparing context")
 
-                import time
                 start_time = time.time()
                 aggregated_chunks: List[str] = []
 
@@ -468,11 +474,16 @@ def chat_response_stream(request: HttpRequest) -> StreamingHttpResponse:
                 except StopAsyncIteration:
                     pass
                 finally:
+                    try:
+                        loop.run_until_complete(stream_iter.aclose())
+                    except Exception as e:
+                        logger.debug(f"stream_iter.aclose() error: {e}")
+                    try:
+                        loop.run_until_complete(loop.shutdown_asyncgens())
+                    except Exception as e:
+                        logger.debug(f"shutdown_asyncgens() error: {e}")
                     loop.close()
-                    if previous_loop is not None:
-                        asyncio.set_event_loop(previous_loop)
-                    else:
-                        asyncio.set_event_loop(None)
+                    asyncio.set_event_loop(previous_loop)
 
                 final_response = ""
                 if stream_state:
@@ -525,6 +536,7 @@ def chat_response_stream(request: HttpRequest) -> StreamingHttpResponse:
 
 
 @csrf_exempt
+@ratelimit(key='ip', rate=settings.API_RATE_LIMIT, method='ALL', block=True)
 def adv_response_stream(request: HttpRequest) -> StreamingHttpResponse:
     """Process streaming advanced chat response from selected models using SSE"""
     try:
@@ -569,7 +581,6 @@ def adv_response_stream(request: HttpRequest) -> StreamingHttpResponse:
                 yield _build_status_frame("Preparing context", "Research mode")
                 yield _build_status_frame("Searching the web")
 
-                import time
                 start_time = time.time()
                 full_response = ""
                 source_entries = []
@@ -582,6 +593,12 @@ def adv_response_stream(request: HttpRequest) -> StreamingHttpResponse:
                     user_timezone=request.GET.get('user_timezone'),
                     user_time=request.GET.get('user_time')
                 )
+
+                previous_loop = None
+                try:
+                    previous_loop = asyncio.get_event_loop()
+                except RuntimeError:
+                    previous_loop = None
 
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
@@ -612,13 +629,14 @@ def adv_response_stream(request: HttpRequest) -> StreamingHttpResponse:
                 finally:
                     try:
                         loop.run_until_complete(stream_iter.aclose())
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.debug(f"stream_iter.aclose() error: {e}")
                     try:
                         loop.run_until_complete(loop.shutdown_asyncgens())
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.debug(f"shutdown_asyncgens() error: {e}")
                     loop.close()
+                    asyncio.set_event_loop(previous_loop)
 
                 if source_entries:
                     integration.add_search_results(session_id, source_entries)

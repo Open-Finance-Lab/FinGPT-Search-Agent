@@ -85,6 +85,9 @@ AGENTS.md
 # serena (the claude code plugin)
 /.serena
 
+# git worktrees
+.worktrees/
+
 # uv
 mcp-server/uv.lock
 

@@ -2,12 +2,14 @@
 Post-generation numerical validation for financial agent responses.
 
 Compares numbers in the agent's final output against numbers from tool outputs
-to detect LLM hallucination of financial figures (e.g., $190.66 vs $190.68).
+to detect LLM hallucination of financial figures (e.g., $190.66 vs $190.68)
+and orphan numbers not traceable to any source.
 """
 
 import re
 import json
 import logging
+from dataclasses import dataclass, field
 from typing import Set
 
 logger = logging.getLogger(__name__)
@@ -17,11 +19,20 @@ _NUMBER_PATTERN = re.compile(
     r'(?<!\w)'           # not preceded by word char
     r'-?'                # optional negative sign
     r'\$?'               # optional dollar sign
-    r'(\d{1,3}(?:,\d{3})*'  # integer with optional comma separators
+    r'(\d{1,3}(?:,?\d{3})*'  # integer with optional comma separators (comma optional for raw JSON integers)
     r'(?:\.\d+)?)'       # optional decimal part
     r'%?'                # optional percent sign
     r'(?!\w)',           # not followed by word char
 )
+
+
+@dataclass
+class ValidationResult:
+    """Structured result from numerical validation."""
+    exact_matches: int = 0                        # Numbers matching tool output exactly
+    close_matches: list = field(default_factory=list)   # (resp_num, tool_num, diff) within 1%
+    orphan_numbers: list = field(default_factory=list)   # Numbers not traceable to any source
+    suspicious: list = field(default_factory=list)       # Close-but-wrong values
 
 
 def _extract_numbers(text: str) -> Set[str]:
@@ -67,59 +78,77 @@ def _extract_tool_output_numbers(run_result) -> Set[str]:
     return tool_numbers
 
 
-def validate_numerical_accuracy(run_result, final_output: str) -> None:
+def validate_numerical_accuracy(run_result, final_output: str) -> ValidationResult:
     """
     Compare numbers in the final output against tool outputs.
-    Logs warnings for any numbers that appear in the response but not in any tool output,
-    which could indicate LLM hallucination.
 
-    This is a logging-only validation — it does not modify the response.
+    Returns a ValidationResult with:
+    - exact_matches: count of numbers matching tool output
+    - close_matches: numbers within 1% but not exact
+    - orphan_numbers: numbers not traceable to any tool output
+    - suspicious: close-but-wrong values (same as close_matches, kept for logging)
+
+    Backward-compatible: callers that ignored the previous None return are unaffected.
     """
+    result = ValidationResult()
+
     if not final_output:
-        return
+        return result
 
     try:
         response_numbers = _extract_numbers(final_output)
         if not response_numbers:
-            return
+            return result
 
         tool_numbers = _extract_tool_output_numbers(run_result)
         if not tool_numbers:
             logger.debug("[NUM VALIDATOR] No tool output numbers found, skipping validation")
-            return
+            return result
 
-        # Check each response number against tool outputs
-        # Allow for rounding (compare up to 2 decimal places)
-        suspicious = []
         for resp_num in response_numbers:
             resp_val = float(resp_num)
 
-            # Check if this number (or a close match) exists in tool output
-            found_match = False
+            found_exact = False
+            found_close = False
             for tool_num in tool_numbers:
                 tool_val = float(tool_num)
                 if tool_val == 0:
                     continue
+                relative_diff = abs(resp_val - tool_val) / abs(tool_val)
+
                 # Exact match or very close (within 0.01%)
-                if abs(resp_val - tool_val) / abs(tool_val) < 0.0001:
-                    found_match = True
+                if relative_diff < 0.0001:
+                    result.exact_matches += 1
+                    found_exact = True
                     break
-                # Also check if it's a reasonable derivation (sum, difference, ratio)
-                # We only flag numbers that are close-but-wrong (within 1% but not exact)
-                if 0.0001 <= abs(resp_val - tool_val) / abs(tool_val) < 0.01:
-                    suspicious.append((resp_num, tool_num, abs(resp_val - tool_val)))
-                    found_match = True  # Close enough that it's likely this number, just slightly off
+                # Close-but-wrong (within 1% but not exact)
+                if relative_diff < 0.01:
+                    diff = abs(resp_val - tool_val)
+                    result.close_matches.append((resp_num, tool_num, diff))
+                    result.suspicious.append((resp_num, tool_num, diff))
+                    found_close = True
                     break
 
-            # Don't flag numbers not found at all — they may be computed values
+            if not found_exact and not found_close:
+                result.orphan_numbers.append(resp_num)
 
-        if suspicious:
-            for resp_num, tool_num, diff in suspicious:
+        # Log warnings for suspicious values
+        if result.suspicious:
+            for resp_num, tool_num, diff in result.suspicious:
                 logger.warning(
                     f"[NUM VALIDATOR] Possible numerical hallucination: "
                     f"response has {resp_num}, tool output has {tool_num} "
                     f"(difference: {diff:.6f})"
                 )
 
+        # Log orphan numbers
+        if result.orphan_numbers:
+            logger.info(
+                f"[NUM VALIDATOR] Orphan numbers (not in tool output): "
+                f"{result.orphan_numbers}"
+            )
+
     except Exception as e:
         logger.debug(f"[NUM VALIDATOR] Validation error (non-critical): {e}")
+
+    return result

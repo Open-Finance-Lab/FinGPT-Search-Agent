@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/playwright/python:v1.48.0-jammy
+FROM mcr.microsoft.com/playwright/python:v1.58.0-jammy
 
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
     software-properties-common \
@@ -22,10 +22,8 @@ RUN npm install -g @modelcontextprotocol/server-filesystem
 
 COPY pyproject.toml uv.lock ./
 
-# Safety: regenerate lock file to ensure it matches pyproject.toml
-# Then sync with --frozen for deterministic install
+# Install dependencies from the committed lock file for reproducible builds
 RUN uv venv --python 3.12 && \
-    uv lock && \
     uv sync --frozen --no-dev && \
     echo "Verifying Playwright installation..." && \
     .venv/bin/python -c "from playwright.async_api import async_playwright; print('✓ Playwright package installed')"
@@ -45,12 +43,12 @@ RUN sed -i 's/\r$//' /app/entrypoint.sh && chmod +x /app/entrypoint.sh
 
 RUN mkdir -p /app/staticfiles /app/media /app/logs /tmp/fingpt_cache
 
-RUN ln -sf /ms-playwright/chromium-*/chrome-linux/chrome /usr/bin/chromium-bundled
+RUN ln -sf /ms-playwright/chromium_headless_shell-*/chrome-headless-shell-linux64/chrome-headless-shell /usr/bin/chromium-bundled
 
 # Verify Playwright browsers are accessible
 RUN echo "Verifying Playwright browsers..." && \
     ls -la /ms-playwright/ && \
-    test -d /ms-playwright/chromium-* && \
+    test -d /ms-playwright/chromium_headless_shell-* && \
     echo "✓ Chromium browser found at /ms-playwright"
 
 
@@ -58,7 +56,7 @@ ENTRYPOINT ["/app/entrypoint.sh"]
 
 EXPOSE 8000
 
-HEALTHCHECK --interval=10m --timeout=10s --start-period=1m --retries=3 \
+HEALTHCHECK --interval=30s --timeout=10s --start-period=1m --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/')" || exit 1
 
 CMD ["gunicorn", \
@@ -70,5 +68,4 @@ CMD ["gunicorn", \
     "--max-requests-jitter", "50", \
     "--access-logfile", "-", \
     "--error-logfile", "-", \
-    "--worker-tmp-dir", "/dev/shm", \
-    "--worker-class", "sync"]
+    "--worker-tmp-dir", "/dev/shm"]

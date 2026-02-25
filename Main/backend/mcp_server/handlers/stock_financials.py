@@ -15,6 +15,16 @@ from mcp_server.executor import run_in_executor
 logger = logging.getLogger(__name__)
 
 
+def _safe_financials_to_dict(df) -> dict:
+    """Convert financial DataFrame to dict, stringifying Timestamp index/columns."""
+    if df is None or df.empty:
+        return {}
+    df = df.copy()
+    df.index = df.index.astype(str)
+    df.columns = df.columns.astype(str)
+    return df.to_dict()
+
+
 class GetStockFinancialsHandler(ToolHandler):
     """Handler for get_stock_financials tool."""
 
@@ -37,9 +47,9 @@ class GetStockFinancialsHandler(ToolHandler):
         )
 
         financials = {
-            "income_statement": income_stmt.to_dict() if not income_stmt.empty else {},
-            "balance_sheet": balance_sheet.to_dict() if not balance_sheet.empty else {},
-            "cash_flow": cashflow.to_dict() if not cashflow.empty else {}
+            "income_statement": _safe_financials_to_dict(income_stmt),
+            "balance_sheet": _safe_financials_to_dict(balance_sheet),
+            "cash_flow": _safe_financials_to_dict(cashflow),
         }
 
         # If all statements are empty, return a clear message (e.g. for indices)
