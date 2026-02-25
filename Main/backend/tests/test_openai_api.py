@@ -193,15 +193,15 @@ class TestDomainMerging:
     def test_merge_domains_into_empty_links(self):
         from api.openai_views import _merge_domains_into_preferred_links
         result = _merge_domains_into_preferred_links([], ["reuters.com", "bloomberg.com"])
-        assert "https://reuters.com" in result
-        assert "https://bloomberg.com" in result
+        expected = {"https://reuters.com", "https://bloomberg.com"}
+        assert expected.issubset(set(result))
 
     def test_merge_domains_preserves_existing_links(self):
         from api.openai_views import _merge_domains_into_preferred_links
         existing = ["https://example.com"]
         result = _merge_domains_into_preferred_links(existing, ["reuters.com"])
-        assert "https://example.com" in result
-        assert "https://reuters.com" in result
+        expected = {"https://example.com", "https://reuters.com"}
+        assert expected.issubset(set(result))
 
     def test_merge_domains_deduplicates(self):
         from api.openai_views import _merge_domains_into_preferred_links
@@ -214,7 +214,7 @@ class TestDomainMerging:
     def test_merge_handles_full_urls(self):
         from api.openai_views import _merge_domains_into_preferred_links
         result = _merge_domains_into_preferred_links([], ["https://reuters.com/markets"])
-        assert "https://reuters.com/markets" in result
+        assert any(x == "https://reuters.com/markets" for x in result)
 
     def test_merge_handles_none_domains(self):
         from api.openai_views import _merge_domains_into_preferred_links
