@@ -1185,17 +1185,24 @@ def create_agent_response_stream(
 
         # --- Planner: select skill and constrain agent ---
         from planner.planner import Planner
-        _planner = Planner()
-        _domain = None
-        if current_url:
-            from urllib.parse import urlparse
-            _domain = urlparse(current_url).netloc.lower() or None
+        from planner.plan import ExecutionPlan
 
-        execution_plan = _planner.plan(
-            user_query=user_input,
-            system_prompt=extracted_system_prompt,
-            domain=_domain,
-        )
+        try:
+            _planner = Planner()
+            _domain = None
+            if current_url:
+                from urllib.parse import urlparse
+                _domain = urlparse(current_url).netloc.lower() or None
+
+            execution_plan = _planner.plan(
+                user_query=user_input,
+                system_prompt=extracted_system_prompt,
+                domain=_domain,
+            )
+        except Exception as planner_err:
+            logging.warning(f"[Planner] Failed ({planner_err}), falling back to default plan")
+            execution_plan = ExecutionPlan(skill_name="fallback", tools_allowed=None, max_turns=10)
+
         logging.info(
             f"[AGENT STREAM] Plan: skill={execution_plan.skill_name} "
             f"tools={'ALL' if execution_plan.tools_allowed is None else len(execution_plan.tools_allowed)} "
@@ -1203,7 +1210,7 @@ def create_agent_response_stream(
         )
         # --- End planner ---
 
-        MAX_RETRIES = 2
+        MAX_RETRIES = 2 if execution_plan.skill_name != "fallback" else 1
         MAX_AGENT_TURNS = execution_plan.max_turns
         retry_count = 0
         
