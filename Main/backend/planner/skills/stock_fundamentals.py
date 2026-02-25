@@ -12,7 +12,7 @@ _PATTERNS = [
     r"\bcurrent (price|value|quote)\b",
     r"\bprice (of|for)\b",
     r"\bquote (for|of)\b",
-    r"\bvolume\b(?!.*option)",
+    r"^(?!.*options?)\b.*\bvolume\b",
     r"\bbeta\b",
     r"\bshares outstanding\b",
     r"\bfloat\b.*\bshares\b",

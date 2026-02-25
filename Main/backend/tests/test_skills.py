@@ -167,3 +167,66 @@ class TestTechnicalAnalysisSkill:
 
     def test_matches_macd(self):
         assert self.skill.matches("show MACD for BTC", has_prescraped=False, domain=None) >= 0.7
+
+
+from planner.skills.web_research import WebResearchSkill
+from planner.skills.registry import SkillRegistry
+
+
+class TestWebResearchSkill:
+    def setup_method(self):
+        self.skill = WebResearchSkill()
+
+    def test_all_tools(self):
+        assert self.skill.tools_allowed is None
+
+    def test_max_turns(self):
+        assert self.skill.max_turns == 10
+
+    def test_always_matches_at_baseline(self):
+        score = self.skill.matches("random query", has_prescraped=False, domain=None)
+        assert 0.0 < score <= 0.2
+
+
+class TestSkillRegistry:
+    def setup_method(self):
+        self.registry = SkillRegistry()
+
+    def test_all_skills_registered(self):
+        names = {s.name for s in self.registry.skills}
+        assert names == {
+            "summarize_page",
+            "stock_fundamentals",
+            "options_analysis",
+            "financial_statements",
+            "technical_analysis",
+            "web_research",
+        }
+
+    def test_best_match_summarize(self):
+        skill = self.registry.best_match("summarize this page", has_prescraped=True, domain=None)
+        assert skill.name == "summarize_page"
+
+    def test_best_match_stock_price(self):
+        skill = self.registry.best_match("what is AAPL stock price?", has_prescraped=False, domain=None)
+        assert skill.name == "stock_fundamentals"
+
+    def test_best_match_fallback(self):
+        skill = self.registry.best_match(
+            "find me some interesting investment ideas for biotech sector",
+            has_prescraped=False,
+            domain=None,
+        )
+        assert skill.name == "web_research"
+
+    def test_best_match_options(self):
+        skill = self.registry.best_match("options volume for AVGO", has_prescraped=False, domain=None)
+        assert skill.name == "options_analysis"
+
+    def test_best_match_earnings(self):
+        skill = self.registry.best_match("when are AAPL earnings?", has_prescraped=False, domain=None)
+        assert skill.name == "financial_statements"
+
+    def test_best_match_rsi(self):
+        skill = self.registry.best_match("what is RSI for TSLA?", has_prescraped=False, domain=None)
+        assert skill.name == "technical_analysis"
