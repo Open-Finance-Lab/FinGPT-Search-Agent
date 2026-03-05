@@ -3,9 +3,9 @@ import multiprocessing
 
 bind = f"0.0.0.0:{os.getenv('PORT', '8000')}"
 
-workers = int(os.getenv('GUNICORN_WORKERS', '2'))
+workers = int(os.getenv('GUNICORN_WORKERS', '1'))
 worker_class = 'gthread'
-worker_connections = 1000
+worker_connections = int(os.getenv('GUNICORN_WORKER_CONNECTIONS', '5'))
 max_requests = int(os.getenv('GUNICORN_MAX_REQUESTS', '200'))
 max_requests_jitter = 50
 
