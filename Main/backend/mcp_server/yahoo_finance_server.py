@@ -98,7 +98,7 @@ async def handle_list_tools() -> List[types.Tool]:
         ),
         types.Tool(
             name="get_stock_history",
-            description="Get historical price data for a stock or market index.",
+            description="Get historical price data for a stock or market index. Use 'start' and 'end' for a specific date range, or 'period' for a relative window. When 'start' is provided, 'period' is ignored.",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -106,9 +106,17 @@ async def handle_list_tools() -> List[types.Tool]:
                         "type": "string",
                         "description": "The ticker symbol (e.g., 'AAPL', '^GSPC' for S&P 500, '^DJI' for Dow Jones)."
                     },
+                    "start": {
+                        "type": "string",
+                        "description": "Start date in YYYY-MM-DD format (e.g., '2025-09-01'). When provided, fetches data from this date instead of using 'period'."
+                    },
+                    "end": {
+                        "type": "string",
+                        "description": "End date in YYYY-MM-DD format (e.g., '2025-10-01'). Optional; defaults to today if omitted."
+                    },
                     "period": {
                         "type": "string",
-                        "description": "The period to fetch data for (e.g., '1mo', '1y', 'ytd', 'max').",
+                        "description": "The relative period to fetch data for (e.g., '1mo', '1y', 'ytd', 'max'). Ignored when 'start' is provided.",
                         "default": "1mo"
                     },
                     "interval": {
