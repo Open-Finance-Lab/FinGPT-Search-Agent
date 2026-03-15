@@ -110,3 +110,4 @@ fingpt-api.tar
 # sample conversations used for giving AI context on the current UX of the search agent
 # may contain personal or sensitive information, therefore it is ignored
 /SampleConversations
+/agentic-finsearch-manual
