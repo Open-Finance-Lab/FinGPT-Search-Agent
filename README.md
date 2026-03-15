@@ -70,8 +70,8 @@ For the browser extension, run once per environment:
 
 ```bash
 cd Main/frontend
-npm install
-npm run build:full
+bun install
+bun run build:full
 ```
 ### Post-Installation
 
