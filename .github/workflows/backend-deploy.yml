@@ -69,6 +69,7 @@ jobs:
       - name: Build backend image
         run: |
           docker build \
+            --pull \
             --file ${{ env.BACKEND_DIR }}/Dockerfile \
             --tag ${{ steps.meta.outputs.sha_tag }} \
             --tag ${{ steps.meta.outputs.main_tag }} \

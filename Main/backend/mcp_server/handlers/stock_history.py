@@ -1,6 +1,7 @@
 """Handler for get_stock_history tool."""
 
 import logging
+from datetime import datetime, timedelta
 from typing import List
 
 import mcp.types as types
@@ -31,6 +32,12 @@ class GetStockHistoryHandler(ToolHandler):
         interval = validate_interval(ctx.arguments.get("interval", "1d"))
 
         stock = await get_ticker(ctx.ticker)
+
+        # yfinance treats `end` as exclusive; add 1 day so the caller's
+        # end date is inclusive (users expect "Aug 1 to Aug 8" to include Aug 8)
+        if end:
+            end_dt = datetime.strptime(end, "%Y-%m-%d")
+            end = (end_dt + timedelta(days=1)).strftime("%Y-%m-%d")
 
         # auto_adjust=False returns both "Close" (actual trading price) and
         # "Adj Close" (adjusted for splits/dividends) with correct labels
