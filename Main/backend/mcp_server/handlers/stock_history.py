@@ -32,15 +32,20 @@ class GetStockHistoryHandler(ToolHandler):
 
         stock = await get_ticker(ctx.ticker)
 
+        # auto_adjust=False returns both "Close" (actual trading price) and
+        # "Adj Close" (adjusted for splits/dividends) with correct labels
         if start:
-            # Use explicit date range — period is ignored by yfinance when start is set
             history = await run_in_executor(
-                lambda: stock.history(start=start, end=end, interval=interval)
+                lambda: stock.history(
+                    start=start, end=end, interval=interval, auto_adjust=False
+                )
             )
         else:
             period = validate_period(ctx.arguments.get("period", "1mo"))
             history = await run_in_executor(
-                lambda: stock.history(period=period, interval=interval)
+                lambda: stock.history(
+                    period=period, interval=interval, auto_adjust=False
+                )
             )
 
         if history.empty:

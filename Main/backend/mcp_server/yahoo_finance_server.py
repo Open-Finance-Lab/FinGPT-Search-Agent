@@ -98,7 +98,7 @@ async def handle_list_tools() -> List[types.Tool]:
         ),
         types.Tool(
             name="get_stock_history",
-            description="Get historical price data for a stock or market index. Use 'start' and 'end' for a specific date range, or 'period' for a relative window. When 'start' is provided, 'period' is ignored.",
+            description="Get historical price data for a stock or market index. Returns columns: Open, High, Low, Close (actual trading price), Adj Close (adjusted for splits/dividends), Volume. Use 'start' and 'end' for a specific date range, or 'period' for a relative window. When 'start' is provided, 'period' is ignored.",
             inputSchema={
                 "type": "object",
                 "properties": {
