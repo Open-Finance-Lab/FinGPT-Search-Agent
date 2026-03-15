@@ -112,7 +112,7 @@ async def handle_list_tools() -> List[types.Tool]:
                     },
                     "end": {
                         "type": "string",
-                        "description": "End date in YYYY-MM-DD format (e.g., '2025-10-01'). Optional; defaults to today if omitted."
+                        "description": "End date in YYYY-MM-DD format, inclusive (e.g., '2025-10-01' includes Oct 1 data). Optional; defaults to today if omitted."
                     },
                     "period": {
                         "type": "string",

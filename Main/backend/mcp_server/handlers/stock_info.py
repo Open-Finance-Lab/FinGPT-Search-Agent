@@ -45,7 +45,11 @@ class GetStockInfoHandler(ToolHandler):
     STOCK_KEYS = [
         'longName', 'symbol', 'currentPrice', 'marketCap', 'trailingPE',
         'forwardPE', 'dividendYield', 'fiftyTwoWeekHigh', 'fiftyTwoWeekLow',
-        'averageVolume', 'sector', 'industry', 'longBusinessSummary'
+        'averageVolume', 'sector', 'industry', 'longBusinessSummary',
+        # Real-time market data (essential for daily change, range, turnover)
+        'regularMarketDayHigh', 'regularMarketDayLow', 'regularMarketOpen',
+        'regularMarketVolume', 'regularMarketPreviousClose',
+        'regularMarketChangePercent', 'sharesOutstanding',
     ]
 
     # Keys relevant for indices (^GSPC, ^DJI, etc.) and broader instruments
