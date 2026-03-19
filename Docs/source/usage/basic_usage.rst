@@ -51,13 +51,13 @@ Two more buttons appear above the prompt box and below where conversations are s
 - **Source Button**: Shows the sources used by the search agent to answer the user's prompt. The sources are shown in a
   pop up and may be closed.'
 
-These components make up the current FinGPT Search Agent demo. The documentation will be updated regularly to keep up
+These components make up the current Agentic FinSearch demo. The documentation will be updated regularly to keep up
 with latest progress.
 
 Supported Websites
 ------------------
 
-The FinGPT Search Agent automatically activates on the following financial websites:
+Agentic FinSearch automatically activates on the following financial websites:
 
 * **Bloomberg**: ``https://www.bloomberg.com/*``
 * **Yahoo Finance**: ``https://finance.yahoo.com/*``
@@ -69,7 +69,7 @@ The FinGPT Search Agent automatically activates on the following financial websi
 * **Kalshi**: ``https://kalshi.com/*``
 * **Polymarket**: ``https://polymarket.com/*``
 
-When you navigate to any of these websites, the FinGPT popup will automatically appear, ready for your financial queries.
+When you navigate to any of these websites, the Agentic FinSearch popup will automatically appear, ready for your financial queries.
 
 .. tip::
    If the popup doesn't appear on a supported site:

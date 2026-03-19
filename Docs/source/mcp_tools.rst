@@ -1,7 +1,7 @@
 MCP Tools Integration
 =====================
 
-FinGPT Search Agent leverages the **Model Context Protocol (MCP)** to provide advanced financial capabilities through specialized tools. MCP servers are defined in ``Main/backend/mcp_server_config.json`` and managed by the ``MCPClientManager`` class.
+Agentic FinSearch leverages the **Model Context Protocol (MCP)** to provide advanced financial capabilities through specialized tools. MCP servers are defined in ``Main/backend/mcp_server_config.json`` and managed by the ``MCPClientManager`` class.
 
 Available MCP Servers
 ---------------------

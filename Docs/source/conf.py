@@ -6,10 +6,10 @@
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
-project = 'FinGPT Search Agent'
+project = 'Agentic FinSearch'
 copyright = '2025-2026, FlyM1ss, Yanglet Liu'
 author = 'FlyM1ss, Yanglet Liu'
-release = '0.13.1'
+release = '0.13.3'
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
@@ -59,7 +59,7 @@ html_css_files = [
 html_context = {
     "display_github": True, # Integrate GitHub
     "github_user": "Open-Finance-Lab", # Username
-    "github_repo": "FinGPT-Search-Agent", # Repo name
+    "github_repo": "Agentic-FinSearch", # Repo name
     "github_version": "Docs", # Version
     "conf_py_path": "/docs/source/", # Path in the checkout to the docs root
 }

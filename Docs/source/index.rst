@@ -1,7 +1,7 @@
-FinGPT Search Agent
-===================
+Agentic FinSearch
+==================
 
-**FinGPT Search Agent** is a powerful browser extension that combines financial information retrieval with advanced AI capabilities. It provides real-time access to financial data, documents, and insights through an intuitive chat interface.
+**Agentic FinSearch** is a powerful browser extension that combines financial information retrieval with advanced AI capabilities. It provides real-time access to financial data, documents, and insights through an intuitive chat interface.
 
 .. toctree::
    :maxdepth: 3
@@ -21,11 +21,16 @@ FinGPT Search Agent
    code_of_conduct
 
 .. note::
-   This documentation covers version 0.13.1 of FinGPT Search Agent.
-   
+   This documentation covers version 0.13.3 of Agentic FinSearch.
+
+   **New in 0.13.3:**
+
+   - **Query Planner & Skills**: Heuristic-based skill routing constrains tools per query for faster, more focused responses.
+   - **Hallucination Mitigation**: Improved accuracy for financial data retrieval and synthesis.
+
    **New in 0.13.1:**
-   
-   - **API Now Supported**: FinGPT API may now be used. For details, please check the API Doc
+
+   - **API Now Supported**: The OpenAI-compatible API may now be used. For details, please check the API Reference.
 
    **New in 0.13.0:**
 

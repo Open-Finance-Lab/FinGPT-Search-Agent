@@ -238,7 +238,7 @@ async def create_fin_agent(model: str = "gpt-4o-mini",
             model_settings_kwargs["parallel_tool_calls"] = False
 
         agent = Agent(
-            name="FinGPT Search Agent",
+            name="Agentic FinSearch",
             instructions=agent_instructions,
             model=model_obj,
             tools=tools if tools else [],

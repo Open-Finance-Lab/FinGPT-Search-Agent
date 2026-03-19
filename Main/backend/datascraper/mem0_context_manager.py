@@ -1,5 +1,5 @@
 """
-Mem0 Context Manager for FinGPT Search Agent
+Mem0 Context Manager for Agentic FinSearch
 Implements production-ready memory layer using Mem0 for conversation context.
 Now with smart context compression for fetched context and conversation history.
 """

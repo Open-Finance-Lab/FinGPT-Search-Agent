@@ -1,7 +1,7 @@
 API Reference
 =============
 
-This document specifies the FinGPT OpenAI-compatible REST API. The API is **synchronous** (no streaming). All request and response bodies are JSON.
+This document specifies the Agentic FinSearch OpenAI-compatible REST API. The API is **synchronous** (no streaming). All request and response bodies are JSON.
 
 .. contents:: Table of Contents
    :depth: 3
@@ -104,7 +104,7 @@ Check if the backend is running. Does **not** require authentication.
      "status": "healthy",
      "service": "fingpt-backend",
      "timestamp": "2026-02-22T12:00:00.000000",
-     "version": "0.10.1",
+     "version": "0.13.3",
      "using_unified_context": true
    }
 
@@ -313,7 +313,7 @@ Modes
 Response Body
 ^^^^^^^^^^^^^
 
-The response follows the **OpenAI chat completion format** with FinGPT extensions.
+The response follows the **OpenAI chat completion format** with Agentic FinSearch extensions.
 
 .. code-block:: json
 
@@ -384,7 +384,7 @@ The response follows the **OpenAI chat completion format** with FinGPT extension
      - Sum of ``prompt_tokens`` and ``completion_tokens``.
    * - ``sources``
      - array
-     - **FinGPT extension.** List of source objects. Structure varies by mode (see below).
+     - **Agentic FinSearch extension.** List of source objects. Structure varies by mode (see below).
 
 Sources Format
 ^^^^^^^^^^^^^^
@@ -625,7 +625,7 @@ Below is a complete, copy-paste-ready Python script for benchmarking the API. It
 
 .. code-block:: python
 
-   """FinGPT API Benchmark Script."""
+   """Agentic FinSearch API Benchmark Script."""
    import requests
    import time
    import json
@@ -767,7 +767,7 @@ Below is a complete, copy-paste-ready Python script for benchmarking the API. It
 
    if __name__ == "__main__":
        print("=" * 60)
-       print("FinGPT API Benchmark")
+       print("Agentic FinSearch API Benchmark")
        print("=" * 60)
 
        test_health()

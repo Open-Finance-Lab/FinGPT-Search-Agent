@@ -1,7 +1,7 @@
 Memory and Context System
 =========================
 
-FinGPT Search Agent employs a two-tier context management system to handle complex, long-running financial research sessions. The active mode is configured via the ``CONTEXT_MANAGER_MODE`` environment variable.
+Agentic FinSearch employs a two-tier context management system to handle complex, long-running financial research sessions. The active mode is configured via the ``CONTEXT_MANAGER_MODE`` environment variable.
 
 Unified Context Manager (Default)
 ----------------------------------
