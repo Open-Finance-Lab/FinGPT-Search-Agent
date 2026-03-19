@@ -3,7 +3,7 @@
 
 Purpose
 -------
-The FinGPT Search Agent project is a collaborative research and engineering effort based at Columbia university and
+The Agentic FinSearch project is a collaborative research and engineering effort based at Columbia university and
 Rensselaer Polytechnic Institute. This Code of Conduct defines the expectations for everyone who contributes to,
 tests, deploys, or otherwise interacts with the project so that we maintain a respectful, inclusive, and academically
 ethical environment.
@@ -49,4 +49,4 @@ The Project Lead, with support from faculty advisors or university offices, will
 
 Acknowledgment & Updates
 ------------------------
-Participation in the FinGPT Search Agent project indicates agreement to abide by this Code. We review the Code annually (or sooner if policies or regulations change) to ensure alignment with university standards, federal and state law, and project needs. Suggestions for improvement are welcome; please submit them via the documentation issue tracker or directly to the Project Lead.
+Participation in the Agentic FinSearch project indicates agreement to abide by this Code. We review the Code annually (or sooner if policies or regulations change) to ensure alignment with university standards, federal and state law, and project needs. Suggestions for improvement are welcome; please submit them via the documentation issue tracker or directly to the Project Lead.

@@ -6,7 +6,7 @@ Top-Level Layout
 
 .. code-block:: text
 
-   FinGPT-Search-Agent/
+   Agentic-FinSearch/
    ├── .github/                      # CI/CD workflows
    ├── Benchmarks/                   # Benchmark documents and test results
    ├── Deploy/                       # Deployment configurations (Podman, Caddy)

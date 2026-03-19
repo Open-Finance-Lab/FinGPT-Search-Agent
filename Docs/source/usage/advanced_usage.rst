@@ -11,7 +11,7 @@
 Multi-Model Support
 -------------------
 
-FinGPT Search Agent supports multiple foundation models.
+Agentic FinSearch supports multiple foundation models.
 
 Available Models
 ~~~~~~~~~~~~~~~~
@@ -160,7 +160,7 @@ Performance Optimization
 Smart Context Management
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
-FinGPT includes a two-tier context management system:
+Agentic FinSearch includes a two-tier context management system:
 
 - **Unified Context Manager** (default): Session-based context tracking with JSON structure for fast, in-memory conversation management.
 - **Mem0 Context Manager** (optional): Production-grade long-term memory powered by **Mem0** for sessions exceeding 100,000 tokens.

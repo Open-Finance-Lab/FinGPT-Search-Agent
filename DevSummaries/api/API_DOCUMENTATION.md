@@ -1,6 +1,6 @@
-# FinGPT API Documentation
+# Agentic FinSearch API Documentation
 
-This API provides an OpenAI-compatible interface to the FinGPT financial search agent. Internal testers and automated workflows can interact with the agent using standard OpenAI client libraries.
+This API provides an OpenAI-compatible interface to the Agentic FinSearch agent. Internal testers and automated workflows can interact with the agent using standard OpenAI client libraries.
 
 **Version:** 0.13.3
 
@@ -9,7 +9,7 @@ This API provides an OpenAI-compatible interface to the FinGPT financial search 
 - **Base URL**: `http://localhost:8000/v1` (Docker) or your deployed server URL
 - **Authentication**: Bearer token via `Authorization: Bearer <key>`. The key is set via the `FINGPT_API_KEY` environment variable. If `FINGPT_API_KEY` is not set, authentication is disabled (development mode).
 - **Rate Limiting**: Configurable via `API_RATE_LIMIT` in Django settings (default: `60/m`)
-- **Compatibility**: Follows the [OpenAI Chat Completions API](https://platform.openai.com/docs/api-reference/chat) specification with FinGPT-specific extensions.
+- **Compatibility**: Follows the [OpenAI Chat Completions API](https://platform.openai.com/docs/api-reference/chat) specification with Agentic FinSearch extensions.
 
 ---
 

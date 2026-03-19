@@ -16,8 +16,8 @@ Steps
 
    .. code-block:: bash
 
-      git clone https://github.com/Open-Finance-Lab/FinGPT-Search-Agent.git
-      cd FinGPT-Search-Agent
+      git clone https://github.com/Open-Finance-Lab/Agentic-FinSearch.git
+      cd Agentic-FinSearch
 
 2. Copy the environment template and add your keys.
 
