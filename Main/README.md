@@ -1,13 +1,13 @@
 # Project Structure
 
-This document provides comprehensive details about the FinGPT Search Agents project structure.
+This document provides comprehensive details about the Agentic FinSearch project structure.
 
 ---
 
 ## 1. Top-Level Layout
 
 ```markdown
-fingpt/
+Agentic-FinSearch/
 ├── Main/
 │   ├── backend/               # Django backend with MCP agent orchestration
 │   └── frontend/              # Browser extension (Webpack-bundled JS)

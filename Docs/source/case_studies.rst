@@ -1,7 +1,7 @@
 Dev Case Studies
 ================
 
-This section documents real-world development challenges, debugging processes, and their resolutions within the FinGPT Search Agent project. These case studies serve as a knowledge base to prevent recurring issues and improve system robustness.
+This section documents real-world development challenges, debugging processes, and their resolutions within the Agentic FinSearch project. These case studies serve as a knowledge base to prevent recurring issues and improve system robustness.
 
 .. contents:: Table of Contents
    :depth: 2

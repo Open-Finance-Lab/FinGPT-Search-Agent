@@ -1,6 +1,7 @@
 """Input validation for Yahoo Finance MCP server."""
 
 import re
+from datetime import datetime
 from typing import Optional
 
 
@@ -58,6 +59,29 @@ def validate_period(period: str) -> str:
             f"Invalid period '{period}'. Must be one of: {', '.join(sorted(VALID_PERIODS))}"
         )
     return period
+
+
+def validate_date(date_str: Optional[str]) -> Optional[str]:
+    """Validate a date string in YYYY-MM-DD format.
+
+    Args:
+        date_str: The date string to validate, or None
+
+    Returns:
+        The validated date string, or None if input is None
+
+    Raises:
+        ValidationError: If date format is invalid
+    """
+    if not date_str:
+        return None
+    try:
+        datetime.strptime(date_str, "%Y-%m-%d")
+    except ValueError:
+        raise ValidationError(
+            f"Invalid date '{date_str}'. Must be in YYYY-MM-DD format (e.g., '2025-09-01')"
+        )
+    return date_str
 
 
 def validate_interval(interval: str) -> str:

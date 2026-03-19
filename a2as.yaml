@@ -2,8 +2,8 @@ manifest:
   version: "0.1.2"
   schema: https://a2as.org/cert/schema
   subject:
-    name: open-finance-lab/fingpt-search-agent
-    source: https://github.com/open-finance-lab/fingpt-search-agent
+    name: open-finance-lab/agentic-finsearch
+    source: https://github.com/open-finance-lab/Agentic-FinSearch
     branch: main
     commit: "ad9f9059"
     scope: [Docs/source/conf.py, Main/backend/api/openai_views.py, Main/backend/api/views.py, Main/backend/datascraper/context_integration.py,
@@ -24,7 +24,7 @@ agents:
     models: [actual_model]
     params:
       function: create_fin_agent
-      name: FinGPT Search Agent
+      name: Agentic FinSearch
       model_settings: ModelSettings()
       instructions: [instructions]
 
