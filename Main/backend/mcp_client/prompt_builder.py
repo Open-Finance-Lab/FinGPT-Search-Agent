@@ -1,5 +1,5 @@
 """
-Prompt builder for the FinGPT search agent.
+Prompt builder for the Agentic FinSearch agent.
 
 Loads prompt files from Main/backend/prompts/ and assembles the final
 system prompt based on the user's current site context.

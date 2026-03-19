@@ -1,6 +1,6 @@
-# Contributing to FinGPT Search Agents
+# Contributing to Agentic FinSearch
 
-Thank you for your interest in contributing to FinGPT Search Agents! This document provides guidelines and standards for contributing to the future of personalized search.
+Thank you for your interest in contributing to Agentic FinSearch! This document provides guidelines and standards for contributing to the future of personalized search.
 
 ## Table of Contents
 
@@ -33,7 +33,7 @@ We are committed to providing a welcoming and inclusive environment. Please:
 ### Prerequisites
 
 Before contributing, ensure you have Git / GitHub Desktop configured, API keys present and the project ready to go.
-Refer to FinGPT Search Agent's [documentation](https://fingpt-search-agent-docs.readthedocs.io/en/latest/) for setup instructions
+Refer to the [Agentic FinSearch documentation](https://agentic-finsearch.readthedocs.io/en/latest/) for setup instructions
 ---
 
 ## Development Workflow
@@ -302,7 +302,7 @@ Always double-check existing documentation and issues first before asking for he
 
 ### Resources
 
-- **Documentation**: https://fingpt-search-agent-docs.readthedocs.io/
+- **Documentation**: https://agentic-finsearch.readthedocs.io/
 - **Issues**: Check existing issues on GitHub
 - **Communication**: Message or email the project lead and / or start a discussion in Discord
 
@@ -337,6 +337,6 @@ If your contribution is used in academic work, it may be cited according to:
 
 ---
 
-**Thank you for contributing to FinGPT Search Agents!**
+**Thank you for contributing to Agentic FinSearch!**
 
 **Disclaimer**: We are sharing code for academic purposes under the MIT education license. Nothing herein is financial advice, and NOT a recommendation to trade real money. Please use common sense and always first consult a professional before trading or investing.

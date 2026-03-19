@@ -2,7 +2,7 @@
 
 An agentic financial search engine that retrieves, verifies, and synthesizes information across major financial data sources — with full source transparency.
 
-[![Open Financial LLM Leaderboard](https://img.shields.io/badge/FinLLM-Leaderboard-blue)](https://huggingface.co/spaces/TheFinAI/Open-Financial-LLM-Leaderboard)
+[![Open Financial LLM Leaderboard](https://img.shields.io/badge/FinLLM-Leaderboard-blue)](https://finosfoundation-open-financial-llm-leaderboard.hf.space/#/?columns=isPinned%2Crank%2Cmodel_type%2Cid%2Cmodel.average_score%2Cevaluations.vision_average%2Cevaluations.audio_average%2Cevaluations.english_average%2Cevaluations.chinese_average%2Cevaluations.japanese_average%2Cevaluations.spanish_average%2Cevaluations.greek_average%2Cevaluations.bilingual_average%2Cevaluations.multilingual_average)
 
 - **Agentic retrieval** across major finance websites (Yahoo Finance, SEC EDGAR, TradingView, and more).
 - **Answer engine** that performs open search to locate relevant financial information from websites, reports, filings, and databases.
