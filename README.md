@@ -1,21 +1,21 @@
 # Agentic FinSearch
 
-Vision: A financial agent to assist users in information retrieval and data analysis. It provides the information sources of generated responses to help users evaluate the responses' quality.
- 
-This is a demo of FinLLM Leaderboard on HuggingFace's [Open Financial LLM Leaderboard](https://huggingface.co/spaces/TheFinAI/Open-Financial-LLM-Leaderboard).
+An agentic financial search engine that retrieves, verifies, and synthesizes information across major financial data sources — with full source transparency.
 
-1. A powerful agent for retrieving financial information across major finance websites (Yahoo Finance, Bloomberg, XBRL International).
-2. A powerful answer engine: performs open search to quickly locate relevant financial information from various sources, such as websites, reports, filings, and databases
-3. Users can check the sources of generated responses, ensuring reliability and accuracy.
+[![Open Financial LLM Leaderboard](https://img.shields.io/badge/FinLLM-Leaderboard-blue)](https://huggingface.co/spaces/TheFinAI/Open-Financial-LLM-Leaderboard)
 
-**NO Trading Suggestions!**
+- **Agentic retrieval** across major finance websites (Yahoo Finance, SEC EDGAR, TradingView, and more).
+- **Answer engine** that performs open search to locate relevant financial information from websites, reports, filings, and databases.
+- **Source transparency** — every response includes verifiable sources, ensuring reliability and reducing misinformation.
 
-Current Progress:
+**No trading suggestions. For research and informational purposes only.**
 
-1. Snapshot of the search agent: drag, resize and minimize; Providing information on user's current page.
+### Screenshots
+
+1. The search agent overlay: drag, resize, and minimize. Provides context-aware information on the user's current page.
    ![image](Docs/source/_static/images/F4.0_1.png)
 
-2. Checking sources, which are very important and help reduce misinformation.
+2. Source verification — check exactly where each piece of information came from.
    ![image](Docs/source/_static/images/F4.0_Source.png)
 
 
@@ -33,8 +33,8 @@ Build and run everything with a single command.
 
 ```bash
 # Clone the repository
-git clone https://github.com/Open-Finance-Lab/FinGPT-Search-Agent.git
-cd FinGPT-Search-Agent
+git clone https://github.com/Open-Finance-Lab/Agentic-FinSearch.git
+cd Agentic-FinSearch
 
 # Copy backend environment template and add your API keys
 cp Main/backend/.env.example Main/backend/.env
@@ -52,8 +52,8 @@ Use this path if you want to run Django without Docker.
 
 ```bash
 # Clone the repository
-git clone https://github.com/Open-Finance-Lab/FinGPT-Search-Agent.git
-cd FinGPT-Search-Agent
+git clone https://github.com/Open-Finance-Lab/Agentic-FinSearch.git
+cd Agentic-FinSearch
 
 # Install backend dependencies with uv (Python 3.12)
 cd Main/backend
@@ -108,16 +108,16 @@ bun run build:full
 
 ## Usage and Documentation
 
-For detailed usage instructions and more information, see: https://fingpt-search-agent-docs.readthedocs.io/
+For detailed usage instructions and more information, see: https://agentic-finsearch.readthedocs.io/
 
 
-Immediate Next Steps:
-1. Deploy the back-end to cloud, further simplifying the installation process.
+### Live Demo
 
-Future Plans:
-1. zkp demo.
+The backend is deployed at [agenticfinsearch.org](https://agenticfinsearch.org).
 
-Citing:
+### Citing
+
+This project was originally published as *FinGPT Search Agents* and has since been renamed to **Agentic FinSearch**.
 
 ```
 @inproceedings{tian2024customized,
