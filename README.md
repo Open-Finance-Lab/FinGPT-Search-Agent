@@ -1,4 +1,4 @@
-# FinGPT Search Agents
+# Agentic FinSearch
 
 Vision: A financial agent to assist users in information retrieval and data analysis. It provides the information sources of generated responses to help users evaluate the responses' quality.
  
