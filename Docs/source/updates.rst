@@ -6,7 +6,6 @@ This page tracks the history of updates and new features for Agentic FinSearch.
 Version 0.13.3
 --------------
 
-- **Project Rebrand**: Renamed from FinGPT Search Agents to **Agentic FinSearch**. Repository, documentation, and extension updated.
 - **Query Planner & Skills**: Heuristic-based skill routing that constrains MCP tools per query type for faster, more focused responses. Six skills: summarize_page, stock_fundamentals, options_analysis, financial_statements, technical_analysis, web_research.
 - **Hallucination Mitigation**: Improved accuracy for financial data retrieval benchmarks.
 
