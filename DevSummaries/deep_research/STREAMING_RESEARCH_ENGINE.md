@@ -75,7 +75,7 @@ research_engine.run_iterative_research_streaming()
   - Added `try/finally` with `stream_iter.aclose()` + `loop.shutdown_asyncgens()` for proper async generator cleanup
 
 ### `datascraper/models_config.py`
-- **`validate_model_support()`** — Added reverse lookup by `model_name` field so resolved names like `"gpt-5.2-chat-latest"` are recognized (not just display names like `"FinGPT"`)
+- **`validate_model_support()`** — Added reverse lookup by `model_name` field so resolved names like `"gpt-5.2-chat-latest"` are recognized (not just display names like `"FinSearch"`)
 
 ### `frontend/src/modules/handlers.js`
 - Added 6 research phase labels to `STATUS_LABEL_REMAPPINGS` for user-friendly display
@@ -107,7 +107,7 @@ research_engine.run_iterative_research_streaming()
 **Fix**: Changed to `--timeout 1200` in both Dockerfile and gunicorn.conf.py.
 
 ### 4. `validate_model_support` failing for resolved model names
-**Symptom**: `gemini-3-flash-preview` flagged as "MCP not supported" even though `FinGPT` config has `supports_mcp: True`.
+**Symptom**: `gemini-3-flash-preview` flagged as "MCP not supported" even though `FinSearch` config has `supports_mcp: True`.
 **Fix**: Added reverse lookup by `model_name` field in `validate_model_support()`.
 
 ### 5. Source URL retrieval broken

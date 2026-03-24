@@ -2,7 +2,7 @@
 
 This API provides an OpenAI-compatible interface to the Agentic FinSearch agent. Internal testers and automated workflows can interact with the agent using standard OpenAI client libraries.
 
-**Version:** 0.13.3
+**Version:** 0.15.0
 
 ## Base Configuration
 
@@ -25,7 +25,7 @@ client = OpenAI(
 
 # Ask about a stock
 response = client.chat.completions.create(
-    model="FinGPT",
+    model="FinSearch",
     messages=[{"role": "user", "content": "What is Apple's current P/E ratio?"}],
     extra_body={"mode": "thinking"}
 )
@@ -48,13 +48,13 @@ Retrieves the list of available models.
   "object": "list",
   "data": [
     {
-      "id": "FinGPT",
+      "id": "FinSearch",
       "object": "model",
       "created": 1740000000,
       "owned_by": "google"
     },
     {
-      "id": "FinGPT-Light",
+      "id": "FinSearch-Light",
       "object": "model",
       "created": 1740000000,
       "owned_by": "openai"
@@ -73,8 +73,8 @@ Retrieves the list of available models.
 
 | Model ID | Provider | Underlying Model | Description |
 |----------|----------|-------------------|-------------|
-| `FinGPT` | Google | `gemini-3-flash-preview` | Default model. High context window (1M tokens). |
-| `FinGPT-Light` | OpenAI | `gpt-5.1-chat-latest` | Fast and efficient. Supports streaming. |
+| `FinSearch` | Google | `gemini-3-flash-preview` | Default model. High context window (1M tokens). |
+| `FinSearch-Light` | OpenAI | `gpt-5.1-chat-latest` | Fast and efficient. Supports streaming. |
 | `Buffet-Agent` | Custom | Buffet-Agent | Custom fine-tuned agent. |
 
 ### 2. Chat Completions
@@ -89,11 +89,11 @@ Generates a response from the financial agent. Supports **Thinking** and **Resea
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `model` | string | Yes | Model ID (e.g., `"FinGPT"`, `"FinGPT-Light"`). Use `GET /v1/models` to list options. |
+| `model` | string | Yes | Model ID (e.g., `"FinSearch"`, `"FinSearch-Light"`). Use `GET /v1/models` to list options. |
 | `messages` | array | Yes | Conversation history. Each message has `role` (`"system"`, `"user"`, `"assistant"`) and `content`. |
 | `user` | string | No | Unique user identifier. If provided, enables session continuity across requests with the same user ID. |
 
-**FinGPT Extensions** (pass in the root body, or via `extra_body` in the OpenAI Python client):
+**FinSearch Extensions** (pass in the root body, or via `extra_body` in the OpenAI Python client):
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
@@ -118,14 +118,14 @@ For streaming responses (SSE), use the browser extension endpoints (`/get_chat_r
 
 #### Response
 
-Standard OpenAI chat completion format with a FinGPT-specific `sources` extension:
+Standard OpenAI chat completion format with a FinSearch-specific `sources` extension:
 
 ```json
 {
   "id": "chatcmpl-abc123",
   "object": "chat.completion",
   "created": 1740000000,
-  "model": "FinGPT",
+  "model": "FinSearch",
   "choices": [
     {
       "index": 0,
@@ -204,7 +204,7 @@ client = OpenAI(
 
 # Stock fundamentals
 response = client.chat.completions.create(
-    model="FinGPT",
+    model="FinSearch",
     messages=[{"role": "user", "content": "What is Tesla's market cap and P/E ratio?"}],
     extra_body={"mode": "thinking"}
 )
@@ -212,28 +212,28 @@ print(response.choices[0].message.content)
 
 # Options analysis
 response = client.chat.completions.create(
-    model="FinGPT",
+    model="FinSearch",
     messages=[{"role": "user", "content": "What's the put/call ratio for SPY?"}],
     extra_body={"mode": "thinking"}
 )
 
 # Financial statements
 response = client.chat.completions.create(
-    model="FinGPT",
+    model="FinSearch",
     messages=[{"role": "user", "content": "Show me NVIDIA's revenue and EPS for the last 4 quarters"}],
     extra_body={"mode": "thinking"}
 )
 
 # Technical analysis
 response = client.chat.completions.create(
-    model="FinGPT",
+    model="FinSearch",
     messages=[{"role": "user", "content": "What's the RSI and MACD for BTC on Binance?"}],
     extra_body={"mode": "thinking"}
 )
 
 # Page context: scrape and analyze a URL
 response = client.chat.completions.create(
-    model="FinGPT",
+    model="FinSearch",
     messages=[{"role": "user", "content": "Summarize the key financial metrics from this page."}],
     extra_body={
         "mode": "thinking",
@@ -245,7 +245,7 @@ response = client.chat.completions.create(
 
 # Open research
 response = client.chat.completions.create(
-    model="FinGPT",
+    model="FinSearch",
     messages=[{"role": "user", "content": "What caused the recent crypto market volatility?"}],
     extra_body={"mode": "research"}
 )
@@ -254,7 +254,7 @@ print(response.sources)  # List of URLs used
 
 # Scoped research (limit to specific domains)
 response = client.chat.completions.create(
-    model="FinGPT",
+    model="FinSearch",
     messages=[{"role": "user", "content": "Latest news on NVIDIA earnings"}],
     extra_body={
         "mode": "research",
@@ -271,7 +271,7 @@ messages = [
 ]
 
 response = client.chat.completions.create(
-    model="FinGPT",
+    model="FinSearch",
     messages=messages,
     extra_body={"mode": "thinking"}
 )
@@ -285,7 +285,7 @@ curl -X POST http://localhost:8000/v1/chat/completions \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your-fingpt-api-key" \
   -d '{
-    "model": "FinGPT",
+    "model": "FinSearch",
     "messages": [{"role": "user", "content": "What is AAPL stock price?"}],
     "mode": "thinking"
   }'
@@ -297,7 +297,7 @@ curl -X POST http://localhost:8000/v1/chat/completions \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your-fingpt-api-key" \
   -d '{
-    "model": "FinGPT",
+    "model": "FinSearch",
     "messages": [{"role": "user", "content": "Latest news on NVIDIA?"}],
     "mode": "research",
     "search_domains": ["reuters.com", "sec.gov"]
@@ -310,7 +310,7 @@ curl -X POST http://localhost:8000/v1/chat/completions \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your-fingpt-api-key" \
   -d '{
-    "model": "FinGPT",
+    "model": "FinSearch",
     "messages": [{"role": "user", "content": "Summarize this article."}],
     "mode": "thinking",
     "url": "https://finance.yahoo.com/quote/AAPL"
@@ -391,7 +391,7 @@ Returns service status and version. No authentication required.
 ```json
 {
   "status": "healthy",
-  "version": "0.13.3"
+  "version": "0.15.0"
 }
 ```
 
@@ -402,8 +402,8 @@ Returns service status and version. No authentication required.
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `FINGPT_API_KEY` | No | API key for Bearer token authentication. If not set, auth is disabled. |
-| `OPENAI_API_KEY` | Yes* | OpenAI API key (required for FinGPT-Light model and web search) |
-| `GOOGLE_API_KEY` | Yes* | Google API key (required for FinGPT model) |
+| `OPENAI_API_KEY` | Yes* | OpenAI API key (required for FinSearch-Light model and web search) |
+| `GOOGLE_API_KEY` | Yes* | Google API key (required for FinSearch model) |
 | `ANTHROPIC_API_KEY` | No | Anthropic API key (optional provider) |
 | `DEEPSEEK_API_KEY` | No | DeepSeek API key (optional provider) |
 | `BUFFET_AGENT_API_KEY` | No | Buffet-Agent API key (optional provider) |
