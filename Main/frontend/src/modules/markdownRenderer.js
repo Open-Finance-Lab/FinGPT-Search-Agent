@@ -167,7 +167,7 @@ export function renderMarkdownContent(targetElement, rawText, options = {}) {
     return;
   }
 
-  const { prefixLabel = 'FinGPT', wrapMath = true } = options;
+  const { prefixLabel = 'FinSearch', wrapMath = true } = options;
 
   try {
     const html = render(rawText);
@@ -189,7 +189,7 @@ export function renderStreamingPreview(targetElement, rawText, options = {}) {
     return;
   }
 
-  const { prefixLabel = 'FinGPT', wrapMath = true } = options;
+  const { prefixLabel = 'FinSearch', wrapMath = true } = options;
 
   try {
     const html = render(rawText, { stabilizeStreaming: true });
