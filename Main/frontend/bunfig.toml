@@ -1,4 +1,4 @@
-# Bun configuration for FinGPT Frontend Extension
+# Bun configuration for FinSearch Frontend Extension
 
 [install]
 # Frozen lockfile for reproducible builds (CI/CD should fail if lockfile changes)
