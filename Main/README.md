@@ -267,8 +267,8 @@ uv run python manage.py runserver
 - **Gunicorn** – Production WSGI server (1200s timeout for deep research)
 
 ### LLM Providers
-- **OpenAI API** – GPT models (FinGPT-Light)
-- **Google Gemini API** – Gemini models (FinGPT default)
+- **OpenAI API** – GPT models (FinSearch-Light)
+- **Google Gemini API** – Gemini models (FinSearch default)
 - **DeepSeek API** – Alternative provider
 - **Anthropic API** – Claude integration
 - **Custom endpoints** – Buffet-Agent (HuggingFace)
@@ -385,8 +385,8 @@ See `DevSummaries/api/API_DOCUMENTATION.md` for the complete API reference with 
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `OPENAI_API_KEY` | Yes* | OpenAI API key (for FinGPT-Light and web search) |
-| `GOOGLE_API_KEY` | Yes* | Google API key (for FinGPT default model) |
+| `OPENAI_API_KEY` | Yes* | OpenAI API key (for FinSearch-Light and web search) |
+| `GOOGLE_API_KEY` | Yes* | Google API key (for FinSearch default model) |
 | `ANTHROPIC_API_KEY` | No | Anthropic API key |
 | `DEEPSEEK_API_KEY` | No | DeepSeek API key |
 | `BUFFET_AGENT_API_KEY` | No | Buffet-Agent API key |

@@ -1,4 +1,4 @@
-# FinGPT Backend Production Setup (Podman)
+# FinSearch Backend Production Setup (Podman)
 
 This guide walks through preparing the backend container for production while keeping day‑to‑day development workflows unchanged (`docker compose up --build` still uses the development settings).
 
