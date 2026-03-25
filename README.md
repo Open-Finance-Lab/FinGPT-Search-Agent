@@ -1,11 +1,12 @@
 # Agentic FinSearch
 
-An agentic financial search engine that retrieves, verifies, and synthesizes information across major financial data sources — with full source transparency.
+Accurate retrieval of real-time financial data is a core infrastructure for building FinAgents. Our Agentic FinSearch is considered as a cornerstone towards democratizing financial intelligence to the general public. Also, it serves as a reference architecture for safe AI adoption in the financial services industry.
 
 [![Open Financial LLM Leaderboard](https://img.shields.io/badge/FinLLM-Leaderboard-blue)](https://finosfoundation-open-financial-llm-leaderboard.hf.space/#/?columns=isPinned%2Crank%2Cmodel_type%2Cid%2Cmodel.average_score%2Cevaluations.vision_average%2Cevaluations.audio_average%2Cevaluations.english_average%2Cevaluations.chinese_average%2Cevaluations.japanese_average%2Cevaluations.spanish_average%2Cevaluations.greek_average%2Cevaluations.bilingual_average%2Cevaluations.multilingual_average)
 
-- **Agentic retrieval** across major finance websites (Yahoo Finance, SEC EDGAR, TradingView, and more).
-- **Answer engine** that performs open search to locate relevant financial information from websites, reports, filings, and databases.
+- **Air-gapped deployment** - By design, our Agentic FinSearch emphasizes  in the production environment, in order to protect user privacy. 
+- **Numerical accuracy** - This is a critical issue, since one cannot directly apply general-purpose LLMs and agents to business and finance.
+- **No hallucination & misinformation** - For safe AI adoption in high-stake domains like finance, no hallucination & misinformation is a must.  
 - **Source transparency** — every response includes verifiable sources, ensuring reliability and reducing misinformation.
 
 **No trading suggestions. For research and informational purposes only.**
@@ -13,10 +14,10 @@ An agentic financial search engine that retrieves, verifies, and synthesizes inf
 ### Screenshots
 
 1. The search agent overlay: drag, resize, and minimize. Provides context-aware information on the user's current page.
-   ![image](Docs/source/_static/images/F4.0_1.png)
+   ![image](Docs/source/_static/images/new_gui_1.png)
 
 2. Source verification — check exactly where each piece of information came from.
-   ![image](Docs/source/_static/images/F4.0_Source.png)
+   ![image](Docs/source/_static/images/new_gui_2.png)
 
 
 ## Installation

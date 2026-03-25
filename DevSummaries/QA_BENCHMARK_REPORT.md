@@ -1,6 +1,6 @@
 # QA Benchmark Report — Agentic FinSearch vs Manual (24 Questions)
 
-**Test date:** March 16, 2026 | **Mode:** thinking | **Model:** FinGPT | **API:** `agenticfinsearch.org`
+**Test date:** March 16, 2026 | **Mode:** thinking | **Model:** FinSearch | **API:** `agenticfinsearch.org`
 
 ## Results at a Glance
 

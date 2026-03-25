@@ -21,7 +21,7 @@ export function displayChatMessage(containerElement, messageText, sender) {
   messageElement.classList.add('message', `message-${sender}`);
 
   renderMarkdownContent(messageElement, messageText, {
-    prefixLabel: sender === 'bot' ? 'FinGPT' : null,
+    prefixLabel: sender === 'bot' ? 'FinSearch' : null,
   });
 
   containerElement.appendChild(messageElement);

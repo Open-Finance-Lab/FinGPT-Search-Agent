@@ -7,7 +7,7 @@ let availableModels = [];
 let modelDetails = {}; // Store full model details
 
 // Initialize a single selected model
-let selectedModel = "FinGPT";
+let selectedModel = "FinSearch";
 
 // Fetch available models from backend
 async function fetchAvailableModels() {
