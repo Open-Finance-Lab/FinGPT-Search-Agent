@@ -1,6 +1,6 @@
-# Podman Reverse Proxy Deployment (Caddy + FinGPT Backend)
+# Podman Reverse Proxy Deployment (Caddy + FinSearch Backend)
 
-This runbook extends the production setup guide and shows how to run the FinGPT backend together with a Caddy reverse proxy inside a Podman pod. The goal is to expose HTTPS to beta testers while keeping the backend container unchanged (still built with the existing `Main/backend/Dockerfile`).
+This runbook extends the production setup guide and shows how to run the FinSearch backend together with a Caddy reverse proxy inside a Podman pod. The goal is to expose HTTPS to beta testers while keeping the backend container unchanged (still built with the existing `Main/backend/Dockerfile`).
 
 ## 1. Prerequisites
 

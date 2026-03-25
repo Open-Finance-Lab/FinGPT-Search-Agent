@@ -140,7 +140,7 @@ function createLoadingCard(responseContainer) {
 
   const title = document.createElement('div');
   title.className = 'loading-card-title';
-  title.innerText = 'FinGPT is working';
+  title.innerText = 'FinSearch is working';
 
   const currentWrapper = document.createElement('div');
   currentWrapper.className = 'loading-card-current';
@@ -279,8 +279,8 @@ function createActionButtons(
   copyButton.appendChild(copyIcon);
 
   copyButton.onclick = () => {
-    // Remove "FinGPT: " prefix before copying
-    const textToCopy = responseText.replace(/^FinGPT:\s*/, '');
+    // Remove "FinSearch: " prefix before copying
+    const textToCopy = responseText.replace(/^FinSearch:\s*/, '');
     navigator.clipboard
       .writeText(textToCopy)
       .then(() => {
@@ -483,7 +483,7 @@ async function handleChatResponse(question, promptMode = false, useStreaming = t
           console.log('[Debug] onComplete data:', data);
           console.log('[Debug] promptMode:', promptMode);
 
-          const responseText = `FinGPT: ${fullResponse}`;
+          const responseText = `FinSearch: ${fullResponse}`;
           if (responseElement.style.display === 'none') {
             responseElement.style.display = 'block';
           }
@@ -574,7 +574,7 @@ async function handleChatResponse(question, promptMode = false, useStreaming = t
         onError: (error) => {
           console.error('Streaming error:', error);
           responseElement.style.display = 'block';
-          responseElement.innerHTML = `<strong>FinGPT:</strong> Failed to load response (streaming error).`;
+          responseElement.innerHTML = `<strong>FinSearch:</strong> Failed to load response (streaming error).`;
           loadingCard.fail('Streaming error');
         },
         onStatus: (status) => {
@@ -596,13 +596,13 @@ async function handleChatResponse(question, promptMode = false, useStreaming = t
         let responseText = '';
         if (!modelResponse) {
           // Safeguard in case backend does not return something
-          responseText = `FinGPT: (No response from server)`;
+          responseText = `FinSearch: (No response from server)`;
         } else if (
           modelResponse.startsWith('The following file(s) are missing')
         ) {
-          responseText = `FinGPT: Error - ${modelResponse}`;
+          responseText = `FinSearch: Error - ${modelResponse}`;
         } else {
-          responseText = `FinGPT: ${modelResponse}`;
+          responseText = `FinSearch: ${modelResponse}`;
         }
 
         responseElement.style.display = 'block';
@@ -661,7 +661,7 @@ async function handleChatResponse(question, promptMode = false, useStreaming = t
       .catch((error) => {
         console.error('There was a problem with your fetch operation:', error);
         responseElement.style.display = 'block';
-        responseElement.innerHTML = `<strong>FinGPT:</strong> Failed to load response.`;
+        responseElement.innerHTML = `<strong>FinSearch:</strong> Failed to load response.`;
         loadingCard.fail('Network error');
       });
   }
