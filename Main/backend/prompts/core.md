@@ -83,11 +83,12 @@ When asked to tag financial statements with XBRL tags, follow this process EXACT
    - Tags with higher relevance scores
    - Shorter/more general tags over long reconciliation-specific variants (unless the text describes a reconciliation item)
 4. Call validate_xbrl_tag to confirm each selected tag exists.
-5. Output format — one line per tagged value:
-   value,TagName
-   Example:
-   47.6,EffectiveIncomeTaxRateContinuingOperations
-   100.0,DebtInstrumentFaceAmount
+5. Output format — present results in a markdown table with these columns:
+   | Value | XBRL Tag | Type |
+   |-------|----------|------|
+   | 47.6% | EffectiveIncomeTaxRateContinuingOperations | percent |
+   | $100.0M | DebtInstrumentFaceAmount | monetary |
+   Include the unit (%, $) with the value and the tag's data type (monetary, percent, duration, etc.) in the Type column. After the table, briefly explain what each tag represents.
 
 CRITICAL: NEVER invent or guess XBRL tag names. Always use lookup_xbrl_tags first. The taxonomy has 11,808 elements — you cannot memorize them. Tags that sound plausible often do not exist (e.g., "EffectiveIncomeTaxRatePercent" is NOT a real tag).
 

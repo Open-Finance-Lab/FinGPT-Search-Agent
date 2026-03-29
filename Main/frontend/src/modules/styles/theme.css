@@ -203,6 +203,35 @@
     color: #666;
 }
 
+/* Tables in light mode */
+.light-mode #respons .agent_response th {
+    background-color: rgba(26, 188, 156, 0.12);
+    color: #0e7c63;
+    border-bottom-color: rgba(26, 188, 156, 0.3);
+}
+
+.light-mode #respons .agent_response td {
+    border-bottom-color: rgba(0, 0, 0, 0.08);
+}
+
+.light-mode #respons .agent_response tr:hover td {
+    background-color: rgba(0, 0, 0, 0.03);
+}
+
+/* Code blocks in light mode */
+.light-mode #respons .agent_response pre {
+    background-color: #f6f8fa;
+    border-color: #d0d7de;
+}
+
+.light-mode #respons .agent_response pre code {
+    color: #1f2328;
+}
+
+.light-mode #respons .agent_response code {
+    background-color: rgba(0, 0, 0, 0.06);
+}
+
 /* Mode selector in light mode */
 .light-mode .mode-label {
     color: black;
