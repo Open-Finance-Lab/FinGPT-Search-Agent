@@ -236,6 +236,65 @@
   margin-top: 10px;
 }
 
+/* --- Tables inside agent responses --- */
+#respons .agent_response table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 14px;
+}
+
+#respons .agent_response th {
+  background-color: rgba(26, 188, 156, 0.2);
+  color: #1abc9c;
+  font-weight: 600;
+  text-align: left;
+  padding: 10px 12px;
+  border-bottom: 2px solid rgba(26, 188, 156, 0.4);
+}
+
+#respons .agent_response td {
+  padding: 8px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+#respons .agent_response tr:hover td {
+  background-color: rgba(255, 255, 255, 0.04);
+}
+
+/* --- Code blocks inside agent responses --- */
+#respons .agent_response pre {
+  background-color: #1e1e1e;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  padding: 12px 14px;
+  margin: 10px 0;
+  overflow-x: auto;
+}
+
+#respons .agent_response pre code {
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-size: 13px;
+  color: #d4d4d4;
+  line-height: 1.5;
+}
+
+/* Inline code */
+#respons .agent_response code {
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-size: 0.9em;
+  background-color: rgba(255, 255, 255, 0.1);
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+
+/* Don't double-style code inside pre */
+#respons .agent_response pre code {
+  background-color: transparent;
+  padding: 0;
+  border-radius: 0;
+}
+
 .agent-loading-card {
   width: 95%;
   border-radius: 14px;
