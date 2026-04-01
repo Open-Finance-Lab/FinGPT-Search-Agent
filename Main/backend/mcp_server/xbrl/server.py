@@ -15,6 +15,9 @@ from mcp.server.models import InitializationOptions
 from mcp.server.stdio import stdio_server
 import mcp.types as types
 
+from pathlib import Path
+
+from mcp_server.xbrl.parser import query_facts
 from mcp_server.xbrl.search import search_tags, validate_tag, get_tag_info
 
 
@@ -83,6 +86,36 @@ async def handle_list_tools() -> List[types.Tool]:
                 "required": ["tag_name"],
             },
         ),
+        types.Tool(
+            name="query_xbrl_filing",
+            description=(
+                "Query a company's XBRL filing for the reported value of a specific "
+                "XBRL tag. Returns all matching values with their reporting periods. "
+                "Use this to verify financial claims against the original filing data."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "company": {
+                        "type": "string",
+                        "description": (
+                            "Company name or ticker symbol (e.g., 'apple', 'AAPL', "
+                            "'microsoft', 'MSFT', 'tesla', 'TSLA')"
+                        ),
+                    },
+                    "tag_name": {
+                        "type": "string",
+                        "description": (
+                            "XBRL tag name to look up (e.g., "
+                            "'EffectiveIncomeTaxRateContinuingOperations', "
+                            "'RevenueFromContractWithCustomerExcludingAssessedTax'). "
+                            "Use lookup_xbrl_tags first to find the correct tag name."
+                        ),
+                    },
+                },
+                "required": ["company", "tag_name"],
+            },
+        ),
     ]
 
 
@@ -146,6 +179,42 @@ async def handle_call_tool(
                     ),
                 )
             ]
+
+    elif name == "query_xbrl_filing":
+        company = arguments.get("company", "")
+        tag_name = arguments.get("tag_name", "")
+
+        if not company or not tag_name:
+            return [types.TextContent(type="text", text="Error: both 'company' and 'tag_name' are required")]
+
+        filings_dir = Path(__file__).parent / "filings"
+        results = query_facts(company, tag_name, filings_dir)
+
+        if not results:
+            return [
+                types.TextContent(
+                    type="text",
+                    text=(
+                        f"NOT FOUND: No values for tag '{tag_name}' in filings for '{company}'. "
+                        "Check that the company name/ticker is correct and the tag name is valid "
+                        "(use lookup_xbrl_tags to find correct tag names)."
+                    ),
+                )
+            ]
+
+        lines = [f"Found {len(results)} value(s) for '{tag_name}' in {company}'s filing:\n"]
+        for i, r in enumerate(results, 1):
+            period = r["period_start"] or ""
+            if period:
+                period = f"{period} to {r['period_end']}"
+            else:
+                period = f"as of {r['period_end']}"
+            dim_note = " [dimensional breakdown]" if r["has_dimensions"] else ""
+            lines.append(
+                f"{i}. Value: {r['value']}  (unit={r['unit']}, period={period}){dim_note}"
+            )
+
+        return [types.TextContent(type="text", text="\n".join(lines))]
 
     return [types.TextContent(type="text", text=f"Unknown tool: {name}")]
 
