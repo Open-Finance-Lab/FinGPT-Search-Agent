@@ -1356,7 +1356,19 @@ def create_agent_response_stream(
                                 if event_name in {"tool_called", "tool_output"}:
                                     tool_item = getattr(event, "item", None)
                                     tool_type = getattr(tool_item, "type", "")
-                                    logging.debug(f"[AGENT STREAM] Tool event: {event_name} ({tool_type})")
+                                    if os.getenv("MCP_VERBOSE", "").lower() in ("true", "1"):
+                                        tool_name = getattr(tool_item, "name", "?")
+                                        tool_args = getattr(tool_item, "arguments", "")
+                                        tool_out = getattr(tool_item, "output", "")
+                                        if event_name == "tool_called":
+                                            args_preview = (tool_args[:300] + "...") if len(str(tool_args)) > 300 else tool_args
+                                            logging.info(f"[AGENT STREAM TRACE] CALL {tool_name}({args_preview})")
+                                        elif event_name == "tool_output" and tool_out:
+                                            out_str = str(tool_out)
+                                            preview = (out_str[:400] + "...") if len(out_str) > 400 else out_str
+                                            logging.info(f"[AGENT STREAM TRACE] RESULT {tool_name} ({len(out_str)} chars): {preview}")
+                                    else:
+                                        logging.debug(f"[AGENT STREAM] Tool event: {event_name} ({tool_type})")
                 
                 break
 
