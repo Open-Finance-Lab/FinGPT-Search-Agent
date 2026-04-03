@@ -217,6 +217,14 @@ async def create_fin_agent(model: str = "gpt-4o-mini",
                 f"[AGENT] Tool filter applied: {pre_filter_count} -> {len(tools)} "
                 f"(allowed: {allowed_tools})"
             )
+            # Override prompt tool list so the model only sees allowed tools
+            if allowed_tools:
+                tool_names = ", ".join(allowed_tools)
+                instructions += (
+                    f"\n\nCRITICAL TOOL RESTRICTION: For this request you may ONLY call "
+                    f"these tools: {tool_names}. All other tools listed above are "
+                    f"UNAVAILABLE. Calling any other tool will cause a fatal error."
+                )
 
     try:
         # Handle foundation models that don't support "system" roles
