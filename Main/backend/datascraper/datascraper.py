@@ -138,9 +138,19 @@ _QUALITATIVE_PATTERNS = [
 ]
 
 _MCP_REFUSAL_INDICATORS = (
+    # Data not found
     "no information found", "no data found", "no historical data",
+    # Direct refusals
     "i can't answer", "i cannot answer", "i'm sorry",
     "can't answer this question", "cannot provide",
+    # Conditional / clarification-seeking (agent punted instead of answering)
+    "once we know", "please provide", "which would you prefer",
+    "tell me which", "tell me how", "let me know",
+    "would you like me to", "would you prefer",
+    # Step-limit hedging / overly cautious refusals
+    "dozens of sequential", "dozens of calls", "too many tool calls",
+    "i need the", "but i need",
+    "could not verify", "not verify the required",
 )
 
 
@@ -1070,12 +1080,16 @@ async def _create_agent_response_async(
             extra={"current_url": current_url, "has_system_prompt": bool(extracted_system_prompt)},
         )
 
-        result = await Runner.run(agent, full_prompt)
+        result = await Runner.run(agent, full_prompt, max_turns=30)
 
         final_output = result.final_output if hasattr(result, "final_output") else None
         if final_output is None:
             final_output = ""
         logging.info(f"[AGENT] Result length: {len(final_output)}")
+
+        # Dev-mode trace: log agent's tool-call chain
+        if os.getenv("MCP_VERBOSE", "").lower() in ("true", "1"):
+            _log_agent_trace(result)
 
         # Extract tool sources from the result
         tool_sources = _extract_tool_sources_from_result(result)
@@ -1089,6 +1103,43 @@ async def _create_agent_response_async(
             logging.debug(f"[AGENT] Numerical validation error (non-critical): {val_err}")
 
         return final_output, tool_sources
+
+
+def _log_agent_trace(run_result):
+    """Log the agent's tool-call decision chain (dev mode only, MCP_VERBOSE=true)."""
+    try:
+        raw = getattr(run_result, "raw_responses", None)
+        if not raw:
+            return
+        logging.info("[AGENT TRACE] ─── Tool-call chain ───")
+        for turn_idx, resp in enumerate(raw):
+            output = getattr(resp, "output", [])
+            for item in output:
+                item_type = getattr(item, "type", "")
+                if item_type == "function_call":
+                    name = getattr(item, "name", "?")
+                    args = getattr(item, "arguments", "{}")
+                    args_preview = args[:200] + "..." if len(args) > 200 else args
+                    logging.info(f"[AGENT TRACE] Turn {turn_idx}: CALL {name}({args_preview})")
+                elif item_type == "function_call_output":
+                    output_str = getattr(item, "output", "")
+                    preview = output_str[:300] + "..." if len(output_str) > 300 else output_str
+                    logging.info(f"[AGENT TRACE] Turn {turn_idx}: RESULT ({len(output_str)} chars) {preview}")
+                elif item_type == "message":
+                    content = ""
+                    msg_content = getattr(item, "content", [])
+                    if isinstance(msg_content, list):
+                        for part in msg_content:
+                            if hasattr(part, "text"):
+                                content += part.text
+                    elif isinstance(msg_content, str):
+                        content = msg_content
+                    if content:
+                        preview = content[:200] + "..." if len(content) > 200 else content
+                        logging.info(f"[AGENT TRACE] Turn {turn_idx}: LLM says: {preview}")
+        logging.info("[AGENT TRACE] ─── End chain ───")
+    except Exception as e:
+        logging.debug(f"[AGENT TRACE] Failed to log trace: {e}")
 
 
 def _extract_tool_sources_from_result(run_result) -> List[Dict[str, str]]:
