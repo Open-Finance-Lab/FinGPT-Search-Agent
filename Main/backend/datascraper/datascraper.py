@@ -104,23 +104,54 @@ _NUMERICAL_FINANCIAL_PATTERNS = [
     # Price-related
     _re.compile(r'\b(price|prices|stock price|share price|closing price|opening price|open price|close price)\b', _re.I),
     _re.compile(r'\b(current price|latest price|last price|market price|live price)\b', _re.I),
+    # Historical price data (critical: routes these to MCP instead of web search)
+    _re.compile(r'\b(historical price|price history|monthly closing|daily close|close prices|closing prices)\b', _re.I),
+    _re.compile(r'\b(trading days?|unadjusted close|adjusted close|adj close)\b', _re.I),
+    _re.compile(r'\b(uptrend|downtrend|consecutive months|price trend|sustained)\b', _re.I),
     # Volume
     _re.compile(r'\b(trading volume|volume|shares traded|daily volume)\b', _re.I),
     # Market metrics
     _re.compile(r'\b(market cap|market capitalization|p/e ratio|pe ratio|trailing pe|forward pe)\b', _re.I),
     _re.compile(r'\b(dividend yield|earnings per share|eps|revenue)\b', _re.I),
+    _re.compile(r'\b(beta|earnings date|forward dividend)\b', _re.I),
     # Change / movement
     _re.compile(r'\b(percentage change|percent change|price change|% change|price increase|price decrease|price drop)\b', _re.I),
     _re.compile(r'\b(gain|loss|change in price|up or down)\b', _re.I),
+    _re.compile(r'\b(largest drop|biggest drop|largest gain|biggest gain|percentage drop)\b', _re.I),
+    # Statistical / computational (requires fetching price data first)
+    _re.compile(r'\b(correlation|covariance|variance|pearson|standard deviation|volatility)\b', _re.I),
+    _re.compile(r'\b(returns?\b.*\bhigher|outperform|underperform)\b', _re.I),
     # Range / high-low
     _re.compile(r'\b(high price|low price|day range|52.week high|52.week low|intraday range|range)\b', _re.I),
     # Shares / turnover
     _re.compile(r'\b(shares outstanding|float|turnover ratio|shares)\b', _re.I),
-    # Specific data requests
-    _re.compile(r'\b(what is the|give me the|what are the|tell me the|show me the|get the|fetch the|find the)\b.*\b(price|volume|cap|ratio|yield|change|open|close|high|low)\b', _re.I),
+    # Specific data requests (includes fetch/show verbs)
+    _re.compile(r'\b(what is the|give me the|what are the|tell me the|show me the|get the|fetch the|fetch out the|find the)\b.*\b(price|volume|cap|ratio|yield|change|open|close|high|low|data|history)\b', _re.I),
     # Ticker patterns (e.g., AAPL, DJIA, ^GSPC, $TSLA)
     _re.compile(r'\b[A-Z]{1,5}\b.*\b(price|volume|cap|ratio|change|open|close|high|low|range|turnover)\b', _re.I),
 ]
+
+_QUALITATIVE_PATTERNS = [
+    _re.compile(r'\b(news|headline|article|report|analysis|sentiment|opinion|explain|summarize|summary|impact|outlook|forecast|predict)\b', _re.I),
+    _re.compile(r'\b(why did|why is|why are|what happened|what caused|how will|will .+ go up|will .+ go down)\b', _re.I),
+    _re.compile(r'\b(recommend|should i|is it a good|buy or sell|invest in)\b', _re.I),
+]
+
+_MCP_REFUSAL_INDICATORS = (
+    # Data not found
+    "no information found", "no data found", "no historical data",
+    # Direct refusals
+    "i can't answer", "i cannot answer", "i'm sorry",
+    "can't answer this question", "cannot provide",
+    # Conditional / clarification-seeking (agent punted instead of answering)
+    "once we know", "please provide", "which would you prefer",
+    "tell me which", "tell me how", "let me know",
+    "would you like me to", "would you prefer",
+    # Step-limit hedging / overly cautious refusals
+    "dozens of sequential", "dozens of calls", "too many tool calls",
+    "i need the", "but i need",
+    "could not verify", "not verify the required",
+)
 
 
 def _is_numerical_financial_query(query: str) -> bool:
@@ -138,15 +169,7 @@ def _is_numerical_financial_query(query: str) -> bool:
       - "Explain the impact of tariffs on the market"
       - "Summarize Apple's earnings call"
     """
-    # Qualitative keywords that suggest web search is more appropriate
-    qualitative_patterns = [
-        _re.compile(r'\b(news|headline|article|report|analysis|sentiment|opinion|explain|summarize|summary|impact|outlook|forecast|predict)\b', _re.I),
-        _re.compile(r'\b(why did|why is|why are|what happened|what caused|how will|will .+ go up|will .+ go down)\b', _re.I),
-        _re.compile(r'\b(recommend|should i|is it a good|buy or sell|invest in)\b', _re.I),
-    ]
-
-    # If the query is primarily qualitative, prefer web search
-    qualitative_score = sum(1 for p in qualitative_patterns if p.search(query))
+    qualitative_score = sum(1 for p in _QUALITATIVE_PATTERNS if p.search(query))
     numerical_score = sum(1 for p in _NUMERICAL_FINANCIAL_PATTERNS if p.search(query))
 
     # Numerical intent wins if it has more pattern matches, or tied with at least 1
@@ -591,7 +614,7 @@ def _try_mcp_for_numerical_query(
             return None
 
         logging.info(f"[MCP-FIRST] Attempting MCP agent for numerical query: {user_input[:80]}...")
-        response = asyncio.run(_create_agent_response_async(
+        result = asyncio.run(_create_agent_response_async(
             user_input=user_input,
             message_list=message_list,
             model=model,
@@ -600,19 +623,19 @@ def _try_mcp_for_numerical_query(
             user_time=user_time
         ))
 
-        if not response or len(response.strip()) < 10:
+        response_text, _tool_sources = result
+
+        if not response_text or len(response_text.strip()) < 10:
             logging.info("[MCP-FIRST] MCP response too short, falling through to web search")
             return None
 
-        # Check for error indicators in the response
-        error_indicators = ["error", "could not", "unable to", "no information found", "no data"]
-        response_lower = response.lower()
-        if any(indicator in response_lower for indicator in error_indicators):
-            logging.info("[MCP-FIRST] MCP response contains error indicators, falling through to web search")
+        response_lower = response_text.lower()
+        if any(indicator in response_lower for indicator in _MCP_REFUSAL_INDICATORS):
+            logging.info("[MCP-FIRST] MCP response contains error/refusal indicators, falling through to web search")
             return None
 
-        logging.info(f"[MCP-FIRST] MCP agent succeeded ({len(response)} chars)")
-        return response
+        logging.info(f"[MCP-FIRST] MCP agent succeeded ({len(response_text)} chars)")
+        return response_text
 
     except Exception as e:
         logging.warning(f"[MCP-FIRST] MCP agent failed: {e}, falling through to web search")
@@ -1057,12 +1080,16 @@ async def _create_agent_response_async(
             extra={"current_url": current_url, "has_system_prompt": bool(extracted_system_prompt)},
         )
 
-        result = await Runner.run(agent, full_prompt)
+        result = await Runner.run(agent, full_prompt, max_turns=30)
 
         final_output = result.final_output if hasattr(result, "final_output") else None
         if final_output is None:
             final_output = ""
         logging.info(f"[AGENT] Result length: {len(final_output)}")
+
+        # Dev-mode trace: log agent's tool-call chain
+        if os.getenv("MCP_VERBOSE", "").lower() in ("true", "1"):
+            _log_agent_trace(result)
 
         # Extract tool sources from the result
         tool_sources = _extract_tool_sources_from_result(result)
@@ -1076,6 +1103,43 @@ async def _create_agent_response_async(
             logging.debug(f"[AGENT] Numerical validation error (non-critical): {val_err}")
 
         return final_output, tool_sources
+
+
+def _log_agent_trace(run_result):
+    """Log the agent's tool-call decision chain (dev mode only, MCP_VERBOSE=true)."""
+    try:
+        raw = getattr(run_result, "raw_responses", None)
+        if not raw:
+            return
+        logging.info("[AGENT TRACE] ─── Tool-call chain ───")
+        for turn_idx, resp in enumerate(raw):
+            output = getattr(resp, "output", [])
+            for item in output:
+                item_type = getattr(item, "type", "")
+                if item_type == "function_call":
+                    name = getattr(item, "name", "?")
+                    args = getattr(item, "arguments", "{}")
+                    args_preview = args[:200] + "..." if len(args) > 200 else args
+                    logging.info(f"[AGENT TRACE] Turn {turn_idx}: CALL {name}({args_preview})")
+                elif item_type == "function_call_output":
+                    output_str = getattr(item, "output", "")
+                    preview = output_str[:300] + "..." if len(output_str) > 300 else output_str
+                    logging.info(f"[AGENT TRACE] Turn {turn_idx}: RESULT ({len(output_str)} chars) {preview}")
+                elif item_type == "message":
+                    content = ""
+                    msg_content = getattr(item, "content", [])
+                    if isinstance(msg_content, list):
+                        for part in msg_content:
+                            if hasattr(part, "text"):
+                                content += part.text
+                    elif isinstance(msg_content, str):
+                        content = msg_content
+                    if content:
+                        preview = content[:200] + "..." if len(content) > 200 else content
+                        logging.info(f"[AGENT TRACE] Turn {turn_idx}: LLM says: {preview}")
+        logging.info("[AGENT TRACE] ─── End chain ───")
+    except Exception as e:
+        logging.debug(f"[AGENT TRACE] Failed to log trace: {e}")
 
 
 def _extract_tool_sources_from_result(run_result) -> List[Dict[str, str]]:
