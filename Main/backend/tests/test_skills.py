@@ -98,7 +98,7 @@ class TestStockFundamentalsSkill:
         self.skill = StockFundamentalsSkill()
 
     def test_tools(self):
-        assert set(self.skill.tools_allowed) == {"get_stock_info", "get_stock_history", "calculate"}
+        assert set(self.skill.tools_allowed) == {"get_stock_info", "get_stock_history", "get_earnings_info", "calculate"}
 
     def test_max_turns(self):
         assert self.skill.max_turns == 5
