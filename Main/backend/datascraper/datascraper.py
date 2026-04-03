@@ -104,23 +104,44 @@ _NUMERICAL_FINANCIAL_PATTERNS = [
     # Price-related
     _re.compile(r'\b(price|prices|stock price|share price|closing price|opening price|open price|close price)\b', _re.I),
     _re.compile(r'\b(current price|latest price|last price|market price|live price)\b', _re.I),
+    # Historical price data (critical: routes these to MCP instead of web search)
+    _re.compile(r'\b(historical price|price history|monthly closing|daily close|close prices|closing prices)\b', _re.I),
+    _re.compile(r'\b(trading days?|unadjusted close|adjusted close|adj close)\b', _re.I),
+    _re.compile(r'\b(uptrend|downtrend|consecutive months|price trend|sustained)\b', _re.I),
     # Volume
     _re.compile(r'\b(trading volume|volume|shares traded|daily volume)\b', _re.I),
     # Market metrics
     _re.compile(r'\b(market cap|market capitalization|p/e ratio|pe ratio|trailing pe|forward pe)\b', _re.I),
     _re.compile(r'\b(dividend yield|earnings per share|eps|revenue)\b', _re.I),
+    _re.compile(r'\b(beta|earnings date|forward dividend)\b', _re.I),
     # Change / movement
     _re.compile(r'\b(percentage change|percent change|price change|% change|price increase|price decrease|price drop)\b', _re.I),
     _re.compile(r'\b(gain|loss|change in price|up or down)\b', _re.I),
+    _re.compile(r'\b(largest drop|biggest drop|largest gain|biggest gain|percentage drop)\b', _re.I),
+    # Statistical / computational (requires fetching price data first)
+    _re.compile(r'\b(correlation|covariance|variance|pearson|standard deviation|volatility)\b', _re.I),
+    _re.compile(r'\b(returns?\b.*\bhigher|outperform|underperform)\b', _re.I),
     # Range / high-low
     _re.compile(r'\b(high price|low price|day range|52.week high|52.week low|intraday range|range)\b', _re.I),
     # Shares / turnover
     _re.compile(r'\b(shares outstanding|float|turnover ratio|shares)\b', _re.I),
-    # Specific data requests
-    _re.compile(r'\b(what is the|give me the|what are the|tell me the|show me the|get the|fetch the|find the)\b.*\b(price|volume|cap|ratio|yield|change|open|close|high|low)\b', _re.I),
+    # Specific data requests (includes fetch/show verbs)
+    _re.compile(r'\b(what is the|give me the|what are the|tell me the|show me the|get the|fetch the|fetch out the|find the)\b.*\b(price|volume|cap|ratio|yield|change|open|close|high|low|data|history)\b', _re.I),
     # Ticker patterns (e.g., AAPL, DJIA, ^GSPC, $TSLA)
     _re.compile(r'\b[A-Z]{1,5}\b.*\b(price|volume|cap|ratio|change|open|close|high|low|range|turnover)\b', _re.I),
 ]
+
+_QUALITATIVE_PATTERNS = [
+    _re.compile(r'\b(news|headline|article|report|analysis|sentiment|opinion|explain|summarize|summary|impact|outlook|forecast|predict)\b', _re.I),
+    _re.compile(r'\b(why did|why is|why are|what happened|what caused|how will|will .+ go up|will .+ go down)\b', _re.I),
+    _re.compile(r'\b(recommend|should i|is it a good|buy or sell|invest in)\b', _re.I),
+]
+
+_MCP_REFUSAL_INDICATORS = (
+    "no information found", "no data found", "no historical data",
+    "i can't answer", "i cannot answer", "i'm sorry",
+    "can't answer this question", "cannot provide",
+)
 
 
 def _is_numerical_financial_query(query: str) -> bool:
@@ -138,15 +159,7 @@ def _is_numerical_financial_query(query: str) -> bool:
       - "Explain the impact of tariffs on the market"
       - "Summarize Apple's earnings call"
     """
-    # Qualitative keywords that suggest web search is more appropriate
-    qualitative_patterns = [
-        _re.compile(r'\b(news|headline|article|report|analysis|sentiment|opinion|explain|summarize|summary|impact|outlook|forecast|predict)\b', _re.I),
-        _re.compile(r'\b(why did|why is|why are|what happened|what caused|how will|will .+ go up|will .+ go down)\b', _re.I),
-        _re.compile(r'\b(recommend|should i|is it a good|buy or sell|invest in)\b', _re.I),
-    ]
-
-    # If the query is primarily qualitative, prefer web search
-    qualitative_score = sum(1 for p in qualitative_patterns if p.search(query))
+    qualitative_score = sum(1 for p in _QUALITATIVE_PATTERNS if p.search(query))
     numerical_score = sum(1 for p in _NUMERICAL_FINANCIAL_PATTERNS if p.search(query))
 
     # Numerical intent wins if it has more pattern matches, or tied with at least 1
@@ -591,7 +604,7 @@ def _try_mcp_for_numerical_query(
             return None
 
         logging.info(f"[MCP-FIRST] Attempting MCP agent for numerical query: {user_input[:80]}...")
-        response = asyncio.run(_create_agent_response_async(
+        result = asyncio.run(_create_agent_response_async(
             user_input=user_input,
             message_list=message_list,
             model=model,
@@ -600,19 +613,19 @@ def _try_mcp_for_numerical_query(
             user_time=user_time
         ))
 
-        if not response or len(response.strip()) < 10:
+        response_text, _tool_sources = result
+
+        if not response_text or len(response_text.strip()) < 10:
             logging.info("[MCP-FIRST] MCP response too short, falling through to web search")
             return None
 
-        # Check for error indicators in the response
-        error_indicators = ["error", "could not", "unable to", "no information found", "no data"]
-        response_lower = response.lower()
-        if any(indicator in response_lower for indicator in error_indicators):
-            logging.info("[MCP-FIRST] MCP response contains error indicators, falling through to web search")
+        response_lower = response_text.lower()
+        if any(indicator in response_lower for indicator in _MCP_REFUSAL_INDICATORS):
+            logging.info("[MCP-FIRST] MCP response contains error/refusal indicators, falling through to web search")
             return None
 
-        logging.info(f"[MCP-FIRST] MCP agent succeeded ({len(response)} chars)")
-        return response
+        logging.info(f"[MCP-FIRST] MCP agent succeeded ({len(response_text)} chars)")
+        return response_text
 
     except Exception as e:
         logging.warning(f"[MCP-FIRST] MCP agent failed: {e}, falling through to web search")
