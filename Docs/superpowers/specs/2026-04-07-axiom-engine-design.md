@@ -13,10 +13,12 @@ Add a deterministic validation layer that checks mathematical relationships betw
 **Approach:** MCP Tool Wrapper intercept (Approach 1 of 3 evaluated).
 
 The axiom check runs as a code-enforced post-execution hook inside `tool_wrapper.py`. When `get_stock_financials` returns balance sheet data, the wrapper:
-1. Resolves the ticker to a local XBRL filing
-2. Parses the filing using the existing `xbrl/parser.py`
-3. Runs the axiom check (pure Python, deterministic)
+1. Parses the Yahoo Finance JSON payload already in the tool output
+2. Extracts Assets, Liabilities, and Equity from the structured data
+3. Runs the axiom check on the live data (pure Python, deterministic)
 4. Appends a structured annotation to the tool output before the agent sees it
+
+The axiom validates the data the agent is actually working with, not a separate data source. Local XBRL filings are used exclusively in the benchmark script to prove the axiom against authoritative SEC data.
 
 **Why this approach over alternatives:**
 - Dedicated Skill (Approach 2) relies on the LLM choosing to call a validation tool, reintroducing the tool hallucination problem we fixed in April 2026.
@@ -29,7 +31,8 @@ The axiom check runs as a code-enforced post-execution hook inside `tool_wrapper
 |----------|--------|-----------|
 | Validation point | Tool output (before LLM) | Catches data issues before reasoning; existing `validate_numerical_accuracy()` already handles post-response number checking |
 | Failure behavior | Flag and force disclosure | Inject warning into tool result text so LLM must disclose discrepancy; retry logic deferred |
-| Data source | Local XBRL files (SEC filings) | Ground truth from authoritative source; reuses existing parser; no external network calls |
+| Data source (live) | Yahoo Finance JSON payload | Validates the data the agent actually uses; no temporal mismatch; no file I/O |
+| Data source (benchmark) | Local XBRL files (SEC filings) | Proves axiom against authoritative SEC data; publishable artifact |
 | Demo scope | 3-5 companies, 1 period each | Enough to demonstrate cross-sector generalization; manageable file count |
 
 ## Components
@@ -51,24 +54,31 @@ class AxiomResult:
     source_file: str | None
 ```
 
-**`check_balance_sheet_equality(facts: List[Dict]) -> AxiomResult`:**
-- Filters facts for the most recent non-dimensional instant values of `Assets`, `Liabilities`, `StockholdersEquity`
-- Checks `Assets == Liabilities + StockholdersEquity` within 0.01% tolerance
-- Returns `VERIFIED`, `FAILED`, or `SKIPPED` (if tags not found)
+**`check_balance_sheet_from_json(json_str: str) -> AxiomResult`:**
+- Parses the Yahoo Finance JSON payload from the tool output
+- Extracts from the most recent balance sheet period:
+  - `"Total Assets"` (A)
+  - `"Total Liabilities Net Minority Interest"` (L)
+  - `"Total Equity Gross Minority Interest"` (E)
+- Falls back to `"Stockholders Equity"` for E only if gross field is absent
+- Checks `A == L + E` within 0.01% tolerance
+- Returns `VERIFIED`, `FAILED`, or `SKIPPED` (if fields not found in JSON)
 
-**`validate_filing(company: str, filings_dir: Path) -> List[AxiomResult]`:**
-- Resolves company to filing via `parser.find_filing()`
-- Parses filing via `parser.parse_filing()` (cached)
-- Runs all registered axioms (currently just balance sheet equality)
-- Returns list of results
+**Important: Yahoo Finance field name semantics.** The liabilities field is "net minority interest" (excludes minority interest). To balance, the equity field must be "gross minority interest" (includes minority interest). Using `"Stockholders Equity"` (parent-only) with `"Total Liabilities Net Minority Interest"` produces false failures for companies with non-controlling interests (e.g., Tesla shows 0.53% variance with the wrong pairing).
+
+**`check_balance_sheet_from_xbrl(facts: List[Dict]) -> AxiomResult`:**
+- Used by benchmark only, not the live path
+- Filters facts for the most recent non-dimensional instant values
+- Tag preference order for equity: `StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest`, then `StockholdersEquity`
+- Checks `Assets == Liabilities + Equity` within 0.01% tolerance
 
 **`annotate_with_axioms(tool_name: str, kwargs: dict, text_output: str) -> str`:**
 - Entry point called from tool wrapper
-- Only triggers for `get_stock_financials` when result contains balance sheet data
-- Calls `validate_filing()`, formats annotation, appends to text_output
-- On VERIFIED: `[AXIOM VERIFIED] Balance sheet equality confirmed: Assets ($X) = Liabilities ($Y) + Equity ($Z). Source: SEC filing <filename>`
-- On FAILED: `[AXIOM FAILED] Balance sheet discrepancy detected: ... Variance: X%. You MUST disclose this discrepancy to the user.`
-- On SKIPPED: `[AXIOM SKIPPED] No local XBRL filing available for <ticker>. Balance sheet not independently verified.`
+- Only triggers for `get_stock_financials` when result contains `"balance_sheet"`
+- Calls `check_balance_sheet_from_json(text_output)`, formats annotation, appends
+- On VERIFIED: `[AXIOM VERIFIED] Retrieved balance sheet is internally consistent: Assets ($X) = Liabilities ($Y) + Equity ($Z).`
+- On FAILED: `[AXIOM FAILED] Retrieved balance sheet has a discrepancy: Assets ($X) != Liabilities ($Y) + Equity ($Z). Variance: X%. You MUST disclose this discrepancy to the user.`
+- On SKIPPED: `[AXIOM SKIPPED] Could not extract balance sheet fields for verification.`
 
 ### 2. Tool Wrapper Modification (`Main/backend/mcp_client/tool_wrapper.py`)
 
@@ -90,7 +100,7 @@ The annotation function handles all conditional logic internally (tool name chec
 
 ### 3. Parser Extension (`Main/backend/mcp_server/xbrl/parser.py`)
 
-Add new entries to `COMPANY_ALIASES`:
+Add new entries to `COMPANY_ALIASES` (needed for benchmark and existing `query_xbrl_filing` MCP tool):
 ```python
 COMPANY_ALIASES = {
     "apple": "aapl",
@@ -129,12 +139,12 @@ tool_wrapper.py: assemble text from MCP result
   |
   v
 annotate_with_axioms("get_stock_financials", {"ticker": "AAPL"}, text)
-  |  1. find_filing("AAPL") -> aapl-20230930.xml
-  |  2. parse_filing() -> cached XBRL facts
-  |  3. check_balance_sheet_equality(facts) -> AxiomResult
+  |  1. json.loads(text) -> extract balance_sheet dict
+  |  2. Get most recent period's Total Assets, Total Liabilities, Total Equity
+  |  3. check: A == L + E within 0.01% tolerance
   |  4. Append annotation to text
   v
-Agent receives: original JSON + "[AXIOM VERIFIED] ..."
+Agent receives: original JSON + "[AXIOM VERIFIED] Retrieved balance sheet is internally consistent: ..."
   |
   v
 LLM formats response, includes verification status
@@ -145,17 +155,16 @@ User sees proof trail in response
 
 **Key properties:**
 - Deterministic: axiom check is pure Python math, no LLM involved
-- Non-blocking on skip: missing filing means SKIPPED, response still goes through
-- Cached: `parse_filing()` caches by filepath after first call
-- No IPC: axiom engine imports parser directly, same Python process
-
-**Caveat:** Local XBRL filings are from 2023 while Yahoo Finance returns current data. The axiom validates the relationship (A = L + E) within XBRL data, not cross-source value matching. Cross-source comparison is a future feature.
+- Validates live data: checks the Yahoo Finance payload the agent is actually using, not a separate data source
+- Non-blocking on skip: missing fields means SKIPPED, response still goes through
+- No file I/O: parses JSON string already in memory
+- No temporal mismatch: verification applies to the exact data being presented
 
 ## Testing Strategy
 
 ### Unit Tests (`Main/backend/tests/test_axioms.py`)
-- `check_balance_sheet_equality()` with synthetic facts: exact match, tolerance match, failure, missing tags, dimensional filtering
-- `validate_filing()` against all local filings (should all pass)
+- `check_balance_sheet_from_json()` with synthetic Yahoo JSON: exact match, tolerance match, clear failure, missing fields, minority interest edge case (Stockholders Equity vs Total Equity Gross Minority Interest)
+- `check_balance_sheet_from_xbrl()` with synthetic XBRL facts: exact match, failure, missing tags, dimensional filtering, tag preference order (compound equity tag vs simple)
 - `annotate_with_axioms()` for VERIFIED, FAILED, SKIPPED outcomes
 
 ### Integration Test (`Main/backend/tests/test_axiom_integration.py`)
@@ -163,9 +172,10 @@ User sees proof trail in response
 - Non-financial tools pass through unmodified
 
 ### Benchmark (`Main/backend/axioms/benchmark.py`)
-Standalone script producing publishable output:
+Standalone script that validates XBRL filings (SEC ground truth) using `check_balance_sheet_from_xbrl()`. This is the publishable artifact proving the axiom against authoritative data:
 ```
 Axiom Benchmark: Balance Sheet Equality (A = L + E)
+Source: Local XBRL filings (SEC 10-K)
 ====================================================
 AAPL (2023-09-30)  VERIFIED  Assets: $352.6B = $290.4B + $62.1B  variance: 0.000%
 MSFT (2023-06-30)  VERIFIED  Assets: $411.9B = $205.7B + $206.2B  variance: 0.000%
@@ -175,6 +185,8 @@ BRK  (20XX-XX-XX)  VERIFIED  ...
 ====================================================
 Pass rate: 5/5 (100%)
 ```
+
+The benchmark uses `check_balance_sheet_from_xbrl()` (XBRL tag extraction), while the live tool wrapper uses `check_balance_sheet_from_json()` (Yahoo JSON extraction). Both check the same axiom; they differ only in data extraction.
 
 ## Files Changed
 
@@ -202,9 +214,9 @@ Pass rate: 5/5 (100%)
 
 ## Future Extensions (Not in Scope)
 
-- Retry logic on axiom failure (try SEC-EDGAR, then Yahoo Finance)
+- Cross-source validation: compare Yahoo Finance values against local XBRL filing for the same period (the natural next step, combining both extraction paths)
+- Retry logic on axiom failure (fall back to SEC-EDGAR data source)
 - Additional axioms: Income Statement Identity, Cash Flow Reconciliation, Put-Call Parity
-- Cross-source validation (Yahoo vs SEC-EDGAR value comparison)
-- Pre-extracted JSON cache for faster filing lookups
+- Pre-extracted JSON cache for faster XBRL filing lookups
 - Chrome extension "Mathematically Verified" badge
 - Streaming response annotation support
