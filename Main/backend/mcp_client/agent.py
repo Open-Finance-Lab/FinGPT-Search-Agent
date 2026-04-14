@@ -144,11 +144,6 @@ async def create_fin_agent(model: str = "gpt-4o-mini",
         calculator_tools = get_calculator_tools()
         tools.extend(calculator_tools)
 
-        # Axiom claim-reporting tool for Layer 1 Validate (session-bound via closure)
-        if session_id:
-            from axioms.tool import get_axiom_tools
-            tools.extend(get_axiom_tools(session_id))
-
         from .mcp_manager import MCPClientManager
         from .tool_wrapper import convert_mcp_tool_to_python_callable
         import asyncio
@@ -223,14 +218,24 @@ async def create_fin_agent(model: str = "gpt-4o-mini",
                 f"[AGENT] Tool filter applied: {pre_filter_count} -> {len(tools)} "
                 f"(allowed: {allowed_tools})"
             )
-            # Override prompt tool list so the model only sees allowed tools
+            # Scope the data-tool catalog for this request. Output-protocol
+            # functions (e.g., report_claim) are handled by a separate prompt
+            # section and are deliberately not in scope here.
             if allowed_tools:
                 tool_names = ", ".join(allowed_tools)
                 instructions += (
-                    f"\n\nCRITICAL TOOL RESTRICTION: For this request you may ONLY call "
-                    f"these tools: {tool_names}. All other tools listed above are "
-                    f"UNAVAILABLE. Calling any other tool will cause a fatal error."
+                    f"\n\nTOOL SCOPE: For this request, the only data-gathering "
+                    f"tools in scope are: {tool_names}. Other tools listed in the "
+                    f"AVAILABLE TOOLS catalog are out of scope; calling them will "
+                    f"cause a fatal error."
                 )
+
+        # Axiom claim-reporting tool: added AFTER the allow-list filter so the
+        # planner's per-skill tool restriction can't strip it. It's a logging
+        # hook bound to the session, not a capability the planner chooses.
+        if session_id:
+            from axioms.tool import get_axiom_tools
+            tools.extend(get_axiom_tools(session_id))
 
     try:
         # Handle foundation models that don't support "system" roles

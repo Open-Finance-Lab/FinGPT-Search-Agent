@@ -536,54 +536,6 @@
   background-color: rgba(78, 161, 255, 0.12);
 }
 
-.axiom-validate-panel {
-  margin-top: 10px;
-  padding: 10px 12px;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 8px;
-  background-color: rgba(255, 255, 255, 0.04);
-  font-size: 13px;
-  color: rgba(255, 255, 255, 0.9);
-}
-
-.axiom-validate-header {
-  font-weight: 600;
-  margin-bottom: 8px;
-}
-
-.axiom-validate-list {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.axiom-validate-list > li {
-  padding-left: 4px;
-}
-
-.axiom-chip {
-  display: inline-block;
-  padding: 2px 8px;
-  border-radius: 10px;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.3px;
-  margin-right: 6px;
-}
-
-.axiom-chip-verified   { background-color: rgba(46, 160, 67, 0.25);  color: #3fb950; }
-.axiom-chip-failed     { background-color: rgba(248, 81, 73, 0.25);  color: #f85149; }
-.axiom-chip-na         { background-color: rgba(139, 148, 158, 0.25); color: #b1bac4; }
-.axiom-chip-skipped    { background-color: rgba(210, 153, 34, 0.25); color: #d29922; }
-
-.axiom-claim-label { font-weight: 500; }
-.axiom-claim-detail { font-size: 12px; opacity: 0.85; margin-top: 2px; }
-.axiom-claim-message { font-size: 12px; opacity: 0.75; margin-top: 2px; font-style: italic; }
-.axiom-claim-source { font-size: 11px; opacity: 0.6; margin-top: 2px; font-family: monospace; }
-
 .axiom-mismatch-mark {
   text-decoration: underline wavy rgba(248, 81, 73, 0.9);
   text-underline-offset: 3px;

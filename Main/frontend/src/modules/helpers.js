@@ -1,6 +1,7 @@
 // helpers.js
 import { clearMessages, getSourceUrls, logQuestion, validateClaims } from './api.js';
 import { handleChatResponse, handleImageResponse } from './handlers.js';
+import { renderMarkdownContent } from './markdownRenderer.js';
 import {
     clearCachedSources,
     getCurrentPageUrl,
@@ -645,14 +646,15 @@ function makeDraggableAndResizable(element, sourceWindowOffsetX = 10, onLayoutCh
 
 // ── Layer 1 Validate ────────────────────────────────────────────────
 // Click handler for the Validate button. POSTs session_id to the backend,
-// renders per-claim verdicts under the last agent response, and best-effort
-// highlights claimed numbers that failed verification.
+// renders the XBRL validation report as a fresh conversation turn (user
+// request + agent reply), and best-effort highlights claimed numbers that
+// failed verification in the preceding agent response.
 
-function _statusChipClass(status) {
-    if (status === 'VERIFIED')       return 'axiom-chip axiom-chip-verified';
-    if (status === 'FAILED')         return 'axiom-chip axiom-chip-failed';
-    if (status === 'NOT_APPLICABLE') return 'axiom-chip axiom-chip-na';
-    return 'axiom-chip axiom-chip-skipped';
+function _statusGlyph(status) {
+    if (status === 'VERIFIED')       return 'VERIFIED';
+    if (status === 'FAILED')         return 'FAILED';
+    if (status === 'NOT_APPLICABLE') return 'N/A';
+    return 'SKIPPED';
 }
 
 function _formatNumber(n) {
@@ -700,81 +702,106 @@ function _highlightMismatchedNumbers(container, claim) {
     }
 }
 
-function _renderValidateResults(data) {
-    // Attach a results panel under the most recent agent message bubble.
-    const chatLog = document.getElementById('chat_log');
-    if (!chatLog) return;
-    const bubbles = chatLog.querySelectorAll('.response-chat-element, .chat-element');
-    const lastBubble = bubbles.length ? bubbles[bubbles.length - 1] : chatLog;
-
-    // Remove any prior panel so repeat clicks refresh cleanly
-    const prior = lastBubble.querySelector('.axiom-validate-panel');
-    if (prior) prior.remove();
-
-    const panel = document.createElement('div');
-    panel.className = 'axiom-validate-panel';
-
-    const header = document.createElement('div');
-    header.className = 'axiom-validate-header';
+function _buildValidateMarkdown(data) {
+    const claims = data.claims || [];
     const summary = data.summary || {};
-    const total = summary.total || 0;
+    const total = summary.total || claims.length;
     const verified = summary.VERIFIED || 0;
+    const failed = summary.FAILED || 0;
+    const na = summary.NOT_APPLICABLE || 0;
+
     if (total === 0) {
-        header.textContent = 'No ratio claims recorded for this response.';
-    } else {
-        header.textContent = `Validated ${verified}/${total} claims against SEC XBRL filings.`;
+        return '**Validation Report**\n\nNo ratio claims were recorded for the previous response, so there is nothing to validate.';
     }
-    panel.appendChild(header);
 
-    const list = document.createElement('ul');
-    list.className = 'axiom-validate-list';
-    for (const claim of (data.claims || [])) {
-        const item = document.createElement('li');
-        const chip = document.createElement('span');
-        chip.className = _statusChipClass(claim.status);
-        chip.textContent = claim.status;
-        item.appendChild(chip);
+    const headline = failed > 0
+        ? `**${failed} of ${total} claim${total === 1 ? '' : 's'} failed verification** against SEC XBRL filings.`
+        : na === total
+            ? `All ${total} claim${total === 1 ? '' : 's'} marked not applicable for this filer's reporting structure.`
+            : `**All ${verified} of ${total} claim${total === 1 ? '' : 's'} verified** against SEC XBRL filings.`;
 
-        const label = document.createElement('span');
-        label.className = 'axiom-claim-label';
-        label.textContent = ` ${claim.ratio.replace(/_/g, ' ')} · ${claim.ticker} · ${claim.period}`;
-        item.appendChild(label);
+    const lines = [
+        '**Validation Report**',
+        '',
+        headline,
+        '',
+        '| Ratio | Ticker | Period | Your Claim | XBRL Ground Truth | Variance | Status |',
+        '|---|---|---|---:|---:|---:|:---:|',
+    ];
 
-        if (claim.expected !== undefined && claim.actual !== undefined) {
-            const detail = document.createElement('div');
-            detail.className = 'axiom-claim-detail';
-            detail.textContent = `claimed ${_formatNumber(claim.actual)}, XBRL ${_formatNumber(claim.expected)} (${(claim.variance_pct ?? 0).toFixed(3)}% variance)`;
-            item.appendChild(detail);
-        }
-        if (claim.message) {
-            const msg = document.createElement('div');
-            msg.className = 'axiom-claim-message';
-            msg.textContent = claim.message;
-            item.appendChild(msg);
-        }
-        if (claim.xbrl_source) {
-            const src = document.createElement('div');
-            src.className = 'axiom-claim-source';
-            src.textContent = `Ground truth: ${claim.xbrl_source}`;
-            item.appendChild(src);
-        }
-        list.appendChild(item);
+    for (const c of claims) {
+        const ratio = c.ratio ? c.ratio.replace(/_/g, ' ') : '—';
+        const claimStr = c.actual !== undefined && c.actual !== null
+            ? _formatNumber(c.actual)
+            : (c.claimed_value !== undefined ? _formatNumber(c.claimed_value) : '—');
+        const expectedStr = c.expected !== undefined && c.expected !== null
+            ? _formatNumber(c.expected)
+            : '—';
+        const varStr = c.variance_pct !== undefined && c.variance_pct !== null
+            ? `${c.variance_pct.toFixed(3)}%`
+            : '—';
+        lines.push(
+            `| ${ratio} | ${c.ticker || '—'} | ${c.period || '—'} | ${claimStr} | ${expectedStr} | ${varStr} | ${_statusGlyph(c.status)} |`
+        );
+    }
 
-        if (claim.status === 'FAILED') {
-            _highlightMismatchedNumbers(lastBubble, claim);
+    const notes = claims.filter(c => c.message).map(c =>
+        `- **${c.ticker} · ${c.ratio ? c.ratio.replace(/_/g, ' ') : ''}**: ${c.message}`
+    );
+    if (notes.length) {
+        lines.push('', ...notes);
+    }
+
+    const sources = Array.from(new Set(claims.map(c => c.xbrl_source).filter(Boolean)));
+    if (sources.length) {
+        lines.push('', `*Ground truth: ${sources.map(s => `\`${s}\``).join(', ')}*`);
+    }
+
+    return lines.join('\n');
+}
+
+function _renderValidateResults(data) {
+    const responseContainer = document.getElementById('respons');
+    if (!responseContainer) return;
+
+    // Capture the preceding agent response bubble BEFORE appending new
+    // content — that's the bubble whose numbers should be highlighted if any
+    // claim failed.
+    const priorBubbles = responseContainer.querySelectorAll('.agent_response');
+    const priorAgentBubble = priorBubbles.length ? priorBubbles[priorBubbles.length - 1] : null;
+
+    // Append user-side prompt + agent-side reply to mimic a conversation turn.
+    appendChatElement(responseContainer, 'your_question', 'Validate the numerical claims in your last response against SEC XBRL filings.');
+
+    const replyElement = appendChatElement(responseContainer, 'agent_response', '');
+    renderMarkdownContent(replyElement, _buildValidateMarkdown(data));
+
+    scrollChatToBottom();
+
+    // Highlight the offending numbers in the prior agent bubble for any FAILED
+    // claims, so the user can see in-context which figure was flagged.
+    if (priorAgentBubble) {
+        for (const c of (data.claims || [])) {
+            if (c.status === 'FAILED') {
+                _highlightMismatchedNumbers(priorAgentBubble, c);
+            }
         }
     }
-    panel.appendChild(list);
-    lastBubble.appendChild(panel);
 }
 
 async function validate_response() {
+    const responseContainer = document.getElementById('respons');
     try {
         const data = await validateClaims();
         _renderValidateResults(data);
     } catch (err) {
         console.error('Validate failed:', err);
-        alert('Validation request failed. See console for details.');
+        if (responseContainer) {
+            appendChatElement(responseContainer, 'your_question', 'Validate the numerical claims in your last response against SEC XBRL filings.');
+            const replyElement = appendChatElement(responseContainer, 'agent_response', '');
+            renderMarkdownContent(replyElement, '**Validation request failed.** Unable to reach the validation service. Check the backend logs and try again.');
+            scrollChatToBottom();
+        }
     }
 }
 
