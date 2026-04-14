@@ -17,9 +17,18 @@ from urllib.parse import urlparse
 
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.cache import cache_page
-from django.http import JsonResponse, StreamingHttpResponse, HttpRequest
+from django.http import (
+    FileResponse,
+    HttpRequest,
+    HttpResponseNotFound,
+    JsonResponse,
+    StreamingHttpResponse,
+)
 from django.conf import settings
 from django_ratelimit.decorators import ratelimit
+
+from axioms.resolver import FILINGS_DIR
+from axioms.sources import build_xbrl_sources, merge_xbrl_sources
 
 from datascraper import datascraper as ds
 from datascraper.preferred_links_manager import get_manager
@@ -130,6 +139,35 @@ def has_axiom_claims(request: HttpRequest) -> JsonResponse:
         })
     except Exception as e:
         return JsonResponse({'error': _safe_error_message(e, 'has_axiom_claims')}, status=500)
+
+
+_XBRL_FILENAME_RE = re.compile(r"^[a-z0-9]+-[0-9]{8}\.xml$")
+_FILINGS_DIR_RESOLVED = FILINGS_DIR.resolve()
+
+
+@csrf_exempt
+@ratelimit(key='ip', rate=settings.API_RATE_LIMIT, method='ALL', block=True)
+def xbrl_filing_download(request: HttpRequest, filename: str) -> FileResponse:
+    """Serve a local SEC XBRL filing used for Layer 1 Validate.
+
+    The sources popup links here so users can inspect the ground-truth
+    document the axiom engine verified against. Filename is validated
+    against a strict pattern (``aapl-20230930.xml``) to block path
+    traversal; we never concatenate raw user input into a Path.
+    """
+    if not _XBRL_FILENAME_RE.match(filename):
+        return HttpResponseNotFound('XBRL filing not found')
+
+    try:
+        resolved = (FILINGS_DIR / filename).resolve(strict=True)
+        if _FILINGS_DIR_RESOLVED not in resolved.parents:
+            return HttpResponseNotFound('XBRL filing not found')
+    except (FileNotFoundError, OSError):
+        return HttpResponseNotFound('XBRL filing not found')
+
+    response = FileResponse(open(resolved, 'rb'), content_type='application/xml')
+    response['Content-Disposition'] = f'inline; filename="{filename}"'
+    return response
 
 
 @csrf_exempt
@@ -323,18 +361,34 @@ def adv_response(request: HttpRequest) -> JsonResponse:
                 if sources:
                     integration.add_search_results(session_id, sources)
 
+                # XBRL filings must be persisted into sources_used so that the
+                # /get_source_urls/ endpoint (which backs the Sources popup) can
+                # surface them. Build here — post-agent-run — so report_claim()
+                # claims emitted during ds.create_advanced_response are visible.
+                try:
+                    xbrl_sources = build_xbrl_sources(session_id, request.build_absolute_uri)
+                except Exception as xbrl_err:
+                    logger.debug(f"XBRL source collection failed (non-critical): {xbrl_err}")
+                    xbrl_sources = []
+
                 response_time_ms = int((time.time() - start_time) * 1000)
                 context_mgr.add_assistant_message(
                     session_id=session_id,
                     content=response,
                     model=model,
-                    sources_used=sources,
+                    sources_used=merge_xbrl_sources(sources, xbrl_sources),
                     tools_used=["web_search"],
                     response_time_ms=response_time_ms
                 )
 
             except Exception as e:
                 responses[model] = f"Error: {_safe_error_message(e, f'model {model}')}"
+
+        try:
+            xbrl_sources = build_xbrl_sources(session_id, request.build_absolute_uri)
+            all_sources = merge_xbrl_sources(all_sources, xbrl_sources)
+        except Exception as xbrl_err:
+            logger.debug(f"XBRL source collection failed (non-critical): {xbrl_err}")
 
         stats = context_mgr.get_session_stats(session_id)
 
@@ -547,11 +601,18 @@ def chat_response_stream(request: HttpRequest) -> StreamingHttpResponse:
                 if not final_response and aggregated_chunks:
                     final_response = "".join(aggregated_chunks)
 
+                try:
+                    xbrl_sources = build_xbrl_sources(session_id, request.build_absolute_uri)
+                except Exception as xbrl_err:
+                    logger.debug(f"XBRL source collection failed (non-critical): {xbrl_err}")
+                    xbrl_sources = []
+
                 response_time_ms = int((time.time() - start_time) * 1000)
                 context_mgr.add_assistant_message(
                     session_id=session_id,
                     content=final_response,
                     model=model,
+                    sources_used=xbrl_sources,
                     tools_used=[],
                     response_time_ms=response_time_ms
                 )
@@ -562,6 +623,8 @@ def chat_response_stream(request: HttpRequest) -> StreamingHttpResponse:
                 final_data = {
                     "content": "",
                     "done": True,
+                    "used_sources": xbrl_sources,
+                    "used_urls": [s.get('url') for s in xbrl_sources if isinstance(s, dict) and s.get('url')],
                     "context_stats": {
                         'session_id': session_id,
                         'message_count': stats['message_count'],
@@ -696,6 +759,12 @@ def adv_response_stream(request: HttpRequest) -> StreamingHttpResponse:
 
                 if source_entries:
                     integration.add_search_results(session_id, source_entries)
+
+                try:
+                    xbrl_sources = build_xbrl_sources(session_id, request.build_absolute_uri)
+                    source_entries = merge_xbrl_sources(source_entries, xbrl_sources)
+                except Exception as xbrl_err:
+                    logger.debug(f"XBRL source collection failed (non-critical): {xbrl_err}")
 
                 response_time_ms = int((time.time() - start_time) * 1000)
                 context_mgr.add_assistant_message(
