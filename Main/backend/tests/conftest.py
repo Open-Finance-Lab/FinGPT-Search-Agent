@@ -9,9 +9,19 @@ root. Force the backend dir to the front, then eagerly import the real
 import sys
 from pathlib import Path
 
-_BACKEND = str(Path(__file__).resolve().parent.parent)
+import pytest
+
+BACKEND_DIR = Path(__file__).resolve().parent.parent
+CORE_PROMPT_PATH = BACKEND_DIR / "prompts" / "core.md"
+
+_BACKEND = str(BACKEND_DIR)
 while _BACKEND in sys.path:
     sys.path.remove(_BACKEND)
 sys.path.insert(0, _BACKEND)
 
 import mcp_server.xbrl.parser  # noqa: F401,E402 — populate sys.modules
+
+
+@pytest.fixture(scope="session")
+def core_prompt() -> str:
+    return CORE_PROMPT_PATH.read_text(encoding="utf-8")
