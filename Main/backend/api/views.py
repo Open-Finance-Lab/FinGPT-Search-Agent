@@ -112,6 +112,57 @@ def _build_status_frame(label: str, detail: Optional[str] = None, url: Optional[
     return f'data: {json.dumps(status_payload)}\n\n'.encode('utf-8')
 
 
+@csrf_exempt
+@ratelimit(key='ip', rate=settings.API_RATE_LIMIT, method='ALL', block=True)
+def has_axiom_claims(request: HttpRequest) -> JsonResponse:
+    """Lightweight check: does the current session have any ratio claims
+    awaiting validation? The frontend uses this to decide whether to show
+    the Validate button on a response bubble.
+    """
+    try:
+        session_id = request.GET.get('session_id') or _get_session_id(request)
+        from axioms.registry import get_claims
+        claims = get_claims(session_id) if session_id else []
+        return JsonResponse({
+            'session_id': session_id,
+            'has_claims': len(claims) > 0,
+            'count': len(claims),
+        })
+    except Exception as e:
+        return JsonResponse({'error': _safe_error_message(e, 'has_axiom_claims')}, status=500)
+
+
+@csrf_exempt
+@ratelimit(key='ip', rate=settings.API_RATE_LIMIT, method='ALL', block=True)
+def validate_claims(request: HttpRequest) -> JsonResponse:
+    """Layer 1 Validate: run deterministic proof over claims recorded for a session.
+
+    Request (POST JSON): {"session_id": "..."}
+    Response: {"claims": [per-claim result], "summary": {...}}
+
+    Each claim result contains:
+      ratio, ticker, period, claimed_value, status (VERIFIED|FAILED|SKIPPED|NOT_APPLICABLE),
+      expected, actual, variance_pct, formula, xbrl_source, message
+    """
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST required'}, status=405)
+
+    try:
+        body = json.loads(request.body) if request.body else {}
+    except (json.JSONDecodeError, ValueError):
+        return JsonResponse({'error': 'invalid JSON body'}, status=400)
+
+    session_id = body.get('session_id') or _get_session_id(request)
+    if not session_id:
+        return JsonResponse({'error': 'session_id required'}, status=400)
+
+    try:
+        from axioms import validate_session
+        return JsonResponse(validate_session(session_id))
+    except Exception as e:
+        return JsonResponse({'error': _safe_error_message(e, 'validate_claims')}, status=500)
+
+
  
 
 @csrf_exempt
@@ -163,7 +214,8 @@ def chat_response(request: HttpRequest) -> JsonResponse:
                     model=model,
                     current_url=current_url,
                     user_timezone=request.GET.get('user_timezone'),
-                    user_time=request.GET.get('user_time')
+                    user_time=request.GET.get('user_time'),
+                    session_id=session_id,
                 )
 
                 responses[model] = response
@@ -185,8 +237,10 @@ def chat_response(request: HttpRequest) -> JsonResponse:
         first_response = next(iter(responses.values()), "No response")
         logger.info(f"Interaction [normal_chat]: URL={current_url}, Q='{question[:50]}...', Resp='{str(first_response)[:50]}...'")
 
+        from axioms.registry import get_claims
         result = {
             'resp': responses,
+            'has_axiom_claims': bool(get_claims(session_id)),
             'context_stats': {
                 'session_id': session_id,
                 'mode': stats['mode'],
@@ -353,7 +407,8 @@ def agent_chat_response(request: HttpRequest) -> JsonResponse:
                     model=model,
                     current_url=current_url,
                     user_timezone=request.GET.get('user_timezone'),
-                    user_time=request.GET.get('user_time')
+                    user_time=request.GET.get('user_time'),
+                    session_id=session_id,
                 )
 
                 responses[model] = response
@@ -445,7 +500,8 @@ def chat_response_stream(request: HttpRequest) -> StreamingHttpResponse:
                     model=model,
                     current_url=current_url,
                     user_timezone=user_timezone,
-                    user_time=user_time
+                    user_time=user_time,
+                    session_id=session_id,
                 )
 
                 previous_loop = None

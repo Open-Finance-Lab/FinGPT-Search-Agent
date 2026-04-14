@@ -65,7 +65,8 @@ async def create_fin_agent(model: str = "gpt-4o-mini",
                           user_timezone: Optional[str] = None,
                           user_time: Optional[str] = None,
                           allowed_tools: Optional[List[str]] = None,
-                          instructions_override: Optional[str] = None):
+                          instructions_override: Optional[str] = None,
+                          session_id: Optional[str] = None):
     """
     Create a financial agent with tools (URL scraping, SEC-EDGAR, filesystem).
 
@@ -142,6 +143,11 @@ async def create_fin_agent(model: str = "gpt-4o-mini",
         from datascraper.calculator_tool import get_calculator_tools
         calculator_tools = get_calculator_tools()
         tools.extend(calculator_tools)
+
+        # Axiom claim-reporting tool for Layer 1 Validate (session-bound via closure)
+        if session_id:
+            from axioms.tool import get_axiom_tools
+            tools.extend(get_axiom_tools(session_id))
 
         from .mcp_manager import MCPClientManager
         from .tool_wrapper import convert_mcp_tool_to_python_callable

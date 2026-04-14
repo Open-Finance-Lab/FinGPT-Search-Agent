@@ -1,5 +1,5 @@
 // helpers.js
-import { clearMessages, getSourceUrls, logQuestion } from './api.js';
+import { clearMessages, getSourceUrls, logQuestion, validateClaims } from './api.js';
 import { handleChatResponse, handleImageResponse } from './handlers.js';
 import {
     clearCachedSources,
@@ -643,6 +643,141 @@ function makeDraggableAndResizable(element, sourceWindowOffsetX = 10, onLayoutCh
     }
 }
 
+// ── Layer 1 Validate ────────────────────────────────────────────────
+// Click handler for the Validate button. POSTs session_id to the backend,
+// renders per-claim verdicts under the last agent response, and best-effort
+// highlights claimed numbers that failed verification.
+
+function _statusChipClass(status) {
+    if (status === 'VERIFIED')       return 'axiom-chip axiom-chip-verified';
+    if (status === 'FAILED')         return 'axiom-chip axiom-chip-failed';
+    if (status === 'NOT_APPLICABLE') return 'axiom-chip axiom-chip-na';
+    return 'axiom-chip axiom-chip-skipped';
+}
+
+function _formatNumber(n) {
+    if (n === null || n === undefined) return '—';
+    if (Math.abs(n) >= 1e9) return (n / 1e9).toFixed(3) + 'B';
+    if (Math.abs(n) >= 1e6) return (n / 1e6).toFixed(3) + 'M';
+    return Number.isInteger(n) ? n.toString() : n.toFixed(4);
+}
+
+function _highlightMismatchedNumbers(container, claim) {
+    // Best-effort: underline any text node containing the claimed_value formatted
+    // so a reader sees which figure was flagged. Non-destructive — wraps spans.
+    const raw = claim.claimed_value;
+    if (raw === undefined || raw === null) return;
+    const candidates = new Set([
+        raw.toString(),
+        Number(raw).toFixed(2),
+        Number(raw).toFixed(4),
+    ]);
+    const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
+    const matches = [];
+    while (walker.nextNode()) {
+        const node = walker.currentNode;
+        for (const token of candidates) {
+            if (node.nodeValue && node.nodeValue.includes(token)) {
+                matches.push({ node, token });
+                break;
+            }
+        }
+    }
+    for (const { node, token } of matches) {
+        const parts = node.nodeValue.split(token);
+        const frag = document.createDocumentFragment();
+        for (let i = 0; i < parts.length; i++) {
+            frag.appendChild(document.createTextNode(parts[i]));
+            if (i < parts.length - 1) {
+                const mark = document.createElement('span');
+                mark.className = 'axiom-mismatch-mark';
+                mark.textContent = token;
+                mark.title = `Unverified: claim ${claim.claimed_value} vs ground truth ${_formatNumber(claim.expected)} (${claim.variance_pct?.toFixed(3)}% variance)`;
+                frag.appendChild(mark);
+            }
+        }
+        node.parentNode.replaceChild(frag, node);
+    }
+}
+
+function _renderValidateResults(data) {
+    // Attach a results panel under the most recent agent message bubble.
+    const chatLog = document.getElementById('chat_log');
+    if (!chatLog) return;
+    const bubbles = chatLog.querySelectorAll('.response-chat-element, .chat-element');
+    const lastBubble = bubbles.length ? bubbles[bubbles.length - 1] : chatLog;
+
+    // Remove any prior panel so repeat clicks refresh cleanly
+    const prior = lastBubble.querySelector('.axiom-validate-panel');
+    if (prior) prior.remove();
+
+    const panel = document.createElement('div');
+    panel.className = 'axiom-validate-panel';
+
+    const header = document.createElement('div');
+    header.className = 'axiom-validate-header';
+    const summary = data.summary || {};
+    const total = summary.total || 0;
+    const verified = summary.VERIFIED || 0;
+    if (total === 0) {
+        header.textContent = 'No ratio claims recorded for this response.';
+    } else {
+        header.textContent = `Validated ${verified}/${total} claims against SEC XBRL filings.`;
+    }
+    panel.appendChild(header);
+
+    const list = document.createElement('ul');
+    list.className = 'axiom-validate-list';
+    for (const claim of (data.claims || [])) {
+        const item = document.createElement('li');
+        const chip = document.createElement('span');
+        chip.className = _statusChipClass(claim.status);
+        chip.textContent = claim.status;
+        item.appendChild(chip);
+
+        const label = document.createElement('span');
+        label.className = 'axiom-claim-label';
+        label.textContent = ` ${claim.ratio.replace(/_/g, ' ')} · ${claim.ticker} · ${claim.period}`;
+        item.appendChild(label);
+
+        if (claim.expected !== undefined && claim.actual !== undefined) {
+            const detail = document.createElement('div');
+            detail.className = 'axiom-claim-detail';
+            detail.textContent = `claimed ${_formatNumber(claim.actual)}, XBRL ${_formatNumber(claim.expected)} (${(claim.variance_pct ?? 0).toFixed(3)}% variance)`;
+            item.appendChild(detail);
+        }
+        if (claim.message) {
+            const msg = document.createElement('div');
+            msg.className = 'axiom-claim-message';
+            msg.textContent = claim.message;
+            item.appendChild(msg);
+        }
+        if (claim.xbrl_source) {
+            const src = document.createElement('div');
+            src.className = 'axiom-claim-source';
+            src.textContent = `Ground truth: ${claim.xbrl_source}`;
+            item.appendChild(src);
+        }
+        list.appendChild(item);
+
+        if (claim.status === 'FAILED') {
+            _highlightMismatchedNumbers(lastBubble, claim);
+        }
+    }
+    panel.appendChild(list);
+    lastBubble.appendChild(panel);
+}
+
+async function validate_response() {
+    try {
+        const data = await validateClaims();
+        _renderValidateResults(data);
+    } catch (err) {
+        console.error('Validate failed:', err);
+        alert('Validation request failed. See console for details.');
+    }
+}
+
 export {
     appendChatElement,
     clear,
@@ -650,6 +785,7 @@ export {
     get_adv_chat_response,
     submit_question,
     get_sources,
+    validate_response,
     makeDraggableAndResizable,
     scrollChatToBottom,
 };

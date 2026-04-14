@@ -594,13 +594,26 @@ def _create_response_stream(client, provider: str, model_name: str, model_config
 
 
 
+def _reset_axiom_claims(session_id: Optional[str], context: str) -> None:
+    """Wipe the session's ratio-claim registry before a new agent run so
+    `has_axiom_claims` / Validate reflect only the current response."""
+    if not session_id:
+        return
+    try:
+        from axioms.registry import clear_claims
+        clear_claims(session_id)
+    except Exception as err:
+        logging.debug(f"[{context}] axiom clear_claims failed (non-critical): {err}")
+
+
 def _try_mcp_for_numerical_query(
         user_input: str,
         message_list: list[dict],
         model: str,
         current_url: str = None,
         user_timezone: str = None,
-        user_time: str = None
+        user_time: str = None,
+        session_id: str = None,
 ) -> Optional[str]:
     """
     Attempt to answer a numerical financial query using MCP tools (Yahoo Finance).
@@ -620,7 +633,8 @@ def _try_mcp_for_numerical_query(
             model=model,
             current_url=current_url,
             user_timezone=user_timezone,
-            user_time=user_time
+            user_time=user_time,
+            session_id=session_id,
         ))
 
         response_text, _tool_sources = result
@@ -949,7 +963,8 @@ def create_agent_response(
         model: str = "o4-mini",
         current_url: str = None,
         user_timezone: str = None,
-        user_time: str = None
+        user_time: str = None,
+        session_id: str = None,
 ) -> Tuple[str, List[Dict[str, str]]]:
     """
     Creates a response using the Agent with MCP tools and returns tool source info.
@@ -993,7 +1008,8 @@ def create_agent_response(
 
         logging.info(f"[AGENT] Attempting agent response for {model} ({actual_model_name})")
         response, sources = asyncio.run(_create_agent_response_async(
-            user_input, message_list, model, current_url, user_timezone, user_time
+            user_input, message_list, model, current_url, user_timezone, user_time,
+            session_id=session_id,
         ))
         qt.set_data_source("mcp_tools")
         qt.complete(response)
@@ -1015,7 +1031,8 @@ async def _create_agent_response_async(
         model: str,
         current_url: str = None,
         user_timezone: str = None,
-        user_time: str = None
+        user_time: str = None,
+        session_id: str = None,
 ) -> Tuple[str, List[Dict[str, str]]]:
     """
     Async helper that returns agent response text and tool source information.
@@ -1056,6 +1073,7 @@ async def _create_agent_response_async(
         context += f"User: {content}\n"
 
     full_prompt = context.rstrip()
+    _reset_axiom_claims(session_id, "AGENT")
 
     async with create_fin_agent(
         model=model,
@@ -1063,7 +1081,8 @@ async def _create_agent_response_async(
         user_input=user_input,
         current_url=current_url,
         user_timezone=user_timezone,
-        user_time=user_time
+        user_time=user_time,
+        session_id=session_id,
     ) as agent:
         logging.info(f"[AGENT] Running agent with MCP tools")
         logging.info(f"[AGENT] Current URL: {current_url}")
@@ -1191,7 +1210,8 @@ def create_agent_response_stream(
     model: str = "o4-mini",
     current_url: str | None = None,
     user_timezone: str | None = None,
-    user_time: str | None = None
+    user_time: str | None = None,
+    session_id: str | None = None,
 ) -> Tuple[AsyncIterator[str], Dict[str, str]]:
     """
     Create a streaming agent response with tools, returning an async iterator and final state.
@@ -1277,7 +1297,8 @@ def create_agent_response_stream(
         MAX_RETRIES = 2 if execution_plan.skill_name != "fallback" else 1
         MAX_AGENT_TURNS = execution_plan.max_turns
         retry_count = 0
-        
+        _reset_axiom_claims(session_id, "AGENT STREAM")
+
         while True:
             aggregated_chunks: list[str] = []
             has_yielded = False
@@ -1293,6 +1314,7 @@ def create_agent_response_stream(
                     user_time=user_time,
                     allowed_tools=execution_plan.tools_allowed,
                     instructions_override=execution_plan.instructions,
+                    session_id=session_id,
                 ) as agent:
                     if retry_count > 0:
                         logging.info(f"[AGENT STREAM] Retry attempt {retry_count}/{MAX_RETRIES}")
