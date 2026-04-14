@@ -1442,15 +1442,18 @@ def get_sources(query: str, current_url: str | None = None, session_id: str | No
             for msg in reversed(session["conversation_history"]):
                 if msg.role == "assistant" and msg.metadata and msg.metadata.sources_used:
                     for source in msg.metadata.sources_used:
-                        url = source.get("url") if isinstance(source, dict) else getattr(source, "url", None)
-                        title = source.get("title") if isinstance(source, dict) else getattr(source, "title", None)
-                        
-                        if url:
-                            sources.append({
-                                "url": url,
-                                "title": title or url,
-                                "icon": None
-                            })
+                        src = source if isinstance(source, dict) else {
+                            "url": getattr(source, "url", None),
+                            "title": getattr(source, "title", None),
+                        }
+                        url = src.get("url")
+                        if not url:
+                            continue
+                        sources.append({
+                            **src,
+                            "title": src.get("title") or url,
+                            "icon": src.get("icon"),
+                        })
                     break
             
             if not sources and session["fetched_context"]["web_search"]:

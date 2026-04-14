@@ -311,10 +311,56 @@ async function get_sources() {
         wrapper.textContent = fallbackInitial || '?';
     };
 
+    const buildXbrlCard = (safeMeta) => {
+        const filename = safeMeta.display_url || formatDisplayUrl(safeMeta.url) || 'xbrl-filing';
+        const titleText = safeMeta.title && safeMeta.title !== filename
+            ? safeMeta.title
+            : 'SEC XBRL Filing';
+
+        const cardLink = document.createElement('a');
+        cardLink.className = 'source-card source-card--xbrl';
+        cardLink.href = safeMeta.url;
+        cardLink.target = '_blank';
+        cardLink.rel = 'noopener noreferrer';
+        cardLink.setAttribute('download', filename);
+
+        const headerWrapper = document.createElement('div');
+        headerWrapper.className = 'source-card-header';
+
+        const thumbnailWrapper = document.createElement('div');
+        thumbnailWrapper.className = 'source-card-thumbnail source-card-thumbnail--xbrl';
+        thumbnailWrapper.textContent = 'X';
+
+        const filenameLabel = document.createElement('span');
+        filenameLabel.className = 'source-card-xbrl-filename';
+        filenameLabel.textContent = filename;
+        filenameLabel.title = filename;
+
+        headerWrapper.appendChild(thumbnailWrapper);
+        headerWrapper.appendChild(filenameLabel);
+
+        const contentWrapper = document.createElement('div');
+        contentWrapper.className = 'source-card-content';
+
+        const titleLine = document.createElement('span');
+        titleLine.className = 'source-card-title';
+        titleLine.textContent = titleText;
+        contentWrapper.appendChild(titleLine);
+
+        cardLink.appendChild(headerWrapper);
+        cardLink.appendChild(contentWrapper);
+        cardLink.setAttribute('aria-label', `Download XBRL filing ${filename}`);
+        return cardLink;
+    };
+
     const buildSourceCard = (metadata) => {
         const safeMeta = metadata || {};
         if (!safeMeta.url) {
             return null;
+        }
+
+        if (safeMeta.source_type === 'xbrl') {
+            return buildXbrlCard(safeMeta);
         }
 
         const cardLink = document.createElement('a');
