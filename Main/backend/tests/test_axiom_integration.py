@@ -62,6 +62,11 @@ def test_full_flow_three_verified_claims():
     # Each result carries the XBRL source path
     for r in results:
         assert "xbrl" in r["xbrl_source"].lower()
+    # Each result carries a backend-generated claim_id so the in-text
+    # marking layer can join validation status back to the prose span.
+    claim_ids = [r.get("claim_id") for r in results]
+    assert all(cid for cid in claim_ids), f"missing claim_id: {claim_ids}"
+    assert len(set(claim_ids)) == 3, f"non-unique claim_ids: {claim_ids}"
 
 
 def test_flow_detects_hallucinated_gross_margin():

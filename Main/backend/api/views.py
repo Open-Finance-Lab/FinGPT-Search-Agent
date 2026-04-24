@@ -27,8 +27,10 @@ from django.http import (
 from django.conf import settings
 from django_ratelimit.decorators import ratelimit
 
+from axioms.registry import get_claims
 from axioms.resolver import FILINGS_DIR
 from axioms.sources import build_xbrl_sources, merge_xbrl_sources
+from axioms.wrapper import wrap_claim_values
 
 from datascraper import datascraper as ds
 from datascraper.preferred_links_manager import get_manager
@@ -354,6 +356,16 @@ def adv_response(request: HttpRequest) -> JsonResponse:
                     user_timezone=request.GET.get('user_timezone'),
                     user_time=request.GET.get('user_time')
                 )
+
+                # In-text markings (L1 step 5): wrap each reported claim
+                # value in a data-claim-id span so the frontend decoration
+                # layer can color the exact number per Validate status.
+                try:
+                    response = wrap_claim_values(
+                        response, get_claims(session_id), session_id=session_id
+                    )
+                except Exception as wrap_err:
+                    logger.debug(f"wrap_claim_values failed (non-critical): {wrap_err}")
 
                 responses[model] = response
                 all_sources.extend(sources)
@@ -778,10 +790,22 @@ def adv_response_stream(request: HttpRequest) -> StreamingHttpResponse:
 
                 stats = context_mgr.get_session_stats(session_id)
 
+                # In-text markings (L1 step 5): post-process the finalized
+                # prose so the client can render data-claim-id spans on the
+                # final re-render. Falls back to ``full_response`` on error.
+                try:
+                    wrapped_content = wrap_claim_values(
+                        full_response, get_claims(session_id), session_id=session_id
+                    )
+                except Exception as wrap_err:
+                    logger.debug(f"wrap_claim_values failed (non-critical): {wrap_err}")
+                    wrapped_content = full_response
+
                 yield _build_status_frame("Finalizing response")
                 final_data = {
                     "content": "",
                     "done": True,
+                    "wrapped_content": wrapped_content,
                     "used_sources": source_entries,
                     "used_urls": [s.get('url') for s in source_entries if isinstance(s, dict) and s.get('url')],
                     "context_stats": {

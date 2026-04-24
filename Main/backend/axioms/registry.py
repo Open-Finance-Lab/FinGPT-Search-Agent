@@ -26,12 +26,23 @@ def _key(session_id: str) -> str:
 
 
 def add_claim(session_id: str, claim: Dict[str, Any]) -> None:
-    """Append a claim to the session's claim list."""
+    """Append a claim to the session's claim list.
+
+    Attaches a backend-generated ``claim_id`` so the in-text marking layer
+    can join prose spans to validation results. Scheme is
+    ``{ratio}-{ticker}-{period}-{n}`` where ``n`` is the claim's index
+    within the session — unique within a turn, human-readable in logs.
+    """
     if not session_id:
         return
     claim = dict(claim)
     claim.setdefault("emitted_at", datetime.now(timezone.utc).isoformat())
     claims = cache.get(_key(session_id), []) or []
+    if "claim_id" not in claim:
+        ratio = claim.get("ratio", "ratio")
+        ticker = claim.get("ticker", "")
+        period = claim.get("period", "")
+        claim["claim_id"] = f"{ratio}-{ticker}-{period}-{len(claims)}"
     claims.append(claim)
     cache.set(_key(session_id), claims, _TTL_SECONDS)
 
