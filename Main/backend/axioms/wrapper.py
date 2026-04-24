@@ -172,15 +172,13 @@ def wrap_claim_values(
 
     segments = _split_by_delimited(prose)
 
+    # Seed idempotency set from any data-claim-id spans already present in
+    # the input prose (e.g., re-running over an already-wrapped response).
+    wrapped_ids = set(re.findall(r'data-claim-id="([^"]*)"', prose))
+
     for claim in claims:
         claim_id = claim.get("claim_id")
-        if not claim_id:
-            continue
-
-        # Idempotency: if a span for this claim is already present
-        # anywhere in the current (possibly-mutated) prose, skip.
-        current = "".join(seg[1] for seg in segments)
-        if f'data-claim-id="{claim_id}"' in current:
+        if not claim_id or claim_id in wrapped_ids:
             continue
 
         cands = _candidates(claim)
@@ -207,6 +205,7 @@ def wrap_claim_values(
                 + [[True, before], [False, span], [True, after]]
                 + segments[idx + 1 :]
             )
+            wrapped_ids.add(claim_id)
             wrapped = True
             break
 

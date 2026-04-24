@@ -49,13 +49,15 @@ describe('decorateClaimMarks', () => {
         console.warn = realWarn;
     });
 
-    test('warns once per missing span and does not throw', () => {
+    test('aggregates missing spans into a single warn', () => {
         const bubble = makeBubble([]);
         decorateClaimMarks(bubble, [
             { claim_id: 'missing-1', status: 'FAILED' },
             { claim_id: 'missing-2', status: 'VERIFIED' },
         ]);
-        expect(warnSpy).toHaveBeenCalledTimes(2);
+        expect(warnSpy).toHaveBeenCalledTimes(1);
+        const args = warnSpy.mock.calls[0];
+        expect(args[1]).toEqual(['missing-1', 'missing-2']);
         console.warn = realWarn;
     });
 

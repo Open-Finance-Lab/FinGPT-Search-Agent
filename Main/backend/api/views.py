@@ -123,6 +123,19 @@ def _build_status_frame(label: str, detail: Optional[str] = None, url: Optional[
     return f'data: {json.dumps(status_payload)}\n\n'.encode('utf-8')
 
 
+def _wrap_for_client(prose: str, session_id: str) -> str:
+    """Wrap claim values for client rendering; return prose unchanged on error.
+
+    The unwrapped prose is what we persist to conversation history so future
+    turns don't see stray <span> markup in context.
+    """
+    try:
+        return wrap_claim_values(prose, get_claims(session_id), session_id=session_id)
+    except Exception as err:
+        logger.debug(f"wrap_claim_values failed (non-critical): {err}")
+        return prose
+
+
 @csrf_exempt
 @ratelimit(key='ip', rate=settings.API_RATE_LIMIT, method='ALL', block=True)
 def has_axiom_claims(request: HttpRequest) -> JsonResponse:
@@ -132,7 +145,6 @@ def has_axiom_claims(request: HttpRequest) -> JsonResponse:
     """
     try:
         session_id = request.GET.get('session_id') or _get_session_id(request)
-        from axioms.registry import get_claims
         claims = get_claims(session_id) if session_id else []
         return JsonResponse({
             'session_id': session_id,
@@ -277,7 +289,6 @@ def chat_response(request: HttpRequest) -> JsonResponse:
         first_response = next(iter(responses.values()), "No response")
         logger.info(f"Interaction [normal_chat]: URL={current_url}, Q='{question[:50]}...', Resp='{str(first_response)[:50]}...'")
 
-        from axioms.registry import get_claims
         result = {
             'resp': responses,
             'has_axiom_claims': bool(get_claims(session_id)),
@@ -357,21 +368,7 @@ def adv_response(request: HttpRequest) -> JsonResponse:
                     user_time=request.GET.get('user_time')
                 )
 
-                # In-text markings (L1 step 5): wrap each reported claim
-                # value in a data-claim-id span so the frontend decoration
-                # layer can color the exact number per Validate status.
-                # Wrapped copy goes to the client; the unwrapped prose is
-                # what we persist to conversation history so future turns
-                # don't see stray <span> markup in context.
-                try:
-                    wrapped_response = wrap_claim_values(
-                        response, get_claims(session_id), session_id=session_id
-                    )
-                except Exception as wrap_err:
-                    logger.debug(f"wrap_claim_values failed (non-critical): {wrap_err}")
-                    wrapped_response = response
-
-                responses[model] = wrapped_response
+                responses[model] = _wrap_for_client(response, session_id)
                 all_sources.extend(sources)
 
                 if sources:
@@ -794,22 +791,11 @@ def adv_response_stream(request: HttpRequest) -> StreamingHttpResponse:
 
                 stats = context_mgr.get_session_stats(session_id)
 
-                # In-text markings (L1 step 5): post-process the finalized
-                # prose so the client can render data-claim-id spans on the
-                # final re-render. Falls back to ``full_response`` on error.
-                try:
-                    wrapped_content = wrap_claim_values(
-                        full_response, get_claims(session_id), session_id=session_id
-                    )
-                except Exception as wrap_err:
-                    logger.debug(f"wrap_claim_values failed (non-critical): {wrap_err}")
-                    wrapped_content = full_response
-
                 yield _build_status_frame("Finalizing response")
                 final_data = {
                     "content": "",
                     "done": True,
-                    "wrapped_content": wrapped_content,
+                    "wrapped_content": _wrap_for_client(full_response, session_id),
                     "used_sources": source_entries,
                     "used_urls": [s.get('url') for s in source_entries if isinstance(s, dict) and s.get('url')],
                     "context_stats": {

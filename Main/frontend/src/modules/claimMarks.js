@@ -14,6 +14,7 @@ const STATUS_CLASS = {
 
 export function decorateClaimMarks(bubble, claims) {
     if (!bubble || !Array.isArray(claims)) return;
+    const missing = [];
     for (const c of claims) {
         if (!c || !c.claim_id) continue;
         const cls = STATUS_CLASS[c.status];
@@ -21,10 +22,10 @@ export function decorateClaimMarks(bubble, claims) {
         const span = bubble.querySelector(
             '[data-claim-id="' + CSS.escape(c.claim_id) + '"]'
         );
-        if (!span) {
-            console.warn('[Validate] no span for claim_id', c.claim_id);
-            continue;
-        }
+        if (!span) { missing.push(c.claim_id); continue; }
         span.classList.add(cls);
+    }
+    if (missing.length) {
+        console.warn('[Validate] no spans for claim_ids', missing);
     }
 }
