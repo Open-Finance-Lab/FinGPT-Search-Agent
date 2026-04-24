@@ -360,14 +360,18 @@ def adv_response(request: HttpRequest) -> JsonResponse:
                 # In-text markings (L1 step 5): wrap each reported claim
                 # value in a data-claim-id span so the frontend decoration
                 # layer can color the exact number per Validate status.
+                # Wrapped copy goes to the client; the unwrapped prose is
+                # what we persist to conversation history so future turns
+                # don't see stray <span> markup in context.
                 try:
-                    response = wrap_claim_values(
+                    wrapped_response = wrap_claim_values(
                         response, get_claims(session_id), session_id=session_id
                     )
                 except Exception as wrap_err:
                     logger.debug(f"wrap_claim_values failed (non-critical): {wrap_err}")
+                    wrapped_response = response
 
-                responses[model] = response
+                responses[model] = wrapped_response
                 all_sources.extend(sources)
 
                 if sources:

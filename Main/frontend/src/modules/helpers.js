@@ -1,5 +1,6 @@
 // helpers.js
 import { clearMessages, getSourceUrls, logQuestion, validateClaims } from './api.js';
+import { decorateClaimMarks } from './claimMarks.js';
 import { handleChatResponse, handleImageResponse } from './handlers.js';
 import { renderMarkdownContent } from './markdownRenderer.js';
 import {
@@ -710,34 +711,6 @@ function _formatNumber(n) {
     return Number.isInteger(n) ? n.toString() : n.toFixed(4);
 }
 
-function _decorateClaimMarks(bubble, claims) {
-    // Apply a status class to each pre-wrapped claim span in the prior
-    // agent bubble. The server already wrapped each reported value in
-    // <span data-claim-id="..."> during post-processing; here we just
-    // join the Validate status back by id. Visual-only — no click
-    // handler, no custom tooltip (D3).
-    if (!bubble || !Array.isArray(claims)) return;
-    const classForStatus = (s) => {
-        if (s === 'FAILED')         return 'claim-mark-failed';
-        if (s === 'VERIFIED')       return 'claim-mark-verified';
-        if (s === 'NOT_APPLICABLE') return 'claim-mark-na';
-        return null;
-    };
-    for (const c of claims) {
-        if (!c || !c.claim_id) continue;
-        const cls = classForStatus(c.status);
-        if (!cls) continue;  // SKIPPED and unknowns: no decoration
-        const span = bubble.querySelector(
-            '[data-claim-id="' + CSS.escape(c.claim_id) + '"]'
-        );
-        if (!span) {
-            console.warn('[Validate] no span for claim_id', c.claim_id);
-            continue;
-        }
-        span.classList.add(cls);
-    }
-}
-
 function _buildValidateMarkdown(data) {
     const claims = data.claims || [];
     const summary = data.summary || {};
@@ -819,7 +792,7 @@ function _renderValidateResults(data) {
     // spans were wrapped server-side during post-processing; this just
     // joins status by claim_id.
     if (priorAgentBubble) {
-        _decorateClaimMarks(priorAgentBubble, data.claims || []);
+        decorateClaimMarks(priorAgentBubble, data.claims || []);
     }
 }
 

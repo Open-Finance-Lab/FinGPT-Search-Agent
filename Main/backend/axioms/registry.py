@@ -12,6 +12,7 @@ are tied to a conversational session, not audit history.
 
 from __future__ import annotations
 
+import re
 from datetime import datetime, timezone
 from typing import Any, Dict, List
 
@@ -20,9 +21,25 @@ from django.core.cache import cache
 _KEY_PREFIX = "axiom_claims:"
 _TTL_SECONDS = 3600  # 1 hour
 
+# claim_id is interpolated into an HTML attribute (data-claim-id="...")
+# and later used as a CSS selector, so restrict to a conservative charset
+# that can't close the attribute or break the selector. Anything else in
+# the raw inputs (ticker / period / ratio) is replaced with a single '_'.
+_CLAIM_ID_SAFE = re.compile(r"[^A-Za-z0-9_\-.]")
+
 
 def _key(session_id: str) -> str:
     return f"{_KEY_PREFIX}{session_id}"
+
+
+def _make_claim_id(claim: Dict[str, Any], index: int) -> str:
+    raw = "{ratio}-{ticker}-{period}-{n}".format(
+        ratio=claim.get("ratio", "ratio"),
+        ticker=claim.get("ticker", ""),
+        period=claim.get("period", ""),
+        n=index,
+    )
+    return _CLAIM_ID_SAFE.sub("_", raw)
 
 
 def add_claim(session_id: str, claim: Dict[str, Any]) -> None:
@@ -32,6 +49,8 @@ def add_claim(session_id: str, claim: Dict[str, Any]) -> None:
     can join prose spans to validation results. Scheme is
     ``{ratio}-{ticker}-{period}-{n}`` where ``n`` is the claim's index
     within the session — unique within a turn, human-readable in logs.
+    The id is charset-sanitized so it cannot break out of the attribute
+    or a CSS selector downstream.
     """
     if not session_id:
         return
@@ -39,10 +58,9 @@ def add_claim(session_id: str, claim: Dict[str, Any]) -> None:
     claim.setdefault("emitted_at", datetime.now(timezone.utc).isoformat())
     claims = cache.get(_key(session_id), []) or []
     if "claim_id" not in claim:
-        ratio = claim.get("ratio", "ratio")
-        ticker = claim.get("ticker", "")
-        period = claim.get("period", "")
-        claim["claim_id"] = f"{ratio}-{ticker}-{period}-{len(claims)}"
+        claim["claim_id"] = _make_claim_id(claim, len(claims))
+    else:
+        claim["claim_id"] = _CLAIM_ID_SAFE.sub("_", str(claim["claim_id"]))
     claims.append(claim)
     cache.set(_key(session_id), claims, _TTL_SECONDS)
 

@@ -96,3 +96,36 @@ def test_flow_empty_session_returns_empty():
         response = validate_session("no_such_session")
     assert response["claims"] == []
     assert response["summary"]["total"] == 0
+
+
+def test_claim_id_is_charset_sanitized():
+    """``claim_id`` is interpolated into an HTML attribute and later
+    used as a CSS selector. Any non-``[A-Za-z0-9_\\-.]`` char in the
+    source fields (ticker/period/ratio) must be replaced so the id
+    cannot break out of the attribute or the selector.
+    """
+    stub_cache = _DictCache()
+    with patch("axioms.registry.cache", stub_cache):
+        from axioms.registry import add_claim, get_claims
+
+        sid = "test_sess_sanitize"
+        # A hostile period string containing quote, angle bracket, and
+        # HTML-ish junk — the kind of input a rogue tool call could
+        # smuggle in.
+        add_claim(sid, {
+            "ratio": "gross_margin",
+            "ticker": "AAPL",
+            "period": '"><script>alert(1)</script>',
+            "claimed_value": 44.13,
+            "formula_inputs": {"revenue": 1.0, "cogs": 0.5},
+        })
+        claims = get_claims(sid)
+
+    assert len(claims) == 1
+    cid = claims[0]["claim_id"]
+    # No characters that could close the attribute or the selector.
+    for bad in ('"', "<", ">", "/", " ", "'", "(", ")", "`"):
+        assert bad not in cid, f"sanitized claim_id leaked {bad!r}: {cid}"
+    # Safe charset only.
+    import re
+    assert re.fullmatch(r"[A-Za-z0-9_\-.]+", cid), cid

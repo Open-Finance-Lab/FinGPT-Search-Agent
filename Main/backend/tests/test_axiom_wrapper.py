@@ -230,3 +230,27 @@ def test_claim_without_claim_id_is_skipped():
     }  # no claim_id
     out = wrap_claim_values(prose, [claim])
     assert out == prose
+
+
+# ── regex: bare '<' comparisons must not swallow the whole tail ──────
+
+
+def test_literal_less_than_does_not_eat_later_content():
+    # "<$100M" is not an HTML tag; the wrapper must still find 44.13%
+    # further along in free text rather than treat everything from '<'
+    # onwards as one big delimited region.
+    prose = "Revenue was <$100M; gross margin held at 44.13% for FY2023."
+    claims = [_claim("gross_margin", "AAPL", "2023-09-30", 44.13)]
+    out = wrap_claim_values(prose, claims)
+    assert '<span data-claim-id="gross_margin-AAPL-2023-09-30-0">44.13%</span>' in out
+    # And the original '<$100M' is preserved verbatim.
+    assert "<$100M;" in out
+
+
+def test_angle_bracket_without_tag_name_is_not_delimited():
+    # '<5%' and 'x<y' shouldn't register as delimiters either.
+    prose = "Threshold x<y triggers review; margin was 44.13% regardless."
+    claims = [_claim("gross_margin", "AAPL", "2023-09-30", 44.13)]
+    out = wrap_claim_values(prose, claims)
+    assert "44.13%</span>" in out
+    assert "x<y triggers" in out

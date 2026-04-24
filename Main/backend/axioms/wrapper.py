@@ -31,7 +31,7 @@ _DELIMITED = re.compile(
     r"|\\\[.*?\\\]"                                              # display math \[
     r"|\\\(.*?\\\)"                                              # inline math \(
     r'|<span\s+data-claim-id="[^"]*"[^>]*>.*?</span>'            # existing wrap
-    r"|<[^>]+>",                                                 # any HTML tag
+    r"|</?[a-zA-Z][^>]*>",                                       # HTML tag (name required)
     re.DOTALL,
 )
 
@@ -101,11 +101,12 @@ def _candidates(claim: Dict[str, Any]) -> List[str]:
         _push_unique(out, f"${n:,}")
         _push_unique(out, f"{n:,}")
         _push_unique(out, str(n))
-        # Billions form.
-        if abs(f) >= 1e9:
+        # Billions form. Total assets are always non-negative, so
+        # truncation via int() is the common "352.755 -> 352" case.
+        if f >= 1e9:
             b = f / 1e9
             b_round = int(round(b))
-            b_trunc = int(b) if f >= 0 else -int(-f // 1e9)
+            b_trunc = int(b)
             _push_unique(out, f"${b:.1f} billion")
             _push_unique(out, f"{b:.1f} billion")
             _push_unique(out, f"${b:.1f}B")
@@ -116,7 +117,7 @@ def _candidates(claim: Dict[str, Any]) -> List[str]:
             _push_unique(out, f"${b_trunc}B")
             _push_unique(out, f"{b_trunc} billion")
         # Millions form.
-        if abs(f) >= 1e6:
+        if f >= 1e6:
             mm = f / 1e6
             mm_round = int(round(mm))
             _push_unique(out, f"${mm_round:,} million")
