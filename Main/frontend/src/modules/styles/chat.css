@@ -536,9 +536,9 @@
   background-color: rgba(78, 161, 255, 0.12);
 }
 
-/* Layer 1 Validate in-text markings. Asymmetric treatment: FAILED is
- * loud (three redundant channels so the signal survives color-blindness
- * and greyscale), VERIFIED and NOT_APPLICABLE stay quiet. */
+/* Layer 1 Validate in-text markings. Each status underlines in its own
+ * color; FAILED additionally gets a wavy stroke and an ✗ suffix so the
+ * signal survives color-blindness and greyscale. */
 .claim-mark-failed {
   color: #f85149;
   text-decoration: underline wavy rgba(248, 81, 73, 0.9);
@@ -551,9 +551,13 @@
 }
 
 .claim-mark-verified {
-  color: #2ea043;
+  color: #3fb950;
+  text-decoration: underline solid rgba(63, 185, 80, 0.9);
+  text-underline-offset: 3px;
 }
 
 .claim-mark-na {
   color: #8b949e;
+  text-decoration: underline solid rgba(139, 148, 158, 0.9);
+  text-underline-offset: 3px;
 }
