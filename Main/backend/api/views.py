@@ -270,7 +270,7 @@ def chat_response(request: HttpRequest) -> JsonResponse:
                     session_id=session_id,
                 )
 
-                responses[model] = response
+                responses[model] = _wrap_for_client(response, session_id)
 
                 response_time_ms = int((time.time() - start_time) * 1000)
                 context_mgr.add_assistant_message(
@@ -478,7 +478,7 @@ def agent_chat_response(request: HttpRequest) -> JsonResponse:
                     session_id=session_id,
                 )
 
-                responses[model] = response
+                responses[model] = _wrap_for_client(response, session_id)
 
                 response_time_ms = int((time.time() - start_time) * 1000)
                 context_mgr.add_assistant_message(
@@ -636,6 +636,7 @@ def chat_response_stream(request: HttpRequest) -> StreamingHttpResponse:
                 final_data = {
                     "content": "",
                     "done": True,
+                    "wrapped_content": _wrap_for_client(final_response, session_id),
                     "used_sources": xbrl_sources,
                     "used_urls": [s.get('url') for s in xbrl_sources if isinstance(s, dict) and s.get('url')],
                     "context_stats": {

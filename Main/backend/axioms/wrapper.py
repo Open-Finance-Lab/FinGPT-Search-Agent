@@ -101,21 +101,17 @@ def _candidates(claim: Dict[str, Any]) -> List[str]:
         _push_unique(out, f"${n:,}")
         _push_unique(out, f"{n:,}")
         _push_unique(out, str(n))
-        # Billions form. Total assets are always non-negative, so
-        # truncation via int() is the common "352.755 -> 352" case.
+        # Billions form. Longer/more-specific decimals first so that
+        # ``$106.618 billion`` binds before ``$106.6 billion`` at the
+        # same prose position. Truncation (``int(b)``) is kept alongside
+        # rounding because LLMs do both on non-negative totals
+        # ("352.755" → "352" via truncation, "353" via rounding).
         if f >= 1e9:
             b = f / 1e9
-            b_round = int(round(b))
-            b_trunc = int(b)
-            _push_unique(out, f"${b:.1f} billion")
-            _push_unique(out, f"{b:.1f} billion")
-            _push_unique(out, f"${b:.1f}B")
-            _push_unique(out, f"${b_round} billion")
-            _push_unique(out, f"${b_round}B")
-            _push_unique(out, f"{b_round} billion")
-            _push_unique(out, f"${b_trunc} billion")
-            _push_unique(out, f"${b_trunc}B")
-            _push_unique(out, f"{b_trunc} billion")
+            forms = [f"{b:.3f}", f"{b:.2f}", f"{b:.1f}", str(int(round(b))), str(int(b))]
+            for v in forms:
+                for tmpl in (f"${v} billion", f"{v} billion", f"${v}B"):
+                    _push_unique(out, tmpl)
         # Millions form.
         if f >= 1e6:
             mm = f / 1e6
@@ -123,6 +119,11 @@ def _candidates(claim: Dict[str, Any]) -> List[str]:
             _push_unique(out, f"${mm_round:,} million")
             _push_unique(out, f"${mm_round:,}M")
             _push_unique(out, f"{mm_round:,} million")
+            # Bare form (e.g. ``$106,618``) for tables that put the
+            # "in millions" unit in the column header. Must come AFTER
+            # the suffix forms so ties go to the more specific match.
+            _push_unique(out, f"${mm_round:,}")
+            _push_unique(out, f"{mm_round:,}")
     else:
         _push_unique(out, str(v))
 

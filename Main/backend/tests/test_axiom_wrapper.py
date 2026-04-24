@@ -85,6 +85,55 @@ def test_accounting_equation_millions_suffix():
     assert "$352,755 million" in out
 
 
+def test_accounting_equation_two_decimal_billions():
+    # LLMs commonly round billions to two decimals.
+    prose = "Total assets were $106.62 billion."
+    claims = [_claim("accounting_equation", "TSLA", "2023-12-31", 106618000000)]
+    out = wrap_claim_values(prose, claims)
+    assert (
+        '<span data-claim-id="accounting_equation-TSLA-2023-12-31-0">$106.62 billion</span>'
+        in out
+    )
+
+
+def test_accounting_equation_three_decimal_billions():
+    prose = "Total assets stood at $106.618 billion at year-end."
+    claims = [_claim("accounting_equation", "TSLA", "2023-12-31", 106618000000)]
+    out = wrap_claim_values(prose, claims)
+    assert (
+        '<span data-claim-id="accounting_equation-TSLA-2023-12-31-0">$106.618 billion</span>'
+        in out
+    )
+
+
+def test_accounting_equation_bare_millions_in_table_cell():
+    # Markdown table with "(in millions)" unit in the header, not the cell.
+    prose = (
+        "| Line Item | Q4 2023 |\n"
+        "|---|---|\n"
+        "| Total Assets | $106,618 |\n"
+        "| Total Liabilities | $43,009 |\n"
+    )
+    claims = [_claim("accounting_equation", "TSLA", "2023-12-31", 106618000000)]
+    out = wrap_claim_values(prose, claims)
+    assert (
+        '<span data-claim-id="accounting_equation-TSLA-2023-12-31-0">$106,618</span>'
+        in out
+    )
+
+
+def test_accounting_equation_prefers_million_suffix_over_bare_at_same_position():
+    # When "$106,618 million" appears, the suffix form should win — not
+    # the bare "$106,618" substring.
+    prose = "Total assets of $106,618 million."
+    claims = [_claim("accounting_equation", "TSLA", "2023-12-31", 106618000000)]
+    out = wrap_claim_values(prose, claims)
+    assert (
+        '<span data-claim-id="accounting_equation-TSLA-2023-12-31-0">$106,618 million</span>'
+        in out
+    )
+
+
 # ── delimited-region skips (one per kind) ────────────────────────────
 
 
