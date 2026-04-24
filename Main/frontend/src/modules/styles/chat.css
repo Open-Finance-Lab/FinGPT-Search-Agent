@@ -536,10 +536,24 @@
   background-color: rgba(78, 161, 255, 0.12);
 }
 
-.axiom-mismatch-mark {
+/* Layer 1 Validate in-text markings. Asymmetric treatment: FAILED is
+ * loud (three redundant channels so the signal survives color-blindness
+ * and greyscale), VERIFIED and NOT_APPLICABLE stay quiet. */
+.claim-mark-failed {
+  color: #f85149;
   text-decoration: underline wavy rgba(248, 81, 73, 0.9);
   text-underline-offset: 3px;
-  background-color: rgba(248, 81, 73, 0.08);
-  border-radius: 2px;
-  cursor: help;
+}
+
+.claim-mark-failed::after {
+  content: " \2717";  /* heavy ballot X */
+  font-weight: 600;
+}
+
+.claim-mark-verified {
+  color: #2ea043;
+}
+
+.claim-mark-na {
+  color: #8b949e;
 }

@@ -525,7 +525,14 @@ async function handleChatResponse(question, promptMode = false, useStreaming = t
           if (responseElement.style.display === 'none') {
             responseElement.style.display = 'block';
           }
-          renderMarkdownContent(responseElement, fullResponse);
+          // Prefer server-wrapped content (contains data-claim-id spans
+          // for in-text Validate markings); fall back to the locally
+          // accumulated prose for backwards compatibility with older
+          // servers that don't yet emit `wrapped_content`.
+          renderMarkdownContent(
+            responseElement,
+            data?.wrapped_content ?? fullResponse
+          );
 
           // Create action row containing both action buttons and rating
           const actionRow = document.createElement('div');

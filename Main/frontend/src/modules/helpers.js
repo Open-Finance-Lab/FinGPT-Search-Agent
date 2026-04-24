@@ -710,41 +710,31 @@ function _formatNumber(n) {
     return Number.isInteger(n) ? n.toString() : n.toFixed(4);
 }
 
-function _highlightMismatchedNumbers(container, claim) {
-    // Best-effort: underline any text node containing the claimed_value formatted
-    // so a reader sees which figure was flagged. Non-destructive — wraps spans.
-    const raw = claim.claimed_value;
-    if (raw === undefined || raw === null) return;
-    const candidates = new Set([
-        raw.toString(),
-        Number(raw).toFixed(2),
-        Number(raw).toFixed(4),
-    ]);
-    const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
-    const matches = [];
-    while (walker.nextNode()) {
-        const node = walker.currentNode;
-        for (const token of candidates) {
-            if (node.nodeValue && node.nodeValue.includes(token)) {
-                matches.push({ node, token });
-                break;
-            }
+function _decorateClaimMarks(bubble, claims) {
+    // Apply a status class to each pre-wrapped claim span in the prior
+    // agent bubble. The server already wrapped each reported value in
+    // <span data-claim-id="..."> during post-processing; here we just
+    // join the Validate status back by id. Visual-only — no click
+    // handler, no custom tooltip (D3).
+    if (!bubble || !Array.isArray(claims)) return;
+    const classForStatus = (s) => {
+        if (s === 'FAILED')         return 'claim-mark-failed';
+        if (s === 'VERIFIED')       return 'claim-mark-verified';
+        if (s === 'NOT_APPLICABLE') return 'claim-mark-na';
+        return null;
+    };
+    for (const c of claims) {
+        if (!c || !c.claim_id) continue;
+        const cls = classForStatus(c.status);
+        if (!cls) continue;  // SKIPPED and unknowns: no decoration
+        const span = bubble.querySelector(
+            '[data-claim-id="' + CSS.escape(c.claim_id) + '"]'
+        );
+        if (!span) {
+            console.warn('[Validate] no span for claim_id', c.claim_id);
+            continue;
         }
-    }
-    for (const { node, token } of matches) {
-        const parts = node.nodeValue.split(token);
-        const frag = document.createDocumentFragment();
-        for (let i = 0; i < parts.length; i++) {
-            frag.appendChild(document.createTextNode(parts[i]));
-            if (i < parts.length - 1) {
-                const mark = document.createElement('span');
-                mark.className = 'axiom-mismatch-mark';
-                mark.textContent = token;
-                mark.title = `Unverified: claim ${claim.claimed_value} vs ground truth ${_formatNumber(claim.expected)} (${claim.variance_pct?.toFixed(3)}% variance)`;
-                frag.appendChild(mark);
-            }
-        }
-        node.parentNode.replaceChild(frag, node);
+        span.classList.add(cls);
     }
 }
 
@@ -824,14 +814,12 @@ function _renderValidateResults(data) {
 
     scrollChatToBottom();
 
-    // Highlight the offending numbers in the prior agent bubble for any FAILED
-    // claims, so the user can see in-context which figure was flagged.
+    // Decorate each pre-wrapped number in the prior agent bubble with
+    // its Validate status (VERIFIED / FAILED / NOT_APPLICABLE). The
+    // spans were wrapped server-side during post-processing; this just
+    // joins status by claim_id.
     if (priorAgentBubble) {
-        for (const c of (data.claims || [])) {
-            if (c.status === 'FAILED') {
-                _highlightMismatchedNumbers(priorAgentBubble, c);
-            }
-        }
+        _decorateClaimMarks(priorAgentBubble, data.claims || []);
     }
 }
 
