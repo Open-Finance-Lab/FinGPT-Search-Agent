@@ -1,15 +1,17 @@
 """Post-process finalized prose to decorate reported claim values.
 
 Layer 1 anchoring strategy: the agent has no formatting responsibility.
-After the LLM stream completes, the server regex-matches each registered
-``claimed_value`` against the prose and wraps the first occurrence in a
+After the LLM stream completes, the server picks the earliest-matching
+candidate string for each registered ``claimed_value`` and wraps *every*
+non-delimited occurrence of that candidate in a
 ``<span data-claim-id="...">value</span>`` so the frontend can decorate
-it per Validate status.
+each one per Validate status.
 
 Delimited regions (fenced code, inline code, math, HTML attributes,
 existing ``data-claim-id`` spans) are treated as non-wrappable and left
 untouched — this preserves markdown structural integrity and makes the
-function idempotent on re-run.
+function idempotent on re-run (a claim_id already present anywhere in
+the prose is skipped wholesale).
 """
 
 from __future__ import annotations
@@ -59,9 +61,10 @@ def _push_unique(out: List[str], value: str) -> None:
 def _candidates(claim: Dict[str, Any]) -> List[str]:
     """Ratio-aware candidate strings, ordered longer/more-specific first.
 
-    The first-match semantics in ``wrap_claim_values`` scan segments in
-    order, so candidate order here matters when two candidates overlap
-    (e.g., ``44.13`` vs ``44.1``) within the same text.
+    ``wrap_claim_values`` picks one candidate per claim — the earliest one
+    that appears anywhere in wrappable prose — so candidate order matters
+    when two candidates overlap (e.g., ``44.13%`` vs ``44.13``) within the
+    same text: the more-specific form wins positional ties.
     """
     ratio = claim.get("ratio")
     v = claim.get("claimed_value")
@@ -106,10 +109,14 @@ def _candidates(claim: Dict[str, Any]) -> List[str]:
         # same prose position. Truncation (``int(b)``) is kept alongside
         # rounding because LLMs do both on non-negative totals
         # ("352.755" → "352" via truncation, "353" via rounding).
+        billion_forms: List[str] = []
         if f >= 1e9:
             b = f / 1e9
-            forms = [f"{b:.3f}", f"{b:.2f}", f"{b:.1f}", str(int(round(b))), str(int(b))]
-            for v in forms:
+            billion_forms = [
+                f"{b:.3f}", f"{b:.2f}", f"{b:.1f}",
+                str(int(round(b))), str(int(b)),
+            ]
+            for v in billion_forms:
                 for tmpl in (f"${v} billion", f"{v} billion", f"${v}B"):
                     _push_unique(out, tmpl)
         # Millions form.
@@ -124,6 +131,14 @@ def _candidates(claim: Dict[str, Any]) -> List[str]:
             # the suffix forms so ties go to the more specific match.
             _push_unique(out, f"${mm_round:,}")
             _push_unique(out, f"{mm_round:,}")
+        # Bare billion forms last: they cover tables with "in billions" in
+        # the header and prose equations that drop the unit (e.g. ``106.62
+        # = 43.01 + 63.61``). Kept at the end so that short integer forms
+        # like ``$106`` / ``106`` never match as substrings of longer
+        # candidates (e.g., ``$106,618 million``) when both are present.
+        for v in billion_forms:
+            _push_unique(out, f"${v}")
+            _push_unique(out, v)
     else:
         _push_unique(out, str(v))
 
@@ -162,11 +177,13 @@ def wrap_claim_values(
     claims: List[Dict[str, Any]],
     session_id: str = "",
 ) -> str:
-    """Wrap the first prose occurrence of each claim's value in a span.
+    """Wrap every non-delimited occurrence of each claim's value in a span.
 
-    Returns the post-processed prose. Delimited regions are preserved.
-    Claims with no matching candidate in any wrappable region are left
-    unwrapped and logged via a structured warning.
+    For each claim, the earliest-appearing candidate string across all
+    wrappable segments is chosen; every occurrence of *that* candidate is
+    then wrapped. Delimited regions (code, math, HTML) are preserved.
+    Claims with no matching candidate anywhere are left unwrapped and
+    logged via a structured warning.
     """
     if not prose or not claims:
         return prose
@@ -187,30 +204,31 @@ def wrap_claim_values(
             _warn_no_match(claim, session_id)
             continue
 
-        wrapped = False
-        for idx in range(len(segments)):
-            seg = segments[idx]
+        chosen = ""
+        for seg in segments:
             if not seg[0]:
                 continue
-            text = seg[1]
-            pos, cand = _find_first_match(text, cands)
-            if pos < 0:
-                continue
-            end = pos + len(cand)
-            before = text[:pos]
-            matched = text[pos:end]
-            after = text[end:]
-            span = f'<span data-claim-id="{claim_id}">{matched}</span>'
-            segments = (
-                segments[:idx]
-                + [[True, before], [False, span], [True, after]]
-                + segments[idx + 1 :]
-            )
-            wrapped_ids.add(claim_id)
-            wrapped = True
-            break
+            _, cand = _find_first_match(seg[1], cands)
+            if cand:
+                chosen = cand
+                break
 
-        if not wrapped:
+        if not chosen:
             _warn_no_match(claim, session_id)
+            continue
+
+        span = f'<span data-claim-id="{claim_id}">{chosen}</span>'
+        new_segments: List[List] = []
+        for seg in segments:
+            if not seg[0] or chosen not in seg[1]:
+                new_segments.append(seg)
+                continue
+            parts = seg[1].split(chosen)
+            for i, part in enumerate(parts):
+                if i > 0:
+                    new_segments.append([False, span])
+                new_segments.append([True, part])
+        segments = new_segments
+        wrapped_ids.add(claim_id)
 
     return "".join(seg[1] for seg in segments)

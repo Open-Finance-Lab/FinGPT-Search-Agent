@@ -196,18 +196,75 @@ def test_value_in_both_code_and_free_text_only_wraps_free_text():
     assert '<span data-claim-id="gross_margin-AAPL-2023-09-30-0">44.13</span> in prose' in out
 
 
-# ── multiple-occurrence: first match only ────────────────────────────
+# ── multiple-occurrence: wrap all ────────────────────────────────────
 
 
-def test_multiple_occurrence_wraps_first_only():
+def test_multiple_occurrence_wraps_every_instance():
     prose = "Gross margin of 44.13% this year, up from 44.13% last year."
     claims = [_claim("gross_margin", "AAPL", "2023-09-30", 44.13)]
     out = wrap_claim_values(prose, claims)
-    # First occurrence wrapped
-    assert out.count('<span data-claim-id="gross_margin-AAPL-2023-09-30-0">') == 1
-    assert out.startswith("Gross margin of <span")
-    # Second occurrence intact, no wrap
-    assert out.endswith("up from 44.13% last year.")
+    # Both occurrences wrapped with the same id.
+    assert out.count('<span data-claim-id="gross_margin-AAPL-2023-09-30-0">44.13%</span>') == 2
+    # Structure preserved — stripping the wraps returns the original prose.
+    assert out.replace(
+        '<span data-claim-id="gross_margin-AAPL-2023-09-30-0">44.13%</span>',
+        "44.13%",
+    ) == prose
+
+
+def test_wraps_across_prose_and_table():
+    # Same value appears both in narrative prose and in a markdown table row.
+    prose = (
+        "Total assets were $106,618 million at year-end.\n\n"
+        "| Line Item | Q4 2023 |\n"
+        "|---|---|\n"
+        "| Total Assets | $106,618 |\n"
+    )
+    claims = [_claim("accounting_equation", "TSLA", "2023-12-31", 106618000000)]
+    out = wrap_claim_values(prose, claims)
+    # The prose sentence locks the candidate to the "$106,618 million" form,
+    # so the table's bare "$106,618" remains unwrapped (different string).
+    assert out.count(
+        '<span data-claim-id="accounting_equation-TSLA-2023-12-31-0">$106,618 million</span>'
+    ) == 1
+    assert "| Total Assets | $106,618 |" in out
+
+
+def test_multiple_occurrence_skips_delimited_regions():
+    # Three occurrences: free text, fenced code, free text. Only the two in
+    # free text should be wrapped; the fenced one stays verbatim.
+    prose = (
+        "Gross margin was 44.13% last quarter.\n\n"
+        "```\nmargin = 44.13%\n```\n\n"
+        "Up from 44.13% a year prior."
+    )
+    claims = [_claim("gross_margin", "AAPL", "2023-09-30", 44.13)]
+    out = wrap_claim_values(prose, claims)
+    assert out.count('<span data-claim-id="gross_margin-AAPL-2023-09-30-0">44.13%</span>') == 2
+    assert "```\nmargin = 44.13%\n```" in out
+
+
+def test_wraps_bare_billion_form_in_table():
+    # Regression: LLM renders a balance sheet in a "USD billions" table with
+    # no "billion" unit in any cell, so the only visible form is bare
+    # ``$106.62``. The wrapper must match the bare billions form.
+    prose = (
+        "All figures are in USD billions unless otherwise noted.\n\n"
+        "| Category | Value |\n"
+        "|---|---|\n"
+        "| Total Assets | $106.62 |\n"
+        "\nAccounting Equation: 106.62 = 43.01 + 63.61 = 106.62\n"
+    )
+    claims = [_claim("accounting_equation", "TSLA", "2023-12-31", 106618000000)]
+    out = wrap_claim_values(prose, claims)
+    assert '<span data-claim-id="accounting_equation-TSLA-2023-12-31-0">$106.62</span>' in out
+    # Single-candidate-per-claim contract: the bare ``106.62`` in the equation
+    # is a different string than the chosen ``$106.62``, so it stays unwrapped.
+    assert (
+        '<span data-claim-id="accounting_equation-TSLA-2023-12-31-0">106.62</span>'
+        not in out
+    )
+    assert "106.62 = 43.01 + 63.61 = 106.62" in out
 
 
 # ── no-match case ────────────────────────────────────────────────────
