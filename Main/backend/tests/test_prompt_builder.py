@@ -164,3 +164,86 @@ class TestRuntimeToolCatalog:
         result = pb.build(actual_tool_names=["nothing_matches"])
         assert "CORE WITHOUT MARKERS" in result
         assert "get_stock_info: should stay" in result
+
+
+class TestSecurityFragmentInjection:
+    """`<!-- SECURITY_RULES_INSERT -->` in core.md must be replaced with
+    the contents of `_security.md`. Single source of truth shared with
+    `datascraper.py::_load_security_fragment`."""
+
+    def test_marker_replaced_by_fragment(self, tmp_path: Path):
+        (tmp_path / "core.md").write_text(
+            "INTRO\n<!-- SECURITY_RULES_INSERT -->\nOUTRO", encoding="utf-8"
+        )
+        (tmp_path / "default_site.md").write_text("DEFAULT", encoding="utf-8")
+        (tmp_path / "_security.md").write_text(
+            "SECURITY:\n1. canary-rule-A\n2. canary-rule-B", encoding="utf-8"
+        )
+        pb = PromptBuilder(prompts_dir=str(tmp_path))
+        result = pb.build()
+        assert "<!-- SECURITY_RULES_INSERT -->" not in result
+        assert "canary-rule-A" in result
+        assert "canary-rule-B" in result
+
+    def test_missing_fragment_does_not_crash(self, tmp_path: Path):
+        # If _security.md is missing the marker is replaced with empty
+        # string (and a warning is logged), so production failure mode is
+        # "no security rules" rather than "request crashes".
+        (tmp_path / "core.md").write_text(
+            "INTRO\n<!-- SECURITY_RULES_INSERT -->\nOUTRO", encoding="utf-8"
+        )
+        (tmp_path / "default_site.md").write_text("DEFAULT", encoding="utf-8")
+        pb = PromptBuilder(prompts_dir=str(tmp_path))
+        result = pb.build()
+        assert "<!-- SECURITY_RULES_INSERT -->" not in result
+        assert "INTRO" in result and "OUTRO" in result
+
+    def test_no_marker_means_no_security_section(self, tmp_path: Path):
+        # core.md without the marker is returned unchanged — no silent
+        # surprise injection.
+        (tmp_path / "core.md").write_text("CORE WITHOUT MARKER", encoding="utf-8")
+        (tmp_path / "default_site.md").write_text("DEFAULT", encoding="utf-8")
+        (tmp_path / "_security.md").write_text("UNUSED", encoding="utf-8")
+        pb = PromptBuilder(prompts_dir=str(tmp_path))
+        result = pb.build()
+        assert "UNUSED" not in result
+
+
+class TestPromptCacheMtimeInvalidation:
+    """`_load_prompt` caches `(text, mtime_ns)`. Editing a prompt file in
+    production must take effect on the next request without restarting
+    Gunicorn. Without mtime invalidation the cache is sticky for the
+    lifetime of the process and prompt edits silently ship stale."""
+
+    def test_edit_picked_up_on_next_call(self, tmp_path: Path):
+        import os
+
+        f = tmp_path / "core.md"
+        f.write_text("VERSION_ONE", encoding="utf-8")
+        (tmp_path / "default_site.md").write_text("DEFAULT", encoding="utf-8")
+        pb = PromptBuilder(prompts_dir=str(tmp_path))
+
+        first = pb.build()
+        assert "VERSION_ONE" in first
+
+        # Rewrite with a strictly-later mtime. mtime resolution on some
+        # filesystems is 1s, so bump the timestamp explicitly rather than
+        # relying on the write itself producing a different ns value.
+        f.write_text("VERSION_TWO", encoding="utf-8")
+        new_mtime = f.stat().st_mtime + 1
+        os.utime(f, (new_mtime, new_mtime))
+
+        second = pb.build()
+        assert "VERSION_TWO" in second
+        assert "VERSION_ONE" not in second
+
+    def test_unchanged_file_uses_cache(self, tmp_path: Path):
+        # Sanity: if mtime did not change, _load_prompt returns the cached
+        # value without re-reading. We can't observe re-read directly, but
+        # the second call must return the same text and not error.
+        f = tmp_path / "core.md"
+        f.write_text("STABLE", encoding="utf-8")
+        (tmp_path / "default_site.md").write_text("DEFAULT", encoding="utf-8")
+        pb = PromptBuilder(prompts_dir=str(tmp_path))
+        assert "STABLE" in pb.build()
+        assert "STABLE" in pb.build()
