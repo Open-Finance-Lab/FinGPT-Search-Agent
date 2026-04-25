@@ -1,6 +1,7 @@
 // handlers.js
 import { appendChatElement, scrollChatToBottom, validate_response } from './helpers.js';
 import { hasAxiomClaims } from './api.js';
+import { looksLikeValidationRequest } from './intent.js';
 import { getChatResponse, getChatResponseStream, waitForAutoScrape, isAutoScrapeInProgress } from './api.js';
 import { getSelectedModel, selectedModel } from './config.js';
 import { setCachedSources } from './sourcesCache.js';
@@ -347,11 +348,16 @@ function _createValidateButton() {
   return btn;
 }
 
-function attachValidateButtonIfClaims(actionButtonsContainer, knownFlag) {
+function _attachAndMaybeAutoFire(container, autoFire) {
+  container.appendChild(_createValidateButton());
+  if (autoFire) validate_response();
+}
+
+function attachValidateButtonIfClaims(actionButtonsContainer, { knownFlag, autoFire = false } = {}) {
   // Fast path: if the response payload already told us whether claims
   // exist (has_axiom_claims from chat_response), skip the network call.
   if (knownFlag === true) {
-    actionButtonsContainer.appendChild(_createValidateButton());
+    _attachAndMaybeAutoFire(actionButtonsContainer, autoFire);
     return;
   }
   if (knownFlag === false) return;
@@ -360,7 +366,7 @@ function attachValidateButtonIfClaims(actionButtonsContainer, knownFlag) {
   hasAxiomClaims()
     .then((data) => {
       if (data && data.has_claims) {
-        actionButtonsContainer.appendChild(_createValidateButton());
+        _attachAndMaybeAutoFire(actionButtonsContainer, autoFire);
       }
     })
     .catch((err) => {
@@ -546,7 +552,9 @@ async function handleChatResponse(question, promptMode = false, useStreaming = t
             useMCP,
             selectedModel
           );
-          attachValidateButtonIfClaims(actionButtons);
+          attachValidateButtonIfClaims(actionButtons, {
+            autoFire: looksLikeValidationRequest(question),
+          });
           const ratingElement = createRatingElement();
 
           actionRow.appendChild(actionButtons);
@@ -666,7 +674,10 @@ async function handleChatResponse(question, promptMode = false, useStreaming = t
           useMCP,
           selectedModel
         );
-        attachValidateButtonIfClaims(actionButtons, data.has_axiom_claims);
+        attachValidateButtonIfClaims(actionButtons, {
+          knownFlag: data.has_axiom_claims,
+          autoFire: looksLikeValidationRequest(question),
+        });
         const ratingElement = createRatingElement();
 
         actionRow.appendChild(actionButtons);
