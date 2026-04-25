@@ -85,15 +85,11 @@ async def create_fin_agent(model: str = "gpt-4o-mini",
     Yields:
         Agent instance configured with tools
     """
-    if instructions_override is not None:
-        instructions = instructions_override
-    else:
-        instructions = _prompt_builder.build(
-            current_url=current_url,
-            system_prompt=system_prompt,
-            user_timezone=user_timezone,
-            user_time=user_time,
-        )
+    # `instructions` is finalised AFTER tool collection so the AVAILABLE TOOLS
+    # catalog in core.md can be filtered to the actual tool registry for this
+    # request (P1.11 of finsearch-prompt-audit-fix-01). The `instructions_override`
+    # path skips PromptBuilder entirely and replaces the whole prompt.
+    instructions: Optional[str] = instructions_override
 
     model_config = get_model_config(model)
     if not model_config:
@@ -218,24 +214,37 @@ async def create_fin_agent(model: str = "gpt-4o-mini",
                 f"[AGENT] Tool filter applied: {pre_filter_count} -> {len(tools)} "
                 f"(allowed: {allowed_tools})"
             )
-            # Scope the data-tool catalog for this request. Output-protocol
-            # functions (e.g., report_claim) are handled by a separate prompt
-            # section and are deliberately not in scope here.
-            if allowed_tools:
-                tool_names = ", ".join(allowed_tools)
-                instructions += (
-                    f"\n\nTOOL SCOPE: For this request, the only data-gathering "
-                    f"tools in scope are: {tool_names}. Other tools listed in the "
-                    f"AVAILABLE TOOLS catalog are out of scope; calling them will "
-                    f"cause a fatal error."
-                )
 
-        # Axiom claim-reporting tool: added AFTER the allow-list filter so the
-        # planner's per-skill tool restriction can't strip it. It's a logging
-        # hook bound to the session, not a capability the planner chooses.
-        if session_id:
-            from axioms.tool import get_axiom_tools
-            tools.extend(get_axiom_tools(session_id))
+    # Build the system prompt now that the tool registry for this request is
+    # final, so PromptBuilder can render the AVAILABLE TOOLS catalog from the
+    # actual data-tool list (axiom output-protocol tools are added below and
+    # are intentionally excluded from the catalog).
+    if instructions is None:
+        instructions = _prompt_builder.build(
+            current_url=current_url,
+            system_prompt=system_prompt,
+            user_timezone=user_timezone,
+            user_time=user_time,
+            actual_tool_names=[t.name for t in tools],
+        )
+
+    if allowed_tools is not None and len(allowed_tools) > 0:
+        # Scope the data-tool catalog for this request. Output-protocol
+        # functions (e.g., report_claim) are handled by a separate prompt
+        # section and are deliberately not in scope here.
+        tool_names = ", ".join(allowed_tools)
+        instructions += (
+            f"\n\nTOOL SCOPE: For this request, the only data-gathering "
+            f"tools available to you are: {tool_names}. Other tools listed "
+            f"in the AVAILABLE TOOLS catalog are not attached to this run."
+        )
+
+    # Axiom claim-reporting tool: added AFTER the allow-list filter so the
+    # planner's per-skill tool restriction can't strip it. It's a logging
+    # hook bound to the session, not a capability the planner chooses.
+    if session_id and (allowed_tools is None or len(allowed_tools) > 0):
+        from axioms.tool import get_axiom_tools
+        tools.extend(get_axiom_tools(session_id))
 
     try:
         # Handle foundation models that don't support "system" roles
