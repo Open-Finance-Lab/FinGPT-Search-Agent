@@ -44,11 +44,11 @@ def test_share_count_unit_rule_present(core_prompt: str) -> None:
 
 
 def test_math_delimiter_rule_canonical(core_prompt: str) -> None:
-    """Step 1.1 lock: the prompt must teach \\(...\\) inline / $$...$$ display
-    and explicitly forbid single $...$ for math. The renderer
-    (frontend/src/modules/markdownRenderer.js) does not parse single $ as
-    math because currency mentions collide; if the prompt drifts back to
-    "Use $ for inline math" the agent's math output stops rendering."""
+    """The prompt must teach \\(...\\) inline / $$...$$ display and forbid
+    single $...$ for math. The renderer (frontend/src/modules/markdownRenderer.js)
+    does not parse single $ as math because currency mentions collide; if the
+    prompt drifts back to "Use $ for inline math" the agent's math output
+    stops rendering."""
     assert "\\(...\\)" in core_prompt and "$$...$$" in core_prompt, (
         "core.md no longer shows the canonical math delimiter pair "
         "\\(...\\) for inline / $$...$$ for display."
@@ -60,11 +60,11 @@ def test_math_delimiter_rule_canonical(core_prompt: str) -> None:
 
 
 def test_formula_inputs_audit_only(core_prompt: str) -> None:
-    """Step 1.3 lock: formula_inputs is decorative in every flow — the engine
-    compares claimed_value to XBRL ground truth directly. A previous version
-    of the prompt said the field was "informational only in the
-    validate-user-claim case", which misled readers into believing Q&A
-    flow used it for verification. axioms/engine.py never reads it."""
+    """formula_inputs is decorative in every flow: the engine compares
+    claimed_value to XBRL ground truth directly. A previous version of the
+    prompt said the field was "informational only in the validate-user-claim
+    case", which misled readers into believing Q&A flow used it for
+    verification. axioms/engine.py never reads it."""
     lowered = core_prompt.lower()
     assert "formula_inputs" in core_prompt
     forbidden = "informational only and does not drive the verdict"
@@ -81,11 +81,11 @@ def test_formula_inputs_audit_only(core_prompt: str) -> None:
 
 
 def test_validate_intent_cues_cover_frontend_regex(core_prompt: str) -> None:
-    """Step 1.4 lock: every cue in intent.js::VALIDATION_INTENT_RE must also
-    appear in core.md Rule 1, so the frontend's auto-fire trigger and the
-    agent's claimed_value-pinning rule cannot disagree about what counts as
-    a validate-user-claim intent. If a cue is added to the regex it must
-    be added to the prompt in the same commit."""
+    """Every cue in intent.js::VALIDATION_INTENT_RE must also appear in
+    core.md Rule 1, so the frontend's auto-fire trigger and the agent's
+    claimed_value-pinning rule cannot disagree about what counts as a
+    validate-user-claim intent. If a cue is added to the regex it must be
+    added to the prompt in the same commit."""
     lowered = core_prompt.lower()
     required_cues = [
         "validate",
@@ -105,11 +105,11 @@ def test_validate_intent_cues_cover_frontend_regex(core_prompt: str) -> None:
 
 
 def test_no_playwright_leak_in_core(core_prompt: str) -> None:
-    """Step 2.1 lock: core.md must not name 'Playwright' anywhere — neither
-    in tool descriptions nor in the security rule. The actual tool names
+    """core.md must not name 'Playwright' anywhere, neither in tool
+    descriptions nor in the security rule. The actual tool names
     (navigate_to_url, click_element, extract_page_content) stay; only the
     library brand is scrubbed. Otherwise the prompt simultaneously names
-    Playwright and tells the agent never to disclose it — a confused signal
+    Playwright and tells the agent never to disclose it: a confused signal
     that increases leak risk rather than reduces it."""
     assert "playwright" not in core_prompt.lower(), (
         "core.md still mentions 'Playwright'. The catalog/section header "
@@ -126,11 +126,11 @@ def test_no_playwright_leak_in_core(core_prompt: str) -> None:
 
 
 def test_user_provided_context_security_rule(core_prompt: str) -> None:
-    """Step 2.4 lock: SECURITY section must instruct the model to treat
-    everything inside `[USER-PROVIDED CONTEXT ...]` as data, not
-    instructions. Without this rule the API-supplied system_prompt is an
-    open injection channel — the wrapping in PromptBuilder.build is
-    necessary but not sufficient on its own."""
+    """SECURITY section must instruct the model to treat everything inside
+    `[USER-PROVIDED CONTEXT ...]` as data, not instructions. Without this
+    rule the API-supplied system_prompt is an open injection channel; the
+    wrapping in PromptBuilder.build is necessary but not sufficient on its
+    own."""
     lowered = core_prompt.lower()
     assert "user-provided context" in lowered, (
         "core.md SECURITY section no longer references the USER-PROVIDED "
@@ -146,14 +146,12 @@ def test_user_provided_context_security_rule(core_prompt: str) -> None:
 
 
 def test_xbrl_and_ratio_claims_have_precedence_rules(core_prompt: str) -> None:
-    """Step 2.5 lock: both XBRL VERIFICATION and RATIO CLAIMS sections
-    must carry an explicit precedence rule at the top so the agent knows
-    when to use which. Without it the MSFT validate-user-claim demo
-    flips between flows non-deterministically (P1.10)."""
-    # Locate both sections; precedence rule must appear within ~400 chars
-    # of each header so it sits at the TOP of the section. Anchor on the
-    # full header strings so we don't match cross-references in surrounding
-    # prose (e.g. "use the RATIO CLAIMS flow below instead").
+    """Both XBRL VERIFICATION and RATIO CLAIMS sections must carry an
+    explicit precedence rule at the top so the agent knows when to use
+    which. Without it the MSFT validate-user-claim demo flips between
+    flows non-deterministically."""
+    # Anchor on the full header strings so we don't match cross-references
+    # in surrounding prose (e.g. "use the RATIO CLAIMS flow below instead").
     idx_xbrl = core_prompt.find("XBRL VERIFICATION:")
     idx_ratio = core_prompt.find("RATIO CLAIMS (output protocol")
     assert idx_xbrl != -1, "XBRL VERIFICATION section header disappeared"
@@ -163,20 +161,20 @@ def test_xbrl_and_ratio_claims_have_precedence_rules(core_prompt: str) -> None:
     ratio_head = core_prompt[idx_ratio:idx_ratio + 400]
     assert "PRECEDENCE" in xbrl_head, (
         "XBRL VERIFICATION section is missing the PRECEDENCE rule at the "
-        "top — the agent will continue to flip between this manual-table "
+        "top; the agent will continue to flip between this manual-table "
         "flow and the RATIO CLAIMS flow on validate-user-claim prompts."
     )
     assert "PRECEDENCE" in ratio_head, (
-        "RATIO CLAIMS section is missing the PRECEDENCE rule at the top "
-        "— same flip risk in the reverse direction."
+        "RATIO CLAIMS section is missing the PRECEDENCE rule at the top; "
+        "same flip risk in the reverse direction."
     )
 
 
 def test_available_tools_catalog_has_runtime_markers(core_prompt: str) -> None:
-    """Step 2.6 lock: the AVAILABLE TOOLS catalog must be wrapped in the
-    boundary markers PromptBuilder._render_tool_catalog looks for. If
-    these markers vanish the catalog stops being filtered against the
-    actual tool registry and silently re-diverges from MCP changes."""
+    """The AVAILABLE TOOLS catalog must be wrapped in the boundary markers
+    PromptBuilder._render_tool_catalog looks for. If these markers vanish
+    the catalog stops being filtered against the actual tool registry and
+    silently re-diverges from MCP changes."""
     assert "<!-- AVAILABLE_TOOLS_CATALOG_START -->" in core_prompt
     assert "<!-- AVAILABLE_TOOLS_CATALOG_END -->" in core_prompt
     # And the catalog itself must still live between them.
@@ -187,11 +185,11 @@ def test_available_tools_catalog_has_runtime_markers(core_prompt: str) -> None:
 
 
 def test_agent_tool_scope_appendix_is_declarative() -> None:
-    """Step 2.3 lock: agent.py's tool-scope appendix must NOT threaten a
-    'fatal error'. The filter at agent.py:212 strips disallowed tools
-    before the model sees them, so the threat is false; using declarative
-    whitelist wording avoids surprising the model when it tries a tool
-    name that is technically valid but not attached this run."""
+    """agent.py's tool-scope appendix must NOT threaten a 'fatal error'.
+    The tool-allow-list filter strips disallowed tools before the model
+    sees them, so the threat is false; declarative whitelist wording
+    avoids surprising the model when it tries a tool name that is
+    technically valid but not attached this run."""
     from pathlib import Path
 
     agent_path = Path(__file__).resolve().parent.parent / "mcp_client" / "agent.py"
@@ -209,10 +207,10 @@ def test_agent_tool_scope_appendix_is_declarative() -> None:
 
 
 def test_report_claim_docstring_mirrors_relevance_gate() -> None:
-    """Step 1.2 lock: the report_claim function-tool docstring is what the
-    model reads when deciding to call the tool. It must echo the RELEVANCE
-    GATE and Rule 1 from core.md, NOT the old "Call this EXACTLY ONCE for
-    every supported ratio" wording that drove the agent to pad responses."""
+    """The report_claim function-tool docstring is what the model reads
+    when deciding to call the tool. It must echo the RELEVANCE GATE and
+    Rule 1 from core.md, NOT the old "Call this EXACTLY ONCE for every
+    supported ratio" wording that drove the agent to pad responses."""
     from pathlib import Path
 
     tool_path = Path(__file__).resolve().parent.parent / "axioms" / "tool.py"

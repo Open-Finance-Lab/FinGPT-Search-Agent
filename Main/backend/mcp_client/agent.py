@@ -85,11 +85,11 @@ async def create_fin_agent(model: str = "gpt-4o-mini",
     Yields:
         Agent instance configured with tools
     """
-    # `instructions` is finalised AFTER tool collection so the AVAILABLE TOOLS
-    # catalog in core.md can be filtered to the actual tool registry for this
-    # request (P1.11 of finsearch-prompt-audit-fix-01). The `instructions_override`
-    # path skips PromptBuilder entirely and replaces the whole prompt.
+    # `instructions` is finalised after tool collection so PromptBuilder can
+    # filter the AVAILABLE TOOLS catalog against the actual tool registry for
+    # this request. instructions_override bypasses PromptBuilder entirely.
     instructions: Optional[str] = instructions_override
+    tools_attached = allowed_tools is None or len(allowed_tools) > 0
 
     model_config = get_model_config(model)
     if not model_config:
@@ -125,9 +125,9 @@ async def create_fin_agent(model: str = "gpt-4o-mini",
 
     tools: List = []
 
-    # Skip tool collection entirely when plan specifies zero tools
-    if allowed_tools is not None and len(allowed_tools) == 0:
-        logging.info("[AGENT] Skill specifies zero tools — skipping tool collection")
+    # Skip tool collection entirely when plan specifies zero tools.
+    if not tools_attached:
+        logging.info("[AGENT] Skill specifies zero tools, skipping tool collection")
     else:
         url_tools = get_url_tools()
         tools.extend(url_tools)
@@ -228,10 +228,9 @@ async def create_fin_agent(model: str = "gpt-4o-mini",
             actual_tool_names=[t.name for t in tools],
         )
 
-    if allowed_tools is not None and len(allowed_tools) > 0:
-        # Scope the data-tool catalog for this request. Output-protocol
-        # functions (e.g., report_claim) are handled by a separate prompt
-        # section and are deliberately not in scope here.
+    # Output-protocol tools (e.g. report_claim) live in a separate prompt
+    # section and are deliberately not in scope here.
+    if tools_attached and allowed_tools is not None:
         tool_names = ", ".join(allowed_tools)
         instructions += (
             f"\n\nTOOL SCOPE: For this request, the only data-gathering "
@@ -239,10 +238,10 @@ async def create_fin_agent(model: str = "gpt-4o-mini",
             f"in the AVAILABLE TOOLS catalog are not attached to this run."
         )
 
-    # Axiom claim-reporting tool: added AFTER the allow-list filter so the
-    # planner's per-skill tool restriction can't strip it. It's a logging
-    # hook bound to the session, not a capability the planner chooses.
-    if session_id and (allowed_tools is None or len(allowed_tools) > 0):
+    # Axiom claim-reporting tool is a session-bound logging hook, not a
+    # capability the planner chooses; add after the allow-list filter so the
+    # per-skill restriction can't strip it.
+    if session_id and tools_attached:
         from axioms.tool import get_axiom_tools
         tools.extend(get_axiom_tools(session_id))
 

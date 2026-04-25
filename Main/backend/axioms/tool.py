@@ -17,11 +17,10 @@ from typing import List
 
 from agents import function_tool
 
+from axioms import SUPPORTED_RATIOS
 from axioms.registry import add_claim
 
 logger = logging.getLogger(__name__)
-
-SUPPORTED_RATIOS = ("accounting_equation", "gross_margin", "current_ratio")
 
 
 def get_axiom_tools(session_id: str) -> List:
@@ -46,53 +45,48 @@ def get_axiom_tools(session_id: str) -> List:
         summary.
 
         Supported ratios (the ONLY ones the Validate pipeline can verify):
-          - accounting_equation  (A = L + Temporary Equity + E; pass Total Assets as claimed_value)
-          - gross_margin         (percentage, e.g., 44.13 for 44.13%)
-          - current_ratio        (dimensionless, e.g., 0.9880)
+          - accounting_equation: A = L + Temporary Equity + E. Pass Total Assets as claimed_value.
+          - gross_margin: percentage (e.g., 44.13 for 44.13%).
+          - current_ratio: dimensionless (e.g., 0.9880).
 
-        WHEN TO CALL (RELEVANCE GATE — emit ZERO claims unless this matches):
+        WHEN TO CALL (RELEVANCE GATE; emit ZERO claims unless this matches):
           Emit a claim ONLY when one of the supported ratios above is the
-          DIRECT subject of the user's question — either the user's question
-          asks for it (Q&A) or the user supplied a number for it to be
-          fact-checked. Do NOT call this for tangential mentions, "supporting
-          metrics", or ratio-padded "Financial Snapshot" sections appended to
-          an unrelated answer. If the user asks about EPS, P/E, net income,
-          revenue totals, market cap, ROE, ROA, dividend yield, or any other
-          unsupported metric, do NOT call this tool at all.
+          DIRECT subject of the user's question, either as Q&A ("What is
+          Apple's gross margin?") or as a user-supplied number to be
+          fact-checked. Do NOT call this for tangential mentions,
+          "supporting metrics", or ratio-padded "Financial Snapshot" sections
+          appended to an unrelated answer. If the user asks about EPS, P/E,
+          net income, revenue totals, market cap, ROE, ROA, dividend yield,
+          or any other unsupported metric, do NOT call this tool at all.
 
         WHAT TO PASS AS claimed_value (Rule 1):
-          - Validate-user-claim flow (the user gave a number to fact-check —
-            phrasings like "validate", "verify", "fact-check", "double-check",
-            "sanity-check", "cross-check", "is this right/true/correct/accurate",
-            or any analyst/document figure quoted as something to be checked):
-            claimed_value = the user's stated number, NOT a value you computed
-            yourself, even if your prose shows a discrepancy. Substituting your
+          - Validate-user-claim flow: phrasings like "validate", "verify",
+            "fact-check", "double-check", "sanity-check", "cross-check",
+            "is this right/true/correct/accurate", or any analyst/document
+            figure quoted as something to be checked. claimed_value MUST be
+            the user's stated number, NOT a value you computed yourself,
+            even if your prose shows a discrepancy. Substituting your
             correction defeats the verification.
-          - Normal Q&A flow ("What is Apple's gross margin?"):
-            claimed_value = the value you computed and reported as the answer.
+          - Normal Q&A flow: claimed_value is the value you computed and
+            reported as the answer.
 
         Emit one claim per ratio per (ticker, period). Not in a loop, not per
         paragraph. Do NOT mention this tool, the Validate button, or the claim
-        registry to the user — the Validate UX is rendered by the frontend.
+        registry to the user; the Validate UX is rendered by the frontend.
 
         Args:
-            ratio: One of "accounting_equation", "gross_margin", "current_ratio".
+            ratio: One of the SUPPORTED_RATIOS names.
             ticker: Stock ticker symbol (e.g., "AAPL", "MSFT", "TSLA").
-            period: Fiscal period end date as ISO string (YYYY-MM-DD).
-                    E.g., "2023-09-30" for Apple FY2023, "2023-06-30" for MSFT FY2023,
-                    "2023-12-31" for Tesla FY2023.
-            claimed_value: The numerical value being claimed (see Rule 1 above for
-                           which value to pass). For gross_margin pass the percentage
-                           (e.g., 44.13, not 0.4413). For accounting_equation pass
-                           the claimed Total Assets figure.
-            formula_inputs: JSON string of the inputs underlying the claim. Keys
-                            vary by ratio:
-                            accounting_equation: {"assets": N, "liabilities": N, "equity": N}
-                            gross_margin:        {"revenue": N, "cogs": N}
-                            current_ratio:       {"current_assets": N, "current_liabilities": N}
-                            Recorded for audit only — the engine compares
-                            claimed_value to XBRL ground truth directly and never
-                            uses formula_inputs to compute the verdict.
+            period: Fiscal period end date as ISO YYYY-MM-DD.
+            claimed_value: Numeric value being claimed (see "WHAT TO PASS"
+                           above for which value to use).
+            formula_inputs: JSON object string with ratio-specific keys.
+                            accounting_equation: {"assets","liabilities","equity"}
+                            gross_margin:        {"revenue","cogs"}
+                            current_ratio:       {"current_assets","current_liabilities"}
+                            Recorded for audit only; the engine compares
+                            claimed_value to XBRL ground truth directly and
+                            never uses formula_inputs in the verdict.
         """
         if ratio not in SUPPORTED_RATIOS:
             return (
